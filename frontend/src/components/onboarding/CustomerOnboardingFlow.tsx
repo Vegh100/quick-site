@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
@@ -25,6 +26,7 @@ export function CustomerOnboardingFlow({
   onComplete,
   onBack,
 }: CustomerOnboardingFlowProps) {
+  const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const updateProfile = useUpdateProfile();
@@ -75,7 +77,7 @@ export function CustomerOnboardingFlow({
       setCurrentStep(currentStep + 1);
     } else {
       toast.success("Üdvözlünk a Qvick-ben!");
-      onComplete?.();
+      onComplete ? onComplete() : navigate("/ugyfel", { replace: true });
     }
   };
 
@@ -83,7 +85,7 @@ export function CustomerOnboardingFlow({
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     } else {
-      onBack?.();
+      onBack ? onBack() : navigate("/");
     }
   };
 

@@ -163,6 +163,7 @@ export interface Booking {
   provider?: Provider;
   service?: Service;
   address?: Address;
+  reviews?: Review[];
 }
 
 export interface CreateBookingInput {

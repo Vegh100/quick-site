@@ -188,7 +188,8 @@ export async function getCustomerBookings(
   const where: Prisma.BookingWhereInput = { customerId };
 
   if (filters.status) {
-    where.status = filters.status as BookingStatus;
+    const statuses = filters.status.split(",") as BookingStatus[];
+    where.status = statuses.length > 1 ? { in: statuses } : statuses[0];
   }
   if (filters.dateFrom) {
     where.scheduledDate = {
@@ -246,7 +247,8 @@ export async function getProviderBookings(
   const where: Prisma.BookingWhereInput = { providerId: provider.id };
 
   if (filters.status) {
-    where.status = filters.status as BookingStatus;
+    const statuses = filters.status.split(",") as BookingStatus[];
+    where.status = statuses.length > 1 ? { in: statuses } : statuses[0];
   }
   if (filters.dateFrom) {
     where.scheduledDate = {

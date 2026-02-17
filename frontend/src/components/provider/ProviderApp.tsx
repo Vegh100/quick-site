@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   useMyProvider,
@@ -43,6 +44,14 @@ const STATUS_COLORS: Record<BookingStatus, string> = {
   CANCELLED: "bg-red-500",
 };
 
+const STATUS_HU: Record<BookingStatus, string> = {
+  PENDING: "Függőben",
+  CONFIRMED: "Megerősítve",
+  IN_PROGRESS: "Folyamatban",
+  COMPLETED: "Befejezve",
+  CANCELLED: "Lemondva",
+};
+
 // Provider navigation items
 const providerNavItems = [
   { id: "dashboard", label: "Dashboard" },
@@ -50,12 +59,34 @@ const providerNavItems = [
   { id: "clients", label: "Ügyfelek" },
 ];
 
+// Map URL segments to internal tab names
+const TAB_FROM_URL: Record<string, string> = {
+  foglalasok: "bookings",
+  ugyfelek: "clients",
+  beallitasok: "settings",
+};
+const TAB_TO_URL: Record<string, string> = {
+  bookings: "foglalasok",
+  clients: "ugyfelek",
+  settings: "beallitasok",
+};
+
 export function ProviderApp() {
+  const { tab: urlTab } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState("dashboard");
+
+  const activeTab = urlTab ? TAB_FROM_URL[urlTab] || "dashboard" : "dashboard";
+  const setActiveTab = (tab: string) => {
+    if (tab === "dashboard") {
+      navigate("/szolgaltato");
+    } else {
+      navigate(`/szolgaltato/${TAB_TO_URL[tab] || tab}`);
+    }
+  };
+
   const [paywallModalOpen, setPaywallModalOpen] = useState(false);
   const [referralModalOpen, setReferralModalOpen] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
 
   // API calls
   const {
@@ -108,12 +139,12 @@ export function ProviderApp() {
   }
 
   // If showing settings, render settings panel
-  if (showSettings) {
+  if (activeTab === "settings") {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <HeaderWithSettings
           userType="provider"
-          onSettingsClick={() => setShowSettings(true)}
+          onSettingsClick={() => setActiveTab("settings")}
         />
 
         <main className="flex-1 container mx-auto px-4 py-8">
@@ -123,7 +154,10 @@ export function ProviderApp() {
                 <h1>Üzleti beállítások</h1>
                 <p className="text-muted-foreground">Vállalkozásod kezelése</p>
               </div>
-              <Button variant="outline" onClick={() => setShowSettings(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setActiveTab("dashboard")}
+              >
                 Vissza
               </Button>
             </div>
@@ -142,7 +176,7 @@ export function ProviderApp() {
     <div className="min-h-screen flex flex-col bg-background">
       <HeaderWithSettings
         userType="provider"
-        onSettingsClick={() => setShowSettings(true)}
+        onSettingsClick={() => setActiveTab("settings")}
       />
 
       {/* Provider Navigation */}
@@ -163,7 +197,14 @@ export function ProviderApp() {
               </button>
             ))}
             <div className="ml-auto flex items-center">
-              <Button variant="ghost" size="sm" onClick={logout}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  await logout();
+                  navigate("/", { replace: true });
+                }}
+              >
                 <LogOut className="h-4 w-4 mr-2" />
                 Kijelentkezés
               </Button>
@@ -321,7 +362,7 @@ export function ProviderApp() {
                           {Number(booking.totalAmount)} {booking.currency}
                         </span>
                         <Badge className={STATUS_COLORS[booking.status]}>
-                          {booking.status}
+                          {STATUS_HU[booking.status] || booking.status}
                         </Badge>
                         {booking.status === "PENDING" && (
                           <div className="flex gap-2">
@@ -345,6 +386,27 @@ export function ProviderApp() {
                           </div>
                         )}
                         {booking.status === "CONFIRMED" && (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() =>
+                                handleStatusUpdate(booking.id, "IN_PROGRESS")
+                              }
+                            >
+                              Indítás
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() =>
+                                handleStatusUpdate(booking.id, "CANCELLED")
+                              }
+                            >
+                              Lemondás
+                            </Button>
+                          </div>
+                        )}
+                        {booking.status === "IN_PROGRESS" && (
                           <Button
                             size="sm"
                             onClick={() =>

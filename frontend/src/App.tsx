@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
 import { WelcomeScreen } from "./components/onboarding/WelcomeScreen";
 import { CustomerOnboardingFlow } from "./components/onboarding/CustomerOnboardingFlow";
@@ -6,22 +6,12 @@ import { ProviderOnboardingFlow } from "./components/provider/ProviderOnboarding
 import { CustomerApp } from "./components/customer/CustomerApp";
 import { ProviderApp } from "./components/provider/ProviderApp";
 import { LoginScreen } from "./components/auth/LoginScreen";
+import { ProtectedRoute, RequireRole } from "./components/auth/ProtectedRoute";
 import { Toaster } from "./components/ui/sonner";
 import { Loader2 } from "lucide-react";
 
-type ViewType =
-  | "welcome"
-  | "login"
-  | "register"
-  | "customer-onboarding"
-  | "customer-app"
-  | "provider-onboarding"
-  | "provider-app";
-
 export default function App() {
-  const { user, isLoading, isAuthenticated } = useAuth();
-  const [view, setView] = useState<ViewType>("welcome");
-  const [selectedCategory, setSelectedCategory] = useState<string | undefined>(undefined);
+  const { isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -31,97 +21,47 @@ export default function App() {
     );
   }
 
-  if (isAuthenticated && user) {
-    if (user.role === "PROVIDER" && view !== "provider-onboarding") {
-      return (
-        <>
-          <ProviderApp />
-          <Toaster />
-        </>
-      );
-    }
-    if (user.role === "CUSTOMER" && view !== "customer-onboarding") {
-      return (
-        <>
-          <CustomerApp initialCategory={selectedCategory} />
-          <Toaster />
-        </>
-      );
-    }
-  }
-
-  if (view === "login" || view === "register") {
-    return (
-      <>
-        <LoginScreen
-          mode={view}
-          onSuccess={(loggedInUser) => {
-            if (loggedInUser.role === "PROVIDER") {
-              setView("provider-app");
-            } else {
-              setView("customer-app");
-            }
-          }}
-          onSwitchMode={() => setView(view === "login" ? "register" : "login")}
-          onBack={() => setView("welcome")}
-        />
-        <Toaster />
-      </>
-    );
-  }
-
-  if (view === "customer-onboarding") {
-    return (
-      <>
-        <CustomerOnboardingFlow
-          onComplete={() => setView("customer-app")}
-          onBack={() => setView("welcome")}
-        />
-        <Toaster />
-      </>
-    );
-  }
-
-  if (view === "provider-onboarding") {
-    return (
-      <>
-        <ProviderOnboardingFlow
-          onComplete={() => setView("provider-app")}
-          onBack={() => setView("welcome")}
-        />
-        <Toaster />
-      </>
-    );
-  }
-
   return (
     <>
-      <WelcomeScreen
-        onCustomerApp={(category) => {
-          setSelectedCategory(category);
-          if (isAuthenticated) {
-            setView("customer-app");
-          } else {
-            setView("login");
-          }
-        }}
-        onCustomerOnboarding={() => {
-          if (isAuthenticated) {
-            setView("customer-onboarding");
-          } else {
-            setView("register");
-          }
-        }}
-        onProviderOnboarding={() => {
-          if (isAuthenticated) {
-            setView("provider-onboarding");
-          } else {
-            setView("register");
-          }
-        }}
-        onLogin={() => setView("login")}
-        onRegister={() => setView("register")}
-      />
+      <Routes>
+        {/* Public routes */}
+        <Route path="/" element={<WelcomeScreen />} />
+        <Route path="/bejelentkezes" element={<LoginScreen mode="login" />} />
+        <Route
+          path="/regisztracio/ugyfel"
+          element={<LoginScreen mode="register" role="CUSTOMER" />}
+        />
+        <Route
+          path="/regisztracio/szolgaltato"
+          element={<LoginScreen mode="register" role="PROVIDER" />}
+        />
+
+        {/* Protected routes — require authentication */}
+        <Route element={<ProtectedRoute />}>
+          {/* Customer routes */}
+          <Route
+            path="/ugyfel/bemutatkozas"
+            element={<CustomerOnboardingFlow />}
+          />
+          <Route element={<RequireRole role="CUSTOMER" />}>
+            <Route path="/ugyfel" element={<CustomerApp />} />
+            <Route path="/ugyfel/:tab" element={<CustomerApp />} />
+          </Route>
+
+          {/* Provider routes */}
+          <Route
+            path="/szolgaltato/bemutatkozas"
+            element={<ProviderOnboardingFlow />}
+          />
+          <Route element={<RequireRole role="PROVIDER" />}>
+            <Route path="/szolgaltato" element={<ProviderApp />} />
+            <Route path="/szolgaltato/:tab" element={<ProviderApp />} />
+          </Route>
+        </Route>
+
+        {/* Catch-all — redirect to home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
       <Toaster />
     </>
   );

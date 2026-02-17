@@ -183,6 +183,18 @@ app.listen(PORT, () => {
   console.log(
     `🌐 Frontend URL: ${process.env.FRONTEND_URL || "http://localhost:5173"}`,
   );
+
+  // Security warnings
+  if (!process.env.JWT_SECRET) {
+    console.warn(
+      "⚠️  JWT_SECRET is not set – using insecure dev default. Set it in .env for production!",
+    );
+  }
+  if (!process.env.COOKIE_SECRET) {
+    console.warn(
+      "⚠️  COOKIE_SECRET is not set – using insecure dev default. Set it in .env for production!",
+    );
+  }
 });
 
 // ============================================================================

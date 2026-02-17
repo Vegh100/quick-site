@@ -1,4 +1,5 @@
 import { motion } from "motion/react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
@@ -14,14 +15,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useCategories } from "../../hooks/useApi";
-
-interface WelcomeScreenProps {
-  onCustomerApp?: (category?: string) => void;
-  onCustomerOnboarding?: () => void;
-  onProviderOnboarding?: () => void;
-  onLogin?: () => void;
-  onRegister?: () => void;
-}
+import { useAuth } from "../../contexts/AuthContext";
 
 const CATEGORY_COLORS = [
   "bg-blue-500",
@@ -38,33 +32,38 @@ const benefits = [
   {
     image:
       "https://images.unsplash.com/photo-1587567818566-3272be7d64c9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHx2ZXJpZmllZCUyMHByb2Zlc3Npb25hbCUyMHdvcmtlciUyMGJhZGdlfGVufDF8fHx8MTc3MDYzMTg4NHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-    title: "Verified Providers",
-    description: "All service providers are background checked and verified",
+    title: "Ellenőrzött szolgáltatók",
+    description: "Minden szolgáltató háttérellenőrzésen esett át",
   },
   {
     image:
       "https://images.unsplash.com/photo-1729860646477-c0f603c0300b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxpbnN0YW50JTIwb25saW5lJTIwYm9va2luZyUyMHNtYXJ0cGhvbmV8ZW58MXx8fHwxNzcwNjMxODg0fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-    title: "Instant Booking",
-    description: "Book services in seconds with real-time availability",
+    title: "Azonnali foglalás",
+    description:
+      "Foglalj szolgáltatást másodpercek alatt, valós idejű elérhetőséggel",
   },
   {
     image:
       "https://images.unsplash.com/photo-1481015172496-8cfcb0d85e59?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjdXN0b21lciUyMHNhdGlzZmFjdGlvbiUyMHJhdGluZyUyMHN0YXJzfGVufDF8fHx8MTc3MDYzMTg4N3ww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
-    title: "Quality Service",
-    description: "4.9/5 average rating from 50,000+ bookings",
+    title: "Minőségi szolgáltatás",
+    description: "4.9/5 átlagos értékelés 50 000+ foglalásból",
   },
 ];
 
-export function WelcomeScreen({
-  onCustomerApp,
-  onCustomerOnboarding,
-  onProviderOnboarding,
-  onLogin,
-  onRegister,
-}: WelcomeScreenProps) {
+export function WelcomeScreen() {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const { data: categoriesData, isLoading: loadingCategories } =
     useCategories();
   const apiCategories = categoriesData?.data || [];
+
+  const goToCustomerApp = (category?: string) => {
+    if (isAuthenticated) {
+      navigate(category ? `/ugyfel?kategoria=${category}` : "/ugyfel");
+    } else {
+      navigate("/bejelentkezes", { state: { pendingRole: "CUSTOMER" } });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -79,17 +78,20 @@ export function WelcomeScreen({
           </div>
 
           <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={onProviderOnboarding}>
-              For Business
+            <Button
+              variant="ghost"
+              onClick={() => navigate("/regisztracio/szolgaltato")}
+            >
+              Vállalkozásoknak
             </Button>
-            <Button variant="ghost" onClick={onLogin}>
-              Sign In
+            <Button variant="ghost" onClick={() => navigate("/bejelentkezes")}>
+              Bejelentkezés
             </Button>
             <Button
               variant="outline"
-              onClick={onRegister || onCustomerOnboarding}
+              onClick={() => navigate("/regisztracio/ugyfel")}
             >
-              Sign Up
+              Regisztráció
             </Button>
           </div>
         </div>
@@ -106,18 +108,18 @@ export function WelcomeScreen({
             >
               <Badge className="mb-6 bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
                 <TrendingUp className="h-3 w-3 mr-1" />
-                Trusted by 10,000+ customers
+                10 000+ elégedett ügyfél
               </Badge>
 
               <h1 className="mb-6 text-4xl md:text-6xl">
-                Book Local Services
+                Helyi szolgáltatások
                 <br />
-                <span className="text-primary">In Seconds</span>
+                <span className="text-primary">pár kattintásra</span>
               </h1>
 
               <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-                From home cleaning to car wash, find trusted local service
-                providers instantly. Quality service guaranteed.
+                Takarítás, kertészet, autómosás és más – találd meg a megbízható
+                helyi szolgáltatókat pillanatok alatt.
               </p>
 
               {/* Search Bar */}
@@ -131,17 +133,17 @@ export function WelcomeScreen({
                   <div className="flex-1 flex items-center gap-3 px-4">
                     <MapPin className="h-5 w-5 text-muted-foreground" />
                     <Input
-                      placeholder="Enter your location..."
+                      placeholder="Add meg a tartózkodási helyed..."
                       className="border-0 focus-visible:ring-0 text-base"
                     />
                   </div>
                   <Button
                     size="lg"
                     className="rounded-xl px-8"
-                    onClick={onCustomerApp}
+                    onClick={() => goToCustomerApp()}
                   >
                     <Search className="h-5 w-5 mr-2" />
-                    Find Services
+                    Keresés
                   </Button>
                 </div>
               </motion.div>
@@ -155,10 +157,10 @@ export function WelcomeScreen({
               >
                 <div className="flex items-center gap-2">
                   <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                  <span className="text-muted-foreground">4.9/5 Rating</span>
+                  <span className="text-muted-foreground">4.9/5 Értékelés</span>
                 </div>
-                <div className="text-muted-foreground">50,000+ Bookings</div>
-                <div className="text-muted-foreground">500+ Providers</div>
+                <div className="text-muted-foreground">50 000+ Foglalás</div>
+                <div className="text-muted-foreground">500+ Szolgáltató</div>
               </motion.div>
             </motion.div>
           </div>
@@ -179,10 +181,8 @@ export function WelcomeScreen({
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="mb-3">Popular Services</h2>
-            <p className="text-muted-foreground">
-              What are you looking for today?
-            </p>
+            <h2 className="mb-3">Népszerű szolgáltatások</h2>
+            <p className="text-muted-foreground">Mit keresel ma?</p>
           </motion.div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-5xl mx-auto">
@@ -198,7 +198,7 @@ export function WelcomeScreen({
                   whileInView={{ y: 0, opacity: 1 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1, duration: 0.4 }}
-                  onClick={() => onCustomerApp?.(category.slug)}
+                  onClick={() => goToCustomerApp(category.slug)}
                   className="p-6 bg-background rounded-2xl border-2 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all"
                 >
                   <div
@@ -224,9 +224,9 @@ export function WelcomeScreen({
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="mb-3">Why Choose Qvick?</h2>
+            <h2 className="mb-3">Miért a Qvick?</h2>
             <p className="text-muted-foreground">
-              Experience the easiest way to book local services
+              A legegyszerűbb módja a helyi szolgáltatások foglalásának
             </p>
           </motion.div>
 
@@ -271,9 +271,9 @@ export function WelcomeScreen({
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="mb-3">Get Started with Qvick</h2>
+            <h2 className="mb-3">Kezdj el a Qvick-kel</h2>
             <p className="text-muted-foreground">
-              Choose how you want to use our platform
+              Válaszd ki, hogyan szeretnéd használni a platformot
             </p>
           </motion.div>
 
@@ -296,27 +296,31 @@ export function WelcomeScreen({
                     <div className="absolute inset-0 bg-gradient-to-t from-primary/30 to-transparent" />
                   </div>
 
-                  <h2 className="mb-3">I'm Looking for Services</h2>
+                  <h2 className="mb-3">Szolgáltatást keresek</h2>
                   <p className="text-muted-foreground mb-6 flex-1">
-                    Find and book local service providers for cleaning,
-                    gardening, car wash, and more
+                    Találd meg és foglald le a legjobb helyi szolgáltatókat –
+                    takarítás, kertészet, autómosás és sok más
                   </p>
 
                   <div className="space-y-3">
                     <Button
-                      onClick={onCustomerApp}
+                      onClick={() => goToCustomerApp()}
                       className="w-full justify-between"
                       size="lg"
                     >
-                      Browse Services
+                      Szolgáltatások böngészése
                       <ArrowRight className="h-5 w-5" />
                     </Button>
                     <Button
-                      onClick={onCustomerOnboarding}
+                      onClick={() =>
+                        isAuthenticated
+                          ? navigate("/ugyfel/bemutatkozas")
+                          : navigate("/regisztracio/ugyfel")
+                      }
                       variant="outline"
                       className="w-full"
                     >
-                      Create Customer Account
+                      Ügyfél fiók létrehozása
                     </Button>
                   </div>
                 </div>
@@ -341,23 +345,27 @@ export function WelcomeScreen({
                     <div className="absolute inset-0 bg-gradient-to-t from-accent/30 to-transparent" />
                   </div>
 
-                  <h2 className="mb-3">I'm a Service Provider</h2>
+                  <h2 className="mb-3">Szolgáltató vagyok</h2>
                   <p className="text-muted-foreground mb-6 flex-1">
-                    Grow your business by connecting with customers who need
-                    your services
+                    Növeld a vállalkozásodat – kapcsolódj ügyfelekhez, akiknek
+                    szükségük van a szolgáltatásaidra
                   </p>
 
                   <div className="space-y-3">
                     <Button
-                      onClick={onProviderOnboarding}
+                      onClick={() =>
+                        isAuthenticated
+                          ? navigate("/szolgaltato/bemutatkozas")
+                          : navigate("/regisztracio/szolgaltato")
+                      }
                       className="w-full justify-between bg-accent hover:bg-accent/90"
                       size="lg"
                     >
-                      Start as Provider
+                      Indítás szolgáltatóként
                       <Sparkles className="h-5 w-5" />
                     </Button>
                     <p className="text-sm text-muted-foreground text-center">
-                      Free 30-day trial • No credit card required
+                      30 napos ingyenes próba • Bankkártya nem szükséges
                     </p>
                   </div>
                 </div>
@@ -370,7 +378,7 @@ export function WelcomeScreen({
       {/* Footer */}
       <footer className="border-t py-8 bg-card">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} Qvick. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Qvick. Minden jog fenntartva.</p>
         </div>
       </footer>
     </div>

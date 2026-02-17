@@ -17,7 +17,7 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
 import { useState, useMemo } from "react";
-import { useCreateBooking } from "../../hooks/useApi";
+import { useCreateBooking, useProvider } from "../../hooks/useApi";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import type { Provider } from "../../lib/types";
@@ -49,9 +49,13 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
   const [notes, setNotes] = useState("");
   const createBooking = useCreateBooking();
 
-  const services = provider.services || [];
+  // Fetch full provider details (search results may lack availability)
+  const { data: fullProviderData } = useProvider(provider.id);
+  const resolvedProvider = fullProviderData?.data || provider;
+
+  const services = resolvedProvider.services || [];
   const selectedService = services.find((s) => s.id === selectedServiceId);
-  const availability = provider.availability || [];
+  const availability = resolvedProvider.availability || [];
 
   // Get time slots for the selected date based on provider availability
   const timeSlots = useMemo(() => {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   useProviderSearch,
@@ -41,10 +42,6 @@ import { Toaster } from "../ui/sonner";
 import { toast } from "sonner";
 import type { Provider, BookingStatus, Booking } from "../../lib/types";
 
-interface CustomerAppProps {
-  initialCategory?: string;
-}
-
 const STATUS_COLORS: Record<BookingStatus, string> = {
   PENDING: "bg-yellow-500",
   CONFIRMED: "bg-blue-500",
@@ -61,16 +58,40 @@ const STATUS_HU: Record<BookingStatus, string> = {
   CANCELLED: "Lemondva",
 };
 
-export function CustomerApp({ initialCategory }: CustomerAppProps) {
+// Map URL segments to internal tab names
+const TAB_FROM_URL: Record<string, string> = {
+  foglalasok: "bookings",
+  kedvencek: "favorites",
+  beallitasok: "settings",
+  tevekenyse: "analytics",
+};
+const TAB_TO_URL: Record<string, string> = {
+  bookings: "foglalasok",
+  favorites: "kedvencek",
+  settings: "beallitasok",
+  analytics: "tevekenyse",
+};
+
+export function CustomerApp() {
+  const { tab: urlTab } = useParams<{ tab?: string }>();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState("discover");
-  const [selectedCategory, setSelectedCategory] = useState(
-    initialCategory || "",
-  );
+
+  const activeTab = urlTab ? TAB_FROM_URL[urlTab] || "discover" : "discover";
+  const setActiveTab = (tab: string) => {
+    if (tab === "discover") {
+      navigate("/ugyfel");
+    } else {
+      navigate(`/ugyfel/${TAB_TO_URL[tab] || tab}`);
+    }
+  };
+
+  const initialCategory = searchParams.get("kategoria") || "";
+  const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [bookingProvider, setBookingProvider] = useState<Provider | null>(null);
   const [bookingTab, setBookingTab] = useState("upcoming");
   const [page, setPage] = useState(1);
@@ -103,7 +124,7 @@ export function CustomerApp({ initialCategory }: CustomerAppProps) {
     useCustomerBookings({
       status:
         bookingTab === "upcoming"
-          ? "PENDING"
+          ? "PENDING,CONFIRMED,IN_PROGRESS"
           : bookingTab === "past"
             ? "COMPLETED"
             : "CANCELLED",
@@ -175,12 +196,12 @@ export function CustomerApp({ initialCategory }: CustomerAppProps) {
   };
 
   // If showing settings, render settings panel
-  if (showSettings) {
+  if (activeTab === "settings") {
     return (
       <div className="min-h-screen flex flex-col bg-background">
         <HeaderWithSettings
           userType="customer"
-          onSettingsClick={() => setShowSettings(true)}
+          onSettingsClick={() => setActiveTab("settings")}
         />
 
         <main className="flex-1 container mx-auto px-4 py-8">
@@ -192,7 +213,10 @@ export function CustomerApp({ initialCategory }: CustomerAppProps) {
                   Fiókod és beállításaid kezelése
                 </p>
               </div>
-              <Button variant="outline" onClick={() => setShowSettings(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setActiveTab("discover")}
+              >
                 Vissza
               </Button>
             </div>
@@ -211,7 +235,7 @@ export function CustomerApp({ initialCategory }: CustomerAppProps) {
     <div className="min-h-screen flex flex-col bg-background">
       <HeaderWithSettings
         userType="customer"
-        onSettingsClick={() => setShowSettings(true)}
+        onSettingsClick={() => setActiveTab("settings")}
       />
 
       {/* Customer Navigation */}
@@ -649,21 +673,23 @@ export function CustomerApp({ initialCategory }: CustomerAppProps) {
                                 Lemondás
                               </Button>
                             )}
-                            {/* Review button for COMPLETED */}
-                            {booking.status === "COMPLETED" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setReviewBooking(booking);
-                                  setReviewRating(5);
-                                  setReviewComment("");
-                                }}
-                              >
-                                <MessageSquare className="h-3 w-3 mr-1" />
-                                Értékelés
-                              </Button>
-                            )}
+                            {/* Review button for COMPLETED (hide if already reviewed) */}
+                            {booking.status === "COMPLETED" &&
+                              (!booking.reviews ||
+                                booking.reviews.length === 0) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setReviewBooking(booking);
+                                    setReviewRating(5);
+                                    setReviewComment("");
+                                  }}
+                                >
+                                  <MessageSquare className="h-3 w-3 mr-1" />
+                                  Értékelés
+                                </Button>
+                              )}
                           </div>
                         </div>
                       </Card>

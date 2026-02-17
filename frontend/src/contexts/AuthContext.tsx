@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import { authApi } from "../lib/api-services";
-import type { User, LoginInput, RegisterInput } from "../lib/types";
+import type { User, LoginInput, RegisterInput, UserRole } from "../lib/types";
 
 interface AuthContextType {
   user: User | null;
@@ -15,6 +15,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (data: LoginInput) => Promise<User>;
   register: (data: RegisterInput) => Promise<User>;
+  googleAuth: (credential: string, role?: UserRole) => Promise<User>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   setUser: (user: User | null) => void;
@@ -56,6 +57,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.data.user;
   }, []);
 
+  const googleAuth = useCallback(
+    async (credential: string, role?: UserRole) => {
+      const res = await authApi.googleAuth(credential, role);
+      setUser(res.data.user);
+      return res.data.user;
+    },
+    [],
+  );
+
   const logout = useCallback(async () => {
     await authApi.logout().catch(() => {});
     setUser(null);
@@ -78,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         login,
         register,
+        googleAuth,
         logout,
         refreshUser,
         setUser,

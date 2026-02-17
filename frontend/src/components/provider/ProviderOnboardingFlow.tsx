@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
@@ -47,6 +48,7 @@ export function ProviderOnboardingFlow({
   onComplete,
   onBack,
 }: ProviderOnboardingFlowProps) {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const createProvider = useCreateProvider();
   const addService = useAddService();
@@ -121,7 +123,7 @@ export function ProviderOnboardingFlow({
       setCurrentStep(currentStep + 1);
     } else {
       toast.success("Minden kész! Üdvözlünk a Qvick-ben!");
-      onComplete?.();
+      onComplete ? onComplete() : navigate("/szolgaltato", { replace: true });
     }
   };
 
@@ -129,7 +131,7 @@ export function ProviderOnboardingFlow({
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     } else {
-      onBack?.();
+      onBack ? onBack() : navigate("/");
     }
   };
 

@@ -7,6 +7,7 @@ import {
   Shield,
   HelpCircle,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -28,6 +29,7 @@ export function HeaderWithSettings({
   onSettingsClick,
 }: HeaderWithSettingsProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const displayName = user
     ? [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email
@@ -47,6 +49,7 @@ export function HeaderWithSettings({
 
   const handleLogout = async () => {
     await logout();
+    navigate("/", { replace: true });
   };
 
   const customerMenuItems = [
