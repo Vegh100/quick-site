@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { NotFoundError, ForbiddenError } from "../lib/errors.js";
+import { getProviderForUser } from "./member.service.js";
 import {
   CreateProviderInput,
   UpdateProviderInput,
@@ -19,7 +20,11 @@ export async function createProvider(
   userId: string,
   data: CreateProviderInput,
 ) {
-  const { categoryIds, ...providerData } = data;
+  const { categoryIds, providerType, ...providerData } = data;
+
+  // Get user email for the owner member record
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new NotFoundError("User");
 
   // Update user role to PROVIDER
   await prisma.user.update({
@@ -27,13 +32,28 @@ export async function createProvider(
     data: { role: "PROVIDER" },
   });
 
+  const resolvedType = providerType || "SOLO";
+
   const provider = await prisma.provider.create({
     data: {
       ...providerData,
       userId,
+      providerType: resolvedType,
       onboardingDone: true,
       categories: {
         create: categoryIds.map((categoryId) => ({ categoryId })),
+      },
+      // Create OWNER member record
+      members: {
+        create: {
+          userId,
+          role: "OWNER",
+          status: "ACTIVE",
+          invitedEmail: user.email,
+          displayName:
+            `${user.firstName || ""} ${user.lastName || ""}`.trim() || null,
+          joinedAt: new Date(),
+        },
       },
       // Create default trial subscription
       subscription: {
@@ -46,6 +66,7 @@ export async function createProvider(
     },
     include: {
       categories: { include: { category: true } },
+      members: true,
       subscription: true,
     },
   });
@@ -57,10 +78,14 @@ export async function updateProvider(
   userId: string,
   data: UpdateProviderInput,
 ) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider, memberRole } = await getProviderForUser(userId);
 
-  const { categoryIds, ...updateData } = data;
+  // Only OWNER and MANAGER can update the profile
+  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
+    throw new ForbiddenError("Only owners and managers can update the profile");
+  }
+
+  const { categoryIds, providerType, ...updateData } = data;
 
   const updated = await prisma.provider.update({
     where: { id: provider.id },
@@ -91,8 +116,10 @@ export async function updateProvider(
 // ============================================================================
 
 export async function getProviderByUserId(userId: string) {
+  const { provider: resolved } = await getProviderForUser(userId);
+
   const provider = await prisma.provider.findUnique({
-    where: { userId },
+    where: { id: resolved.id },
     include: {
       user: {
         select: {
@@ -106,6 +133,20 @@ export async function getProviderByUserId(userId: string) {
       categories: { include: { category: true } },
       services: { where: { isActive: true }, orderBy: { sortOrder: "asc" } },
       availability: { orderBy: { dayOfWeek: "asc" } },
+      members: {
+        where: { status: { not: "DEACTIVATED" } },
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+        orderBy: { role: "asc" },
+      },
       subscription: true,
     },
   });
@@ -126,6 +167,23 @@ export async function getProviderById(providerId: string) {
       availability: {
         where: { isEnabled: true },
         orderBy: { dayOfWeek: "asc" },
+      },
+      members: {
+        where: { status: "ACTIVE" },
+        select: {
+          id: true,
+          role: true,
+          displayName: true,
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatarUrl: true,
+            },
+          },
+        },
+        orderBy: { role: "asc" },
       },
     },
   });
@@ -246,8 +304,10 @@ export async function searchProviders(filters: ProviderSearchInput) {
 // ============================================================================
 
 export async function addService(userId: string, data: AddServiceInput) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider, memberRole } = await getProviderForUser(userId);
+  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
+    throw new ForbiddenError("Only owners and managers can add services");
+  }
 
   return prisma.service.create({
     data: {
@@ -263,8 +323,10 @@ export async function updateService(
   serviceId: string,
   data: UpdateServiceInput,
 ) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider, memberRole } = await getProviderForUser(userId);
+  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
+    throw new ForbiddenError("Only owners and managers can update services");
+  }
 
   const service = await prisma.service.findFirst({
     where: { id: serviceId, providerId: provider.id },
@@ -283,8 +345,10 @@ export async function updateService(
 }
 
 export async function deleteService(userId: string, serviceId: string) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider, memberRole } = await getProviderForUser(userId);
+  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
+    throw new ForbiddenError("Only owners and managers can delete services");
+  }
 
   const service = await prisma.service.findFirst({
     where: { id: serviceId, providerId: provider.id },
@@ -306,8 +370,10 @@ export async function setAvailability(
   userId: string,
   data: SetAvailabilityInput,
 ) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider, memberRole } = await getProviderForUser(userId);
+  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
+    throw new ForbiddenError("Only owners and managers can set availability");
+  }
 
   // Upsert availability for each day
   const results = await Promise.all(
@@ -346,8 +412,10 @@ export async function updatePricingSettings(
   userId: string,
   data: UpdatePricingSettingsInput,
 ) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider, memberRole } = await getProviderForUser(userId);
+  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
+    throw new ForbiddenError("Only owners and managers can update pricing");
+  }
 
   return prisma.provider.update({
     where: { id: provider.id },
@@ -360,8 +428,7 @@ export async function updatePricingSettings(
 // ============================================================================
 
 export async function getProviderStats(userId: string) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider } = await getProviderForUser(userId);
 
   const [
     totalBookings,
@@ -432,8 +499,7 @@ export async function getProviderStats(userId: string) {
 // ============================================================================
 
 export async function getProviderClients(userId: string, page = 1, limit = 20) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider } = await getProviderForUser(userId);
 
   const skip = (page - 1) * limit;
 

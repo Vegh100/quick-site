@@ -5,6 +5,7 @@ import type {
   LoginInput,
   User,
   Provider,
+  ProviderMember,
   Service,
   Availability,
   Booking,
@@ -144,6 +145,7 @@ export const providerApi = {
     teamSize?: string;
     taxNumber?: string;
     regNumber?: string;
+    providerType?: "SOLO" | "COMPANY";
     categoryIds: string[];
   }) => api.post<ApiResponse<Provider>>("/providers", data).then((r) => r.data),
 
@@ -340,4 +342,58 @@ export const categoryApi = {
 
   getBySlug: (slug: string) =>
     api.get<ApiResponse<Category>>(`/categories/${slug}`).then((r) => r.data),
+};
+
+// ============================================================================
+// TEAM MEMBERS
+// ============================================================================
+
+export const memberApi = {
+  list: () =>
+    api
+      .get<ApiResponse<ProviderMember[]>>("/providers/me/members")
+      .then((r) => r.data),
+
+  invite: (data: {
+    email: string;
+    role?: "MANAGER" | "EMPLOYEE";
+    displayName?: string;
+  }) =>
+    api
+      .post<ApiResponse<ProviderMember>>("/providers/me/members/invite", data)
+      .then((r) => r.data),
+
+  acceptInvite: (memberId: string) =>
+    api
+      .post<ApiResponse<ProviderMember>>("/providers/me/members/accept", {
+        memberId,
+      })
+      .then((r) => r.data),
+
+  getPendingInvites: () =>
+    api
+      .get<
+        ApiResponse<ProviderMember[]>
+      >("/providers/me/members/invites/pending")
+      .then((r) => r.data),
+
+  update: (
+    memberId: string,
+    data: { role?: "MANAGER" | "EMPLOYEE"; displayName?: string },
+  ) =>
+    api
+      .patch<
+        ApiResponse<ProviderMember>
+      >(`/providers/me/members/${memberId}`, data)
+      .then((r) => r.data),
+
+  deactivate: (memberId: string) =>
+    api
+      .delete<ApiResponse<ProviderMember>>(`/providers/me/members/${memberId}`)
+      .then((r) => r.data),
+
+  upgradeToCompany: () =>
+    api
+      .post<ApiResponse<Provider>>("/providers/me/members/upgrade-company")
+      .then((r) => r.data),
 };

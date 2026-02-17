@@ -15,6 +15,7 @@ import { authConfig } from "./config/auth.config.js";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import providerRoutes from "./routes/provider.routes.js";
+import memberRoutes from "./routes/member.routes.js";
 import bookingRoutes from "./routes/booking.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 import favoriteRoutes from "./routes/favorite.routes.js";
@@ -106,6 +107,7 @@ app.get("/health", (_req: Request, res: Response) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/providers", providerRoutes);
+app.use("/api/providers/me/members", memberRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/favorites", favoriteRoutes);

@@ -12,7 +12,7 @@ datasource db {
 // ============================================================================
 
 model User {
-  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   email         String    @unique @db.VarChar(255)
   passwordHash  String?   @map("password_hash") @db.VarChar(255)
   firstName     String?   @map("first_name") @db.VarChar(100)
@@ -29,6 +29,7 @@ model User {
   oauthAccounts       OAuthAccount[]
   sessions            Session[]
   provider            Provider?
+  providerMembership  ProviderMember?
   addresses           Address[]
   bookingsAsCustomer  Booking[]           @relation("CustomerBookings")
   reviewsGiven        Review[]            @relation("ReviewAuthor")
@@ -52,7 +53,7 @@ enum UserRole {
 }
 
 model OAuthAccount {
-  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId        String   @map("user_id") @db.Uuid
   provider      String   @db.VarChar(50)
   providerAccId String   @map("provider_account_id") @db.VarChar(255)
@@ -69,7 +70,7 @@ model OAuthAccount {
 }
 
 model Session {
-  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId       String   @map("user_id") @db.Uuid
   token        String   @unique @db.VarChar(512)
   userAgent    String?  @map("user_agent") @db.VarChar(500)
@@ -90,30 +91,32 @@ model Session {
 // ============================================================================
 
 model Provider {
-  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  userId          String   @unique @map("user_id") @db.Uuid
-  businessName    String   @map("business_name") @db.VarChar(255)
-  description     String?  @db.Text
-  phone           String?  @db.VarChar(50)
-  website         String?  @db.VarChar(500)
-  logoUrl         String?  @map("logo_url") @db.VarChar(500)
-  coverImageUrl   String?  @map("cover_image_url") @db.VarChar(500)
-  serviceArea     String?  @map("service_area") @db.VarChar(500)
-  teamSize        String?  @map("team_size") @db.VarChar(20)
-  taxNumber       String?  @map("tax_number") @db.VarChar(50)
-  regNumber       String?  @map("reg_number") @db.VarChar(50)
-  rating          Decimal  @default(0) @db.Decimal(2, 1)
-  reviewCount     Int      @default(0) @map("review_count")
-  isVerified      Boolean  @default(false) @map("is_verified")
-  onboardingDone  Boolean  @default(false) @map("onboarding_done")
-  dynamicPricing  Boolean  @default(false) @map("dynamic_pricing")
-  weekendPremium  Boolean  @default(false) @map("weekend_premium")
-  weekendPremiumPercent Int @default(20) @map("weekend_premium_percent")
-  autoAccept      Boolean  @default(false) @map("auto_accept")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String       @unique @map("user_id") @db.Uuid
+  providerType    ProviderType @default(SOLO) @map("provider_type")
+  businessName    String       @map("business_name") @db.VarChar(255)
+  description     String?      @db.Text
+  phone           String?      @db.VarChar(50)
+  website         String?      @db.VarChar(500)
+  logoUrl         String?      @map("logo_url") @db.VarChar(500)
+  coverImageUrl   String?      @map("cover_image_url") @db.VarChar(500)
+  serviceArea     String?      @map("service_area") @db.VarChar(500)
+  teamSize        String?      @map("team_size") @db.VarChar(20)
+  taxNumber       String?      @map("tax_number") @db.VarChar(50)
+  regNumber       String?      @map("reg_number") @db.VarChar(50)
+  rating          Decimal      @default(0) @db.Decimal(2, 1)
+  reviewCount     Int          @default(0) @map("review_count")
+  isVerified      Boolean      @default(false) @map("is_verified")
+  onboardingDone  Boolean      @default(false) @map("onboarding_done")
+  dynamicPricing  Boolean      @default(false) @map("dynamic_pricing")
+  weekendPremium  Boolean      @default(false) @map("weekend_premium")
+  weekendPremiumPercent Int    @default(20) @map("weekend_premium_percent")
+  autoAccept      Boolean      @default(false) @map("auto_accept")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members         ProviderMember[]
   categories      ProviderCategory[]
   services        Service[]
   availability    Availability[]
@@ -128,8 +131,56 @@ model Provider {
   @@map("providers")
 }
 
+enum ProviderType {
+  SOLO
+  COMPANY
+
+  @@map("provider_type_enum")
+}
+
+// ============================================================================
+// PROVIDER MEMBERS (TEAM)
+// ============================================================================
+
+model ProviderMember {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId    String       @map("provider_id") @db.Uuid
+  userId        String?      @unique @map("user_id") @db.Uuid
+  role          MemberRole   @default(EMPLOYEE)
+  status        MemberStatus @default(INVITED)
+  invitedEmail  String       @map("invited_email") @db.VarChar(255)
+  displayName   String?      @map("display_name") @db.VarChar(200)
+  invitedAt     DateTime     @default(now()) @map("invited_at") @db.Timestamptz(6)
+  joinedAt      DateTime?    @map("joined_at") @db.Timestamptz(6)
+
+  provider      Provider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignedBookings Booking[] @relation("AssignedMember")
+
+  @@index([providerId])
+  @@index([userId])
+  @@index([invitedEmail])
+  @@map("provider_members")
+}
+
+enum MemberRole {
+  OWNER
+  MANAGER
+  EMPLOYEE
+
+  @@map("member_role")
+}
+
+enum MemberStatus {
+  INVITED
+  ACTIVE
+  DEACTIVATED
+
+  @@map("member_status")
+}
+
 model ProviderDocument {
-  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   providerId  String    @map("provider_id") @db.Uuid
   type        String    @db.VarChar(100)
   fileName    String    @map("file_name") @db.VarChar(255)
@@ -149,7 +200,7 @@ model ProviderDocument {
 // ============================================================================
 
 model Category {
-  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name        String   @unique @db.VarChar(100)
   slug        String   @unique @db.VarChar(100)
   icon        String?  @db.VarChar(10)
@@ -175,7 +226,7 @@ model ProviderCategory {
 }
 
 model Service {
-  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   providerId    String    @map("provider_id") @db.Uuid
   name          String    @db.VarChar(255)
   description   String?   @db.Text
@@ -209,7 +260,7 @@ enum PriceType {
 // ============================================================================
 
 model Availability {
-  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   providerId  String   @map("provider_id") @db.Uuid
   dayOfWeek   Int      @map("day_of_week")
   startTime   String   @map("start_time") @db.VarChar(5)
@@ -228,33 +279,36 @@ model Availability {
 // ============================================================================
 
 model Booking {
-  id            String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  customerId    String        @map("customer_id") @db.Uuid
-  providerId    String        @map("provider_id") @db.Uuid
-  serviceId     String        @map("service_id") @db.Uuid
-  status        BookingStatus @default(PENDING)
-  scheduledDate DateTime      @map("scheduled_date") @db.Date
-  scheduledTime String        @map("scheduled_time") @db.VarChar(5)
-  durationMin   Int           @map("duration_min")
-  totalAmount   Decimal       @map("total_amount") @db.Decimal(10, 2)
-  currency      String        @default("RON") @db.VarChar(3)
-  notes         String?       @db.Text
-  addressId     String?       @map("address_id") @db.Uuid
-  cancelledBy   String?       @map("cancelled_by") @db.Uuid
-  cancelReason  String?       @map("cancel_reason") @db.Text
-  completedAt   DateTime?     @map("completed_at") @db.Timestamptz(6)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId       String          @map("customer_id") @db.Uuid
+  providerId       String          @map("provider_id") @db.Uuid
+  serviceId        String          @map("service_id") @db.Uuid
+  assignedMemberId String?         @map("assigned_member_id") @db.Uuid
+  status           BookingStatus   @default(PENDING)
+  scheduledDate    DateTime        @map("scheduled_date") @db.Date
+  scheduledTime    String          @map("scheduled_time") @db.VarChar(5)
+  durationMin      Int             @map("duration_min")
+  totalAmount      Decimal         @map("total_amount") @db.Decimal(10, 2)
+  currency         String          @default("RON") @db.VarChar(3)
+  notes            String?         @db.Text
+  addressId        String?         @map("address_id") @db.Uuid
+  cancelledBy      String?         @map("cancelled_by") @db.Uuid
+  cancelReason     String?         @map("cancel_reason") @db.Text
+  completedAt      DateTime?       @map("completed_at") @db.Timestamptz(6)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  customer      User          @relation("CustomerBookings", fields: [customerId], references: [id])
-  provider      Provider      @relation(fields: [providerId], references: [id])
-  service       Service       @relation(fields: [serviceId], references: [id])
-  address       Address?      @relation(fields: [addressId], references: [id])
-  reviews       Review[]
-  payment       Payment?
+  customer         User            @relation("CustomerBookings", fields: [customerId], references: [id])
+  provider         Provider        @relation(fields: [providerId], references: [id])
+  service          Service         @relation(fields: [serviceId], references: [id])
+  assignedMember   ProviderMember? @relation("AssignedMember", fields: [assignedMemberId], references: [id])
+  address          Address?        @relation(fields: [addressId], references: [id])
+  reviews          Review[]
+  payment          Payment?
 
   @@index([customerId])
   @@index([providerId])
+  @@index([assignedMemberId])
   @@index([status])
   @@index([scheduledDate])
   @@map("bookings")
@@ -275,7 +329,7 @@ enum BookingStatus {
 // ============================================================================
 
 model Review {
-  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   bookingId  String   @map("booking_id") @db.Uuid
   authorId   String   @map("author_id") @db.Uuid
   targetId   String   @map("target_id") @db.Uuid
@@ -301,7 +355,7 @@ model Review {
 // ============================================================================
 
 model Favorite {
-  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId     String   @map("user_id") @db.Uuid
   providerId String   @map("provider_id") @db.Uuid
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -319,7 +373,7 @@ model Favorite {
 // ============================================================================
 
 model Address {
-  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId     String   @map("user_id") @db.Uuid
   label      String   @db.VarChar(50)
   street     String   @db.VarChar(255)
@@ -342,7 +396,7 @@ model Address {
 // ============================================================================
 
 model Payment {
-  id              String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   bookingId       String        @unique @map("booking_id") @db.Uuid
   amount          Decimal       @db.Decimal(10, 2)
   currency        String        @default("RON") @db.VarChar(3)
@@ -379,7 +433,7 @@ enum PaymentStatus {
 // ============================================================================
 
 model Subscription {
-  id                  String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   providerId          String             @unique @map("provider_id") @db.Uuid
   plan                SubscriptionPlan   @default(STARTER)
   status              SubscriptionStatus @default(TRIAL)
@@ -420,7 +474,7 @@ enum SubscriptionStatus {
 // ============================================================================
 
 model NotificationPreference {
-  id                String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id                String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId            String  @unique @map("user_id") @db.Uuid
   emailBookings     Boolean @default(true) @map("email_bookings")
   emailMessages     Boolean @default(true) @map("email_messages")
@@ -439,7 +493,7 @@ model NotificationPreference {
 // ============================================================================
 
 model Referral {
-  id           String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   senderId     String         @map("sender_id") @db.Uuid
   receiverId   String?        @map("receiver_id") @db.Uuid
   code         String         @unique @db.VarChar(50)

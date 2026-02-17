@@ -46,6 +46,7 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
+  const [selectedMemberId, setSelectedMemberId] = useState("");
   const [notes, setNotes] = useState("");
   const createBooking = useCreateBooking();
 
@@ -97,6 +98,7 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
         scheduledDate,
         scheduledTime: selectedTime,
         notes: notes || undefined,
+        assignedMemberId: selectedMemberId || undefined,
       },
       {
         onSuccess: () => {
@@ -144,6 +146,37 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Member selection for COMPANY providers */}
+          {resolvedProvider.providerType === "COMPANY" &&
+            resolvedProvider.members &&
+            resolvedProvider.members.length > 0 && (
+              <div>
+                <Label>Szakember kiválasztása</Label>
+                <Select
+                  value={selectedMemberId}
+                  onValueChange={setSelectedMemberId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Válassz szakembert (opcionális)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Bárki</SelectItem>
+                    {resolvedProvider.members.map((member) => {
+                      const name =
+                        member.displayName ||
+                        `${member.user?.firstName || ""} ${member.user?.lastName || ""}`.trim() ||
+                        "Munkatárs";
+                      return (
+                        <SelectItem key={member.id} value={member.id}>
+                          {name}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>

@@ -6,7 +6,14 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { ProgressIndicator } from "../onboarding/ProgressIndicator";
-import { Briefcase, Clock, CheckCircle2, Loader2 } from "lucide-react";
+import {
+  Briefcase,
+  Clock,
+  CheckCircle2,
+  Loader2,
+  User,
+  Building2,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import {
@@ -15,6 +22,7 @@ import {
   useSetAvailability,
 } from "../../hooks/useApi";
 import { useCategories } from "../../hooks/useApi";
+import type { ProviderType } from "../../lib/types";
 
 interface ProviderOnboardingFlowProps {
   onComplete?: () => void;
@@ -59,6 +67,7 @@ export function ProviderOnboardingFlow({
   const [description, setDescription] = useState("");
   const [phone, setPhone] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [providerType, setProviderType] = useState<ProviderType>("SOLO");
 
   const [serviceName, setServiceName] = useState("");
   const [serviceDescription, setServiceDescription] = useState("");
@@ -80,6 +89,7 @@ export function ProviderOnboardingFlow({
           businessName,
           description,
           phone,
+          providerType,
           categoryIds: selectedCategory ? [selectedCategory] : [],
         });
         toast.success("Szolgáltatói profil létrehozva!");
@@ -157,6 +167,47 @@ export function ProviderOnboardingFlow({
             </div>
 
             <div className="space-y-4">
+              {/* Provider Type Selection */}
+              <div>
+                <Label>Fiók típusa *</Label>
+                <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setProviderType("SOLO")}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                      providerType === "SOLO"
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <User
+                      className={`h-8 w-8 ${providerType === "SOLO" ? "text-primary" : "text-muted-foreground"}`}
+                    />
+                    <span className="font-medium text-sm">Egyéni</span>
+                    <span className="text-xs text-muted-foreground text-center">
+                      Egyedül nyújtom a szolgáltatást
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setProviderType("COMPANY")}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
+                      providerType === "COMPANY"
+                        ? "border-primary bg-primary/5 shadow-sm"
+                        : "border-border hover:border-primary/50"
+                    }`}
+                  >
+                    <Building2
+                      className={`h-8 w-8 ${providerType === "COMPANY" ? "text-primary" : "text-muted-foreground"}`}
+                    />
+                    <span className="font-medium text-sm">Céges</span>
+                    <span className="text-xs text-muted-foreground text-center">
+                      Cégem van alkalmazottakkal
+                    </span>
+                  </button>
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="businessName">Üzlet neve *</Label>
                 <Input

@@ -9,6 +9,7 @@ export const createProviderSchema = z.object({
   teamSize: z.string().max(20).optional(),
   taxNumber: z.string().max(50).optional(),
   regNumber: z.string().max(50).optional(),
+  providerType: z.enum(["SOLO", "COMPANY"]).default("SOLO"),
   categoryIds: z.array(z.string().uuid()).default([]),
 });
 

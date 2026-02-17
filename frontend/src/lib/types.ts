@@ -42,6 +42,10 @@ export interface LoginInput {
 // PROVIDER TYPES
 // ============================================================================
 
+export type ProviderType = "SOLO" | "COMPANY";
+export type MemberRole = "OWNER" | "MANAGER" | "EMPLOYEE";
+export type MemberStatus = "INVITED" | "ACTIVE" | "DEACTIVATED";
+
 export interface Category {
   id: string;
   name: string;
@@ -83,6 +87,7 @@ export interface Availability {
 export interface Provider {
   id: string;
   userId: string;
+  providerType: ProviderType;
   businessName: string;
   description: string | null;
   phone: string | null;
@@ -113,7 +118,32 @@ export interface Provider {
   categories?: ProviderCategory[];
   services?: Service[];
   availability?: Availability[];
+  members?: ProviderMember[];
   subscription?: Subscription | null;
+}
+
+export interface ProviderMember {
+  id: string;
+  providerId: string;
+  userId: string | null;
+  role: MemberRole;
+  status: MemberStatus;
+  invitedEmail: string;
+  displayName: string | null;
+  invitedAt: string;
+  joinedAt: string | null;
+  user?: {
+    id: string;
+    email?: string;
+    firstName: string | null;
+    lastName: string | null;
+    avatarUrl: string | null;
+  };
+  provider?: {
+    id: string;
+    businessName: string;
+    logoUrl?: string | null;
+  };
 }
 
 export interface Subscription {
@@ -142,6 +172,7 @@ export interface Booking {
   customerId: string;
   providerId: string;
   serviceId: string;
+  assignedMemberId: string | null;
   status: BookingStatus;
   scheduledDate: string;
   scheduledTime: string;
@@ -162,6 +193,16 @@ export interface Booking {
   };
   provider?: Provider;
   service?: Service;
+  assignedMember?: {
+    id: string;
+    displayName: string | null;
+    role: MemberRole;
+    user?: {
+      firstName: string | null;
+      lastName: string | null;
+      avatarUrl: string | null;
+    };
+  } | null;
   address?: Address;
   reviews?: Review[];
 }
@@ -173,6 +214,7 @@ export interface CreateBookingInput {
   scheduledTime: string;
   notes?: string;
   addressId?: string;
+  assignedMemberId?: string;
 }
 
 // ============================================================================

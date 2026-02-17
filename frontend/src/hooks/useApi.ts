@@ -6,6 +6,7 @@ import {
   favoriteApi,
   categoryApi,
   userApi,
+  memberApi,
 } from "../lib/api-services";
 import type { CreateBookingInput } from "../lib/types";
 
@@ -347,6 +348,83 @@ export function useUpdateNotificationPrefs() {
     mutationFn: userApi.updateNotificationPrefs,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user", "notifications"] });
+    },
+  });
+}
+
+// ============================================================================
+// TEAM MEMBERS
+// ============================================================================
+
+export function useTeamMembers() {
+  return useQuery({
+    queryKey: ["providers", "me", "members"],
+    queryFn: () => memberApi.list(),
+  });
+}
+
+export function useInviteMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: memberApi.invite,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
+      qc.invalidateQueries({ queryKey: ["providers", "me"] });
+    },
+  });
+}
+
+export function useAcceptInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: memberApi.acceptInvite,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
+      qc.invalidateQueries({ queryKey: ["providers", "me"] });
+    },
+  });
+}
+
+export function usePendingInvites() {
+  return useQuery({
+    queryKey: ["providers", "me", "members", "pending"],
+    queryFn: () => memberApi.getPendingInvites(),
+  });
+}
+
+export function useUpdateMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      data,
+    }: {
+      memberId: string;
+      data: Parameters<typeof memberApi.update>[1];
+    }) => memberApi.update(memberId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
+    },
+  });
+}
+
+export function useDeactivateMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: memberApi.deactivate,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
+      qc.invalidateQueries({ queryKey: ["providers", "me"] });
+    },
+  });
+}
+
+export function useUpgradeToCompany() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: memberApi.upgradeToCompany,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me"] });
     },
   });
 }

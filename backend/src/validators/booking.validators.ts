@@ -7,6 +7,7 @@ export const createBookingSchema = z.object({
   scheduledTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
   notes: z.string().max(1000).optional(),
   addressId: z.string().uuid().optional(),
+  assignedMemberId: z.string().uuid().optional(),
 });
 
 export const updateBookingStatusSchema = z.object({

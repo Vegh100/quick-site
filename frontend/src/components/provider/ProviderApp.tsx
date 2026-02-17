@@ -18,6 +18,7 @@ import { ReferralModal } from "../common/ReferralModal";
 import { ProviderSettingsPanel } from "../settings/ProviderSettingsPanel";
 import { ProviderOnboardingFlow } from "./ProviderOnboardingFlow";
 import { ClientManagement } from "../clients/ClientManagement";
+import { TeamManagement } from "./TeamManagement";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -57,17 +58,20 @@ const providerNavItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "bookings", label: "Foglalások" },
   { id: "clients", label: "Ügyfelek" },
+  { id: "team", label: "Csapat" },
 ];
 
 // Map URL segments to internal tab names
 const TAB_FROM_URL: Record<string, string> = {
   foglalasok: "bookings",
   ugyfelek: "clients",
+  csapat: "team",
   beallitasok: "settings",
 };
 const TAB_TO_URL: Record<string, string> = {
   bookings: "foglalasok",
   clients: "ugyfelek",
+  team: "csapat",
   settings: "beallitasok",
 };
 
@@ -470,6 +474,19 @@ export function ProviderApp() {
                 )}
               </TabsContent>
             </Tabs>
+          </div>
+        )}
+
+        {/* Team Tab */}
+        {activeTab === "team" && (
+          <div className="space-y-6">
+            <div>
+              <h1>Csapat</h1>
+              <p className="text-muted-foreground">
+                Alkalmazottak és csapattagok kezelése
+              </p>
+            </div>
+            <TeamManagement provider={provider} />
           </div>
         )}
       </main>

@@ -1,6 +1,7 @@
 import { Prisma, BookingStatus } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { NotFoundError, ForbiddenError, AppError } from "../lib/errors.js";
+import { getProviderForUser } from "./member.service.js";
 import {
   CreateBookingInput,
   UpdateBookingStatusInput,
@@ -69,6 +70,18 @@ export async function createBooking(
     if (!address) throw new NotFoundError("Address");
   }
 
+  // Verify assigned member if provided (COMPANY providers)
+  if (data.assignedMemberId) {
+    const member = await prisma.providerMember.findFirst({
+      where: {
+        id: data.assignedMemberId,
+        providerId: data.providerId,
+        status: "ACTIVE",
+      },
+    });
+    if (!member) throw new NotFoundError("Team member");
+  }
+
   const status = provider.autoAccept ? "CONFIRMED" : "PENDING";
 
   const booking = await prisma.booking.create({
@@ -76,6 +89,7 @@ export async function createBooking(
       customerId,
       providerId: data.providerId,
       serviceId: data.serviceId,
+      assignedMemberId: data.assignedMemberId || null,
       scheduledDate: new Date(data.scheduledDate),
       scheduledTime: data.scheduledTime,
       durationMin: service.durationMin,
@@ -89,6 +103,16 @@ export async function createBooking(
       provider: {
         include: {
           user: { select: { firstName: true, lastName: true } },
+        },
+      },
+      assignedMember: {
+        select: {
+          id: true,
+          displayName: true,
+          role: true,
+          user: {
+            select: { firstName: true, lastName: true, avatarUrl: true },
+          },
         },
       },
       address: true,
@@ -117,7 +141,20 @@ export async function updateBookingStatus(
   const isCustomer = booking.customerId === userId;
   const isProvider = booking.provider.userId === userId;
 
+  // Also check if user is a team member of this provider
+  let isTeamMember = false;
   if (!isCustomer && !isProvider) {
+    const membership = await prisma.providerMember.findFirst({
+      where: {
+        userId,
+        providerId: booking.providerId,
+        status: "ACTIVE",
+      },
+    });
+    isTeamMember = !!membership;
+  }
+
+  if (!isCustomer && !isProvider && !isTeamMember) {
     throw new ForbiddenError("Not authorized to update this booking");
   }
 
@@ -171,6 +208,16 @@ export async function updateBookingStatus(
       },
       customer: {
         select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+      },
+      assignedMember: {
+        select: {
+          id: true,
+          displayName: true,
+          role: true,
+          user: {
+            select: { firstName: true, lastName: true, avatarUrl: true },
+          },
+        },
       },
       address: true,
     },
@@ -241,10 +288,14 @@ export async function getProviderBookings(
   userId: string,
   filters: BookingFilterInput,
 ) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+  const { provider, memberRole, member } = await getProviderForUser(userId);
 
   const where: Prisma.BookingWhereInput = { providerId: provider.id };
+
+  // EMPLOYEEs only see their own assigned bookings
+  if (memberRole === "EMPLOYEE" && member) {
+    where.assignedMemberId = member.id;
+  }
 
   if (filters.status) {
     const statuses = filters.status.split(",") as BookingStatus[];
@@ -278,6 +329,16 @@ export async function getProviderBookings(
             email: true,
             phone: true,
             avatarUrl: true,
+          },
+        },
+        assignedMember: {
+          select: {
+            id: true,
+            displayName: true,
+            role: true,
+            user: {
+              select: { firstName: true, lastName: true, avatarUrl: true },
+            },
           },
         },
         address: true,
@@ -335,9 +396,21 @@ export async function getBookingById(userId: string, bookingId: string) {
 
   if (!booking) throw new NotFoundError("Booking");
 
-  // Verify user is a participant
-  if (booking.customerId !== userId && booking.provider.userId !== userId) {
-    throw new ForbiddenError("Not authorized to view this booking");
+  // Verify user is a participant (customer, provider owner, or team member)
+  const isParticipant =
+    booking.customerId === userId || booking.provider.userId === userId;
+
+  if (!isParticipant) {
+    const membership = await prisma.providerMember.findFirst({
+      where: {
+        userId,
+        providerId: booking.providerId,
+        status: "ACTIVE",
+      },
+    });
+    if (!membership) {
+      throw new ForbiddenError("Not authorized to view this booking");
+    }
   }
 
   return booking;
