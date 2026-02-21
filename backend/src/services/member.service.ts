@@ -1,4 +1,5 @@
 import { MemberRole, MemberStatus } from "@prisma/client";
+import crypto from "crypto";
 import prisma from "../lib/prisma.js";
 import { NotFoundError, ForbiddenError, AppError } from "../lib/errors.js";
 import {
@@ -17,15 +18,19 @@ export async function getProviderForUser(userId: string) {
     where: { userId },
   });
   if (ownedProvider) {
+    // Also fetch the OWNER member record
+    const ownerMember = await prisma.providerMember.findFirst({
+      where: { providerId: ownedProvider.id, role: "OWNER" },
+    });
     return {
       provider: ownedProvider,
-      member: null as any,
+      member: ownerMember,
       memberRole: "OWNER" as MemberRole,
       isOwner: true,
     };
   }
 
-  // 2. Check if user is a team member
+  // 2. Check if user is a team member (EMPLOYEE)
   const membership = await prisma.providerMember.findUnique({
     where: { userId },
     include: { provider: true },
@@ -44,35 +49,24 @@ export async function getProviderForUser(userId: string) {
 }
 
 // ============================================================================
-// INVITE MEMBER (Owner/Manager only)
+// INVITE MEMBER (Owner only)
+// Creates a ProviderMember with INVITED status and a unique invite token.
 // ============================================================================
 
 export async function inviteMember(userId: string, data: InviteMemberInput) {
   const { provider, memberRole } = await getProviderForUser(userId);
 
-  // Only OWNER and MANAGER can invite
-  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
-    throw new ForbiddenError("Only owners and managers can invite members");
+  if (memberRole !== "OWNER") {
+    throw new ForbiddenError("Only the company owner can invite members");
   }
 
-  // Only OWNER can invite MANAGERs
-  if (data.role === "MANAGER" && memberRole !== "OWNER") {
-    throw new ForbiddenError("Only the owner can invite managers");
-  }
+  const email = data.email.toLowerCase();
 
-  // Provider must be COMPANY type
-  if (provider.providerType !== "COMPANY") {
-    throw new AppError(
-      "Only company providers can add team members. Upgrade to company first.",
-      400,
-    );
-  }
-
-  // Check if email is already a member
+  // Check if email is already a member of this company
   const existing = await prisma.providerMember.findFirst({
     where: {
       providerId: provider.id,
-      invitedEmail: data.email.toLowerCase(),
+      invitedEmail: email,
       status: { not: "DEACTIVATED" },
     },
   });
@@ -83,9 +77,9 @@ export async function inviteMember(userId: string, data: InviteMemberInput) {
     );
   }
 
-  // Check if the user with this email already belongs to another provider
+  // Check if the email already belongs to a user in another company
   const existingUser = await prisma.user.findUnique({
-    where: { email: data.email.toLowerCase() },
+    where: { email },
   });
   if (existingUser) {
     const existingMembership = await prisma.providerMember.findUnique({
@@ -96,25 +90,21 @@ export async function inviteMember(userId: string, data: InviteMemberInput) {
       existingMembership.status !== "DEACTIVATED" &&
       existingMembership.providerId !== provider.id
     ) {
-      throw new AppError("This user already belongs to another provider", 409);
+      throw new AppError("This user already belongs to another company", 409);
     }
   }
+
+  // Generate unique invite token
+  const inviteToken = crypto.randomBytes(32).toString("hex");
 
   const member = await prisma.providerMember.create({
     data: {
       providerId: provider.id,
-      role: data.role as MemberRole,
-      invitedEmail: data.email.toLowerCase(),
-      displayName: data.displayName,
+      role: "EMPLOYEE",
+      invitedEmail: email,
+      displayName: data.displayName || null,
       status: "INVITED",
-      // If user already exists, link them immediately and set ACTIVE
-      ...(existingUser
-        ? {
-            userId: existingUser.id,
-            status: "ACTIVE",
-            joinedAt: new Date(),
-          }
-        : {}),
+      inviteToken,
     },
     include: {
       user: {
@@ -129,92 +119,17 @@ export async function inviteMember(userId: string, data: InviteMemberInput) {
     },
   });
 
-  // If user exists and is CUSTOMER, change their role to PROVIDER
-  if (existingUser && existingUser.role === "CUSTOMER") {
-    await prisma.user.update({
-      where: { id: existingUser.id },
-      data: { role: "PROVIDER" },
-    });
-  }
-
-  return member;
+  return { ...member, inviteToken };
 }
 
 // ============================================================================
-// ACCEPT INVITE (for users who registered after being invited)
-// ============================================================================
-
-export async function acceptInvite(userId: string, memberId: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw new NotFoundError("User");
-
-  const member = await prisma.providerMember.findUnique({
-    where: { id: memberId },
-  });
-  if (!member) throw new NotFoundError("Invite");
-
-  if (member.status !== "INVITED") {
-    throw new AppError(
-      "This invite has already been used or is no longer valid",
-      400,
-    );
-  }
-
-  if (member.invitedEmail !== user.email.toLowerCase()) {
-    throw new ForbiddenError("This invite is for a different email address");
-  }
-
-  // Check user doesn't already belong to another provider
-  const existingMembership = await prisma.providerMember.findUnique({
-    where: { userId },
-  });
-  if (existingMembership && existingMembership.id !== memberId) {
-    throw new AppError("You already belong to another provider", 409);
-  }
-
-  const updated = await prisma.providerMember.update({
-    where: { id: memberId },
-    data: {
-      userId,
-      status: "ACTIVE",
-      joinedAt: new Date(),
-    },
-    include: {
-      provider: {
-        select: { id: true, businessName: true },
-      },
-      user: {
-        select: {
-          id: true,
-          email: true,
-          firstName: true,
-          lastName: true,
-          avatarUrl: true,
-        },
-      },
-    },
-  });
-
-  // Update user role to PROVIDER if not already
-  if (user.role === "CUSTOMER") {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { role: "PROVIDER" },
-    });
-  }
-
-  return updated;
-}
-
-// ============================================================================
-// LIST MEMBERS
+// LIST MEMBERS (Owner only)
 // ============================================================================
 
 export async function listMembers(userId: string) {
   const { provider, memberRole } = await getProviderForUser(userId);
 
-  // Only OWNER and MANAGER can list all members
-  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
+  if (memberRole !== "OWNER") {
     throw new ForbiddenError("Not authorized to view team members");
   }
 
@@ -230,6 +145,12 @@ export async function listMembers(userId: string) {
           avatarUrl: true,
         },
       },
+      memberServices: {
+        include: { service: true },
+      },
+      availability: {
+        orderBy: { dayOfWeek: "asc" },
+      },
     },
     orderBy: [
       { role: "asc" }, // OWNER first
@@ -241,7 +162,7 @@ export async function listMembers(userId: string) {
 }
 
 // ============================================================================
-// UPDATE MEMBER (role, displayName)
+// UPDATE MEMBER (displayName — Owner only)
 // ============================================================================
 
 export async function updateMember(
@@ -251,25 +172,22 @@ export async function updateMember(
 ) {
   const { provider, memberRole } = await getProviderForUser(userId);
 
+  if (memberRole !== "OWNER") {
+    throw new ForbiddenError("Only the owner can update members");
+  }
+
   const target = await prisma.providerMember.findFirst({
     where: { id: memberId, providerId: provider.id },
   });
   if (!target) throw new NotFoundError("Team member");
 
-  // Cannot modify OWNER
   if (target.role === "OWNER") {
-    throw new ForbiddenError("Cannot modify the owner");
-  }
-
-  // Only OWNER can change roles
-  if (data.role && memberRole !== "OWNER") {
-    throw new ForbiddenError("Only the owner can change member roles");
+    throw new ForbiddenError("Cannot modify the owner through this endpoint");
   }
 
   return prisma.providerMember.update({
     where: { id: memberId },
     data: {
-      ...(data.role ? { role: data.role as MemberRole } : {}),
       ...(data.displayName !== undefined
         ? { displayName: data.displayName }
         : {}),
@@ -289,15 +207,14 @@ export async function updateMember(
 }
 
 // ============================================================================
-// DEACTIVATE MEMBER
+// DEACTIVATE MEMBER (Owner only)
 // ============================================================================
 
 export async function deactivateMember(userId: string, memberId: string) {
   const { provider, memberRole } = await getProviderForUser(userId);
 
-  // Only OWNER and MANAGER can deactivate
-  if (memberRole !== "OWNER" && memberRole !== "MANAGER") {
-    throw new ForbiddenError("Not authorized to deactivate members");
+  if (memberRole !== "OWNER") {
+    throw new ForbiddenError("Only the owner can deactivate members");
   }
 
   const target = await prisma.providerMember.findFirst({
@@ -305,14 +222,8 @@ export async function deactivateMember(userId: string, memberId: string) {
   });
   if (!target) throw new NotFoundError("Team member");
 
-  // Cannot deactivate OWNER
   if (target.role === "OWNER") {
     throw new ForbiddenError("Cannot deactivate the owner");
-  }
-
-  // MANAGER cannot deactivate other MANAGERs
-  if (target.role === "MANAGER" && memberRole !== "OWNER") {
-    throw new ForbiddenError("Only the owner can deactivate managers");
   }
 
   return prisma.providerMember.update({
@@ -333,43 +244,248 @@ export async function deactivateMember(userId: string, memberId: string) {
 }
 
 // ============================================================================
-// UPGRADE SOLO → COMPANY
+// ASSIGN SERVICE TO MEMBER (Owner only)
 // ============================================================================
 
-export async function upgradeToCompany(userId: string) {
-  const provider = await prisma.provider.findUnique({ where: { userId } });
-  if (!provider) throw new NotFoundError("Provider profile");
+export async function assignService(
+  userId: string,
+  memberId: string,
+  serviceId: string,
+) {
+  const { provider, memberRole } = await getProviderForUser(userId);
 
-  if (provider.providerType === "COMPANY") {
-    throw new AppError("Provider is already a company", 400);
+  if (memberRole !== "OWNER") {
+    throw new ForbiddenError("Only the owner can assign services");
   }
 
-  // Get user email for the owner member record
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw new NotFoundError("User");
+  const target = await prisma.providerMember.findFirst({
+    where: { id: memberId, providerId: provider.id, status: "ACTIVE" },
+  });
+  if (!target) throw new NotFoundError("Team member");
 
-  // Update type + ensure OWNER member exists
-  const [updated] = await prisma.$transaction([
-    prisma.provider.update({
-      where: { id: provider.id },
-      data: { providerType: "COMPANY" },
-    }),
-    // Ensure owner ProviderMember row exists
-    prisma.providerMember.upsert({
-      where: { userId },
-      create: {
-        providerId: provider.id,
-        userId,
-        role: "OWNER",
-        status: "ACTIVE",
-        invitedEmail: user.email,
-        joinedAt: new Date(),
+  const service = await prisma.service.findFirst({
+    where: { id: serviceId, providerId: provider.id, isActive: true },
+  });
+  if (!service) throw new NotFoundError("Service");
+
+  return prisma.memberService.create({
+    data: { memberId, serviceId },
+    include: { service: true },
+  });
+}
+
+// ============================================================================
+// REMOVE SERVICE FROM MEMBER (Owner only)
+// ============================================================================
+
+export async function removeService(
+  userId: string,
+  memberId: string,
+  serviceId: string,
+) {
+  const { provider, memberRole } = await getProviderForUser(userId);
+
+  if (memberRole !== "OWNER") {
+    throw new ForbiddenError("Only the owner can remove service assignments");
+  }
+
+  const assignment = await prisma.memberService.findFirst({
+    where: {
+      memberId,
+      serviceId,
+      member: { providerId: provider.id },
+    },
+  });
+  if (!assignment) throw new NotFoundError("Service assignment");
+
+  await prisma.memberService.delete({ where: { id: assignment.id } });
+}
+
+// ============================================================================
+// SET MEMBER AVAILABILITY (Owner only, or self for employee)
+// ============================================================================
+
+export async function setMemberAvailability(
+  userId: string,
+  memberId: string,
+  availability: {
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    isEnabled: boolean;
+  }[],
+) {
+  const { provider, memberRole, member } = await getProviderForUser(userId);
+
+  // Owner can set any member's availability; employee can set own only
+  if (memberRole !== "OWNER") {
+    if (!member || member.id !== memberId) {
+      throw new ForbiddenError("You can only set your own availability");
+    }
+  }
+
+  const target = await prisma.providerMember.findFirst({
+    where: { id: memberId, providerId: provider.id, status: "ACTIVE" },
+  });
+  if (!target) throw new NotFoundError("Team member");
+
+  const results = await Promise.all(
+    availability.map((slot) =>
+      prisma.availability.upsert({
+        where: {
+          memberId_dayOfWeek: {
+            memberId,
+            dayOfWeek: slot.dayOfWeek,
+          },
+        },
+        update: {
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          isEnabled: slot.isEnabled,
+        },
+        create: {
+          providerId: provider.id,
+          memberId,
+          dayOfWeek: slot.dayOfWeek,
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+          isEnabled: slot.isEnabled,
+        },
+      }),
+    ),
+  );
+
+  return results;
+}
+
+// ============================================================================
+// GET MEMBER DETAIL (Owner only — full profile with booking stats)
+// ============================================================================
+
+export async function getMemberDetail(userId: string, memberId: string) {
+  const { provider, memberRole } = await getProviderForUser(userId);
+
+  if (memberRole !== "OWNER") {
+    throw new ForbiddenError("Not authorized to view member details");
+  }
+
+  const member = await prisma.providerMember.findFirst({
+    where: { id: memberId, providerId: provider.id },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          avatarUrl: true,
+        },
       },
-      update: {},
+      memberServices: {
+        include: { service: true },
+      },
+      availability: {
+        orderBy: { dayOfWeek: "asc" },
+      },
+    },
+  });
+  if (!member) throw new NotFoundError("Team member");
+
+  // Booking stats for this member
+  const [
+    totalBookings,
+    completedBookings,
+    pendingBookings,
+    cancelledBookings,
+    revenueResult,
+    upcomingBookings,
+  ] = await Promise.all([
+    prisma.booking.count({
+      where: { assignedMemberId: memberId },
+    }),
+    prisma.booking.count({
+      where: { assignedMemberId: memberId, status: "COMPLETED" },
+    }),
+    prisma.booking.count({
+      where: { assignedMemberId: memberId, status: "PENDING" },
+    }),
+    prisma.booking.count({
+      where: { assignedMemberId: memberId, status: "CANCELLED" },
+    }),
+    prisma.booking.aggregate({
+      where: { assignedMemberId: memberId, status: "COMPLETED" },
+      _sum: { totalAmount: true },
+    }),
+    prisma.booking.findMany({
+      where: {
+        assignedMemberId: memberId,
+        status: { in: ["PENDING", "CONFIRMED", "IN_PROGRESS"] },
+        scheduledDate: { gte: new Date() },
+      },
+      include: {
+        service: { select: { name: true } },
+        customer: {
+          select: { firstName: true, lastName: true, avatarUrl: true },
+        },
+      },
+      orderBy: [{ scheduledDate: "asc" }, { scheduledTime: "asc" }],
+      take: 10,
     }),
   ]);
 
-  return updated;
+  // Recent completed bookings
+  const recentBookings = await prisma.booking.findMany({
+    where: {
+      assignedMemberId: memberId,
+      status: "COMPLETED",
+    },
+    include: {
+      service: { select: { name: true } },
+      customer: {
+        select: { firstName: true, lastName: true, avatarUrl: true },
+      },
+    },
+    orderBy: { completedAt: "desc" },
+    take: 5,
+  });
+
+  return {
+    ...member,
+    bookingStats: {
+      totalBookings,
+      completedBookings,
+      pendingBookings,
+      cancelledBookings,
+      totalRevenue: Number(revenueResult._sum.totalAmount || 0),
+    },
+    upcomingBookings,
+    recentBookings,
+  };
+}
+
+// ============================================================================
+// GET INVITE INFO (public — used by the invite registration page)
+// ============================================================================
+
+export async function getInviteInfo(token: string) {
+  const member = await prisma.providerMember.findUnique({
+    where: { inviteToken: token },
+    include: {
+      provider: {
+        select: { id: true, businessName: true, logoUrl: true },
+      },
+    },
+  });
+
+  if (!member || member.status !== "INVITED") {
+    throw new NotFoundError("Invite");
+  }
+
+  return {
+    email: member.invitedEmail,
+    displayName: member.displayName,
+    provider: member.provider,
+  };
 }
 
 // ============================================================================

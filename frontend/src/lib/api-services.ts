@@ -6,7 +6,10 @@ import type {
   User,
   Provider,
   ProviderMember,
+  MemberDetail,
   Service,
+  ServiceType,
+  TimeSlot,
   Availability,
   Booking,
   CreateBookingInput,
@@ -142,10 +145,8 @@ export const providerApi = {
     phone?: string;
     website?: string;
     serviceArea?: string;
-    teamSize?: string;
     taxNumber?: string;
     regNumber?: string;
-    providerType?: "SOLO" | "COMPANY";
     categoryIds: string[];
   }) => api.post<ApiResponse<Provider>>("/providers", data).then((r) => r.data),
 
@@ -158,7 +159,6 @@ export const providerApi = {
     phone?: string;
     website?: string;
     serviceArea?: string;
-    teamSize?: string;
     categoryIds?: string[];
   }) =>
     api
@@ -166,11 +166,13 @@ export const providerApi = {
       .then((r) => r.data),
 
   addService: (data: {
+    serviceTypeId?: string;
     name: string;
     description?: string;
     priceAmount: number;
     priceType: "PER_HOUR" | "FIXED" | "PER_SERVICE";
     durationMin: number;
+    slotIntervalMin?: number;
   }) =>
     api
       .post<ApiResponse<Service>>("/providers/me/services", data)
@@ -179,11 +181,13 @@ export const providerApi = {
   updateService: (
     serviceId: string,
     data: {
+      serviceTypeId?: string;
       name?: string;
       description?: string;
       priceAmount?: number;
       priceType?: "PER_HOUR" | "FIXED" | "PER_SERVICE";
       durationMin?: number;
+      slotIntervalMin?: number;
     },
   ) =>
     api
@@ -194,6 +198,7 @@ export const providerApi = {
     api.delete(`/providers/me/services/${serviceId}`).then((r) => r.data),
 
   setAvailability: (
+    memberId: string,
     availability: {
       dayOfWeek: number;
       startTime: string;
@@ -204,7 +209,7 @@ export const providerApi = {
     api
       .put<
         ApiResponse<Availability[]>
-      >("/providers/me/availability", { availability })
+      >("/providers/me/availability", { memberId, availability })
       .then((r) => r.data),
 
   updatePricingSettings: (data: {
@@ -237,6 +242,18 @@ export const providerApi = {
 export const bookingApi = {
   create: (data: CreateBookingInput) =>
     api.post<ApiResponse<Booking>>("/bookings", data).then((r) => r.data),
+
+  getAvailableSlots: (params: {
+    providerId: string;
+    serviceId: string;
+    date: string;
+    memberId?: string;
+  }) =>
+    api
+      .get<
+        ApiResponse<{ slots: TimeSlot[]; date: string; serviceId: string }>
+      >("/bookings/available-slots", { params })
+      .then((r) => r.data),
 
   getCustomerBookings: (params?: {
     status?: string;
@@ -342,6 +359,13 @@ export const categoryApi = {
 
   getBySlug: (slug: string) =>
     api.get<ApiResponse<Category>>(`/categories/${slug}`).then((r) => r.data),
+
+  getServiceTypes: (categoryId?: string) =>
+    api
+      .get<ApiResponse<ServiceType[]>>("/categories/service-types", {
+        params: categoryId ? { categoryId } : {},
+      })
+      .then((r) => r.data),
 };
 
 // ============================================================================
@@ -354,20 +378,9 @@ export const memberApi = {
       .get<ApiResponse<ProviderMember[]>>("/providers/me/members")
       .then((r) => r.data),
 
-  invite: (data: {
-    email: string;
-    role?: "MANAGER" | "EMPLOYEE";
-    displayName?: string;
-  }) =>
+  invite: (data: { email: string; displayName?: string }) =>
     api
       .post<ApiResponse<ProviderMember>>("/providers/me/members/invite", data)
-      .then((r) => r.data),
-
-  acceptInvite: (memberId: string) =>
-    api
-      .post<ApiResponse<ProviderMember>>("/providers/me/members/accept", {
-        memberId,
-      })
       .then((r) => r.data),
 
   getPendingInvites: () =>
@@ -377,10 +390,7 @@ export const memberApi = {
       >("/providers/me/members/invites/pending")
       .then((r) => r.data),
 
-  update: (
-    memberId: string,
-    data: { role?: "MANAGER" | "EMPLOYEE"; displayName?: string },
-  ) =>
+  update: (memberId: string, data: { displayName?: string }) =>
     api
       .patch<
         ApiResponse<ProviderMember>
@@ -392,8 +402,62 @@ export const memberApi = {
       .delete<ApiResponse<ProviderMember>>(`/providers/me/members/${memberId}`)
       .then((r) => r.data),
 
-  upgradeToCompany: () =>
+  getDetail: (memberId: string) =>
     api
-      .post<ApiResponse<Provider>>("/providers/me/members/upgrade-company")
+      .get<
+        ApiResponse<MemberDetail>
+      >(`/providers/me/members/${memberId}/detail`)
+      .then((r) => r.data),
+
+  assignService: (memberId: string, serviceId: string) =>
+    api
+      .post<ApiResponse<any>>(`/providers/me/members/${memberId}/services`, {
+        serviceId,
+      })
+      .then((r) => r.data),
+
+  removeService: (memberId: string, serviceId: string) =>
+    api
+      .delete(`/providers/me/members/${memberId}/services/${serviceId}`)
+      .then((r) => r.data),
+
+  setAvailability: (
+    memberId: string,
+    availability: {
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+      isEnabled: boolean;
+    }[],
+  ) =>
+    api
+      .put<
+        ApiResponse<Availability[]>
+      >(`/providers/me/members/${memberId}/availability`, { availability })
+      .then((r) => r.data),
+
+  // Public: get invite info by token
+  getInviteInfo: (token: string) =>
+    api
+      .get<
+        ApiResponse<{
+          email: string;
+          displayName: string | null;
+          provider: {
+            id: string;
+            businessName: string;
+            logoUrl: string | null;
+          };
+        }>
+      >(`/invites/${token}`)
+      .then((r) => r.data),
+
+  // Auth: register employee from invite
+  registerFromInvite: (
+    token: string,
+    data: { password: string; firstName: string; lastName: string },
+  ) =>
+    api
+      .post<any>(`/auth/register-from-invite/${token}`, data)
       .then((r) => r.data),
 };

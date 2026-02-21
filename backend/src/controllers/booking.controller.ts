@@ -1,6 +1,39 @@
-import { Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
 import * as bookingService from "../services/booking.service.js";
 import { AuthenticatedRequest } from "../types/index.js";
+
+export async function getAvailableSlots(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { providerId, serviceId, date, memberId } = req.query as {
+      providerId: string;
+      serviceId: string;
+      date: string;
+      memberId?: string;
+    };
+
+    if (!providerId || !serviceId || !date) {
+      res.status(400).json({
+        success: false,
+        error: "providerId, serviceId, and date are required",
+      });
+      return;
+    }
+
+    const result = await bookingService.getAvailableSlots(
+      providerId,
+      serviceId,
+      date,
+      memberId,
+    );
+    res.json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
 
 export async function createBooking(
   req: AuthenticatedRequest,

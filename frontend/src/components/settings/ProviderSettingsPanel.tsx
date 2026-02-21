@@ -31,6 +31,7 @@ import {
   useDeleteService,
   useSetAvailability,
   useUploadAvatar,
+  useServiceTypes,
 } from "../../hooks/useApi";
 import { authApi } from "../../lib/api-services";
 import { toast } from "sonner";
@@ -59,8 +60,13 @@ export function ProviderSettingsPanel() {
   const deleteServiceMut = useDeleteService();
   const setAvailabilityMut = useSetAvailability();
   const uploadAvatarMut = useUploadAvatar();
+  const { data: serviceTypesData } = useServiceTypes();
 
   const provider = providerData?.data;
+  const serviceTypes = serviceTypesData?.data || [];
+
+  // Find the current user's member record to access per-member availability
+  const currentMember = provider?.members?.find((m) => m.userId === user?.id);
 
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
@@ -74,13 +80,15 @@ export function ProviderSettingsPanel() {
   // Service form
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [showServiceForm, setShowServiceForm] = useState(false);
+  const [svcServiceTypeId, setSvcServiceTypeId] = useState("");
   const [svcName, setSvcName] = useState("");
   const [svcDesc, setSvcDesc] = useState("");
   const [svcPrice, setSvcPrice] = useState("");
   const [svcDuration, setSvcDuration] = useState("60");
+  const [svcSlotInterval, setSvcSlotInterval] = useState("60");
   const [svcPriceType, setSvcPriceType] = useState<
     "PER_HOUR" | "FIXED" | "PER_SERVICE"
-  >("PER_HOUR");
+  >("FIXED");
 
   // Availability
   const [availSlots, setAvailSlots] = useState(
@@ -99,13 +107,12 @@ export function ProviderSettingsPanel() {
       setPhone(provider.phone || "");
       setServiceArea(provider.serviceArea || "");
 
-      // Load availability
-      if (provider.availability && provider.availability.length > 0) {
+      // Load availability from the current member
+      const memberAvail = currentMember?.availability;
+      if (memberAvail && memberAvail.length > 0) {
         const loaded = DAYS_HU.map((_, i) => {
           const dow = DAY_MAP[i];
-          const existing = provider.availability?.find(
-            (a) => a.dayOfWeek === dow,
-          );
+          const existing = memberAvail.find((a) => a.dayOfWeek === dow);
           return existing
             ? {
                 dayOfWeek: dow,
@@ -123,7 +130,7 @@ export function ProviderSettingsPanel() {
         setAvailSlots(loaded);
       }
     }
-  }, [provider]);
+  }, [provider, currentMember]);
 
   const handleSaveBusiness = async () => {
     try {
@@ -168,21 +175,25 @@ export function ProviderSettingsPanel() {
   };
 
   const resetServiceForm = () => {
+    setSvcServiceTypeId("");
     setSvcName("");
     setSvcDesc("");
     setSvcPrice("");
     setSvcDuration("60");
-    setSvcPriceType("PER_HOUR");
+    setSvcSlotInterval("60");
+    setSvcPriceType("FIXED");
     setEditingService(null);
     setShowServiceForm(false);
   };
 
   const openEditService = (svc: Service) => {
     setEditingService(svc);
+    setSvcServiceTypeId(svc.serviceTypeId || "");
     setSvcName(svc.name);
     setSvcDesc(svc.description || "");
     setSvcPrice(String(Number(svc.priceAmount)));
     setSvcDuration(String(svc.durationMin));
+    setSvcSlotInterval(String(svc.slotIntervalMin));
     setSvcPriceType(svc.priceType);
     setShowServiceForm(true);
   };
@@ -193,11 +204,13 @@ export function ProviderSettingsPanel() {
       return;
     }
     const data = {
+      serviceTypeId: svcServiceTypeId || undefined,
       name: svcName,
       description: svcDesc || undefined,
       priceAmount: parseFloat(svcPrice),
       priceType: svcPriceType,
       durationMin: parseInt(svcDuration),
+      slotIntervalMin: parseInt(svcSlotInterval),
     };
 
     try {
@@ -227,8 +240,15 @@ export function ProviderSettingsPanel() {
   };
 
   const handleSaveAvailability = async () => {
+    if (!currentMember) {
+      toast.error("Nem található tag rekord");
+      return;
+    }
     try {
-      await setAvailabilityMut.mutateAsync(availSlots);
+      await setAvailabilityMut.mutateAsync({
+        memberId: currentMember.id,
+        availability: availSlots,
+      });
       toast.success("Időpontok mentve!");
     } catch {
       toast.error("Hiba az időpontok mentésekor");
@@ -397,6 +417,52 @@ export function ProviderSettingsPanel() {
                 </h4>
                 <div className="space-y-3">
                   <div>
+                    <Label>Szolgáltatás típus</Label>
+                    <select
+                      value={svcServiceTypeId}
+                      onChange={(e) => {
+                        const typeId = e.target.value;
+                        setSvcServiceTypeId(typeId);
+                        if (typeId) {
+                          const st = serviceTypes.find((t) => t.id === typeId);
+                          if (st) {
+                            setSvcName(st.name);
+                            setSvcDesc(st.description || "");
+                            setSvcDuration(String(st.defaultDurationMin));
+                          }
+                        }
+                      }}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="">-- Válassz típust --</option>
+                      {(() => {
+                        const grouped = serviceTypes.reduce(
+                          (acc, st) => {
+                            const catName = st.category?.name || "Egyéb";
+                            if (!acc[catName]) acc[catName] = [];
+                            acc[catName].push(st);
+                            return acc;
+                          },
+                          {} as Record<string, typeof serviceTypes>,
+                        );
+                        return Object.entries(grouped).map(
+                          ([catName, types]) => (
+                            <optgroup key={catName} label={catName}>
+                              {types.map((st) => (
+                                <option key={st.id} value={st.id}>
+                                  {st.name} ({st.defaultDurationMin} perc)
+                                </option>
+                              ))}
+                            </optgroup>
+                          ),
+                        );
+                      })()}
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Válaszd ki a szolgáltatás típusát a listából
+                    </p>
+                  </div>
+                  <div>
                     <Label>Név</Label>
                     <Input
                       value={svcName}
@@ -412,7 +478,7 @@ export function ProviderSettingsPanel() {
                       rows={2}
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Ár (RON)</Label>
                       <Input
@@ -428,11 +494,13 @@ export function ProviderSettingsPanel() {
                         onChange={(e) => setSvcPriceType(e.target.value as any)}
                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
-                        <option value="PER_HOUR">Óradíj</option>
                         <option value="FIXED">Fix ár</option>
+                        <option value="PER_HOUR">Óradíj</option>
                         <option value="PER_SERVICE">Szolg. díj</option>
                       </select>
                     </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Időtartam (perc)</Label>
                       <Input
@@ -440,6 +508,27 @@ export function ProviderSettingsPanel() {
                         value={svcDuration}
                         onChange={(e) => setSvcDuration(e.target.value)}
                       />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Mennyi ideig tart a szolgáltatás
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Foglalási intervallum (perc)</Label>
+                      <select
+                        value={svcSlotInterval}
+                        onChange={(e) => setSvcSlotInterval(e.target.value)}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="15">15 perc</option>
+                        <option value="30">30 perc</option>
+                        <option value="45">45 perc</option>
+                        <option value="60">1 óra</option>
+                        <option value="90">1.5 óra</option>
+                        <option value="120">2 óra</option>
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Milyen időközönként lehet foglalni
+                      </p>
                     </div>
                   </div>
                 </div>

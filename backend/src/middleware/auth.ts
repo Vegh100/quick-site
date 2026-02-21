@@ -5,9 +5,18 @@ import prisma from "../lib/prisma.js";
 import { AuthenticatedRequest, AuthPayload } from "../types/index.js";
 import { UnauthorizedError } from "../lib/errors.js";
 
+function clearSessionCookie(res: Response) {
+  res.clearCookie(authConfig.cookie.name, {
+    httpOnly: true,
+    secure: authConfig.cookie.options.secure,
+    sameSite: authConfig.cookie.options.sameSite,
+    path: "/",
+  });
+}
+
 export async function authenticate(
   req: AuthenticatedRequest,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): Promise<void> {
   try {
@@ -30,10 +39,13 @@ export async function authenticate(
       if (session) {
         await prisma.session.delete({ where: { id: session.id } });
       }
+      // Clear the stale cookie so the browser stops sending it
+      clearSessionCookie(res);
       throw new UnauthorizedError("Session expired");
     }
 
     if (!session.user.isActive) {
+      clearSessionCookie(res);
       throw new UnauthorizedError("Account is deactivated");
     }
 
@@ -49,6 +61,8 @@ export async function authenticate(
     if (error instanceof UnauthorizedError) {
       next(error);
     } else if (error instanceof jwt.JsonWebTokenError) {
+      // Invalid/tampered JWT — clear the bad cookie
+      clearSessionCookie(res);
       next(new UnauthorizedError("Invalid session token"));
     } else {
       next(error);

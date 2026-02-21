@@ -6,7 +6,11 @@ import prisma from "../lib/prisma.js";
 import { authConfig } from "../config/auth.config.js";
 import { AppError, ConflictError, UnauthorizedError } from "../lib/errors.js";
 import { AuthPayload, GoogleUserInfo } from "../types/index.js";
-import { RegisterInput, LoginInput } from "../validators/auth.validators.js";
+import {
+  RegisterInput,
+  LoginInput,
+  RegisterFromInviteInput,
+} from "../validators/auth.validators.js";
 
 const googleClient = new OAuth2Client(authConfig.google.clientId);
 
@@ -58,6 +62,98 @@ export async function register(
     user: sanitizeUser(user),
     token,
     sessionId: session.id,
+  };
+}
+
+// ============================================================================
+// REGISTER FROM INVITE (EMPLOYEE only — via invite token)
+// ============================================================================
+
+export async function registerFromInvite(
+  inviteToken: string,
+  input: RegisterFromInviteInput,
+  userAgent?: string,
+  ipAddress?: string,
+) {
+  // Find the invite
+  const member = await prisma.providerMember.findUnique({
+    where: { inviteToken },
+    include: { provider: true },
+  });
+
+  if (!member) {
+    throw new AppError("Invalid or expired invite link", 400);
+  }
+  if (member.status !== "INVITED") {
+    throw new AppError("This invite has already been used", 400);
+  }
+
+  // Check if email is already registered
+  const existing = await prisma.user.findUnique({
+    where: { email: member.invitedEmail },
+  });
+  if (existing) {
+    throw new ConflictError(
+      "Email already registered. Please log in and accept the invite from your dashboard.",
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(
+    input.password,
+    authConfig.password.saltRounds,
+  );
+
+  // Create user + link member in a transaction
+  const user = await prisma.$transaction(async (tx) => {
+    const newUser = await tx.user.create({
+      data: {
+        email: member.invitedEmail,
+        passwordHash,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        role: "EMPLOYEE",
+      },
+    });
+
+    // Link member to the new user + activate
+    await tx.providerMember.update({
+      where: { id: member.id },
+      data: {
+        userId: newUser.id,
+        status: "ACTIVE",
+        joinedAt: new Date(),
+        inviteToken: null, // Consume the token
+        displayName:
+          member.displayName ||
+          `${input.firstName} ${input.lastName}`.trim() ||
+          null,
+      },
+    });
+
+    // Create notification preferences
+    await tx.notificationPreference.create({
+      data: { userId: newUser.id },
+    });
+
+    return newUser;
+  });
+
+  const { token, session } = await createSession(
+    user.id,
+    user.email,
+    user.role,
+    userAgent,
+    ipAddress,
+  );
+
+  return {
+    user: sanitizeUser(user),
+    token,
+    sessionId: session.id,
+    provider: {
+      id: member.provider.id,
+      businessName: member.provider.businessName,
+    },
   };
 }
 

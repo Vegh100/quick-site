@@ -1,11 +1,8 @@
 -- CreateEnum
-CREATE TYPE "user_role" AS ENUM ('CUSTOMER', 'PROVIDER', 'ADMIN');
+CREATE TYPE "user_role" AS ENUM ('CUSTOMER', 'PROVIDER', 'EMPLOYEE', 'ADMIN');
 
 -- CreateEnum
-CREATE TYPE "provider_type_enum" AS ENUM ('SOLO', 'COMPANY');
-
--- CreateEnum
-CREATE TYPE "member_role" AS ENUM ('OWNER', 'MANAGER', 'EMPLOYEE');
+CREATE TYPE "member_role" AS ENUM ('OWNER', 'EMPLOYEE');
 
 -- CreateEnum
 CREATE TYPE "member_status" AS ENUM ('INVITED', 'ACTIVE', 'DEACTIVATED');
@@ -78,7 +75,6 @@ CREATE TABLE "sessions" (
 CREATE TABLE "providers" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "user_id" UUID NOT NULL,
-    "provider_type" "provider_type_enum" NOT NULL DEFAULT 'SOLO',
     "business_name" VARCHAR(255) NOT NULL,
     "description" TEXT,
     "phone" VARCHAR(50),
@@ -86,7 +82,6 @@ CREATE TABLE "providers" (
     "logo_url" VARCHAR(500),
     "cover_image_url" VARCHAR(500),
     "service_area" VARCHAR(500),
-    "team_size" VARCHAR(20),
     "tax_number" VARCHAR(50),
     "reg_number" VARCHAR(50),
     "rating" DECIMAL(2,1) NOT NULL DEFAULT 0,
@@ -112,10 +107,20 @@ CREATE TABLE "provider_members" (
     "status" "member_status" NOT NULL DEFAULT 'INVITED',
     "invited_email" VARCHAR(255) NOT NULL,
     "display_name" VARCHAR(200),
+    "invite_token" VARCHAR(100),
     "invited_at" TIMESTAMPTZ(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "joined_at" TIMESTAMPTZ(6),
 
     CONSTRAINT "provider_members_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "member_services" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "member_id" UUID NOT NULL,
+    "service_id" UUID NOT NULL,
+
+    CONSTRAINT "member_services_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -176,6 +181,7 @@ CREATE TABLE "services" (
 CREATE TABLE "availability" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
     "provider_id" UUID NOT NULL,
+    "member_id" UUID NOT NULL,
     "day_of_week" INTEGER NOT NULL,
     "start_time" VARCHAR(5) NOT NULL,
     "end_time" VARCHAR(5) NOT NULL,
@@ -354,6 +360,9 @@ CREATE INDEX "providers_is_verified_idx" ON "providers"("is_verified");
 CREATE UNIQUE INDEX "provider_members_user_id_key" ON "provider_members"("user_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "provider_members_invite_token_key" ON "provider_members"("invite_token");
+
+-- CreateIndex
 CREATE INDEX "provider_members_provider_id_idx" ON "provider_members"("provider_id");
 
 -- CreateIndex
@@ -361,6 +370,18 @@ CREATE INDEX "provider_members_user_id_idx" ON "provider_members"("user_id");
 
 -- CreateIndex
 CREATE INDEX "provider_members_invited_email_idx" ON "provider_members"("invited_email");
+
+-- CreateIndex
+CREATE INDEX "provider_members_invite_token_idx" ON "provider_members"("invite_token");
+
+-- CreateIndex
+CREATE INDEX "member_services_member_id_idx" ON "member_services"("member_id");
+
+-- CreateIndex
+CREATE INDEX "member_services_service_id_idx" ON "member_services"("service_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "member_services_member_id_service_id_key" ON "member_services"("member_id", "service_id");
 
 -- CreateIndex
 CREATE INDEX "provider_documents_provider_id_idx" ON "provider_documents"("provider_id");
@@ -381,7 +402,10 @@ CREATE INDEX "services_is_active_idx" ON "services"("is_active");
 CREATE INDEX "availability_provider_id_idx" ON "availability"("provider_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "availability_provider_id_day_of_week_key" ON "availability"("provider_id", "day_of_week");
+CREATE INDEX "availability_member_id_idx" ON "availability"("member_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "availability_member_id_day_of_week_key" ON "availability"("member_id", "day_of_week");
 
 -- CreateIndex
 CREATE INDEX "bookings_customer_id_idx" ON "bookings"("customer_id");
@@ -471,6 +495,12 @@ ALTER TABLE "provider_members" ADD CONSTRAINT "provider_members_provider_id_fkey
 ALTER TABLE "provider_members" ADD CONSTRAINT "provider_members_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "member_services" ADD CONSTRAINT "member_services_member_id_fkey" FOREIGN KEY ("member_id") REFERENCES "provider_members"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "member_services" ADD CONSTRAINT "member_services_service_id_fkey" FOREIGN KEY ("service_id") REFERENCES "services"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "provider_documents" ADD CONSTRAINT "provider_documents_provider_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -483,7 +513,7 @@ ALTER TABLE "provider_categories" ADD CONSTRAINT "provider_categories_category_i
 ALTER TABLE "services" ADD CONSTRAINT "services_provider_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "availability" ADD CONSTRAINT "availability_provider_id_fkey" FOREIGN KEY ("provider_id") REFERENCES "providers"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "availability" ADD CONSTRAINT "availability_member_id_fkey" FOREIGN KEY ("member_id") REFERENCES "provider_members"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "bookings" ADD CONSTRAINT "bookings_customer_id_fkey" FOREIGN KEY ("customer_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -532,3 +562,4 @@ ALTER TABLE "referrals" ADD CONSTRAINT "referrals_sender_id_fkey" FOREIGN KEY ("
 
 -- AddForeignKey
 ALTER TABLE "referrals" ADD CONSTRAINT "referrals_receiver_id_fkey" FOREIGN KEY ("receiver_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+

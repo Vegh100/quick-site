@@ -17,34 +17,30 @@ import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
 import { useState, useMemo } from "react";
-import { useCreateBooking, useProvider } from "../../hooks/useApi";
+import {
+  useCreateBooking,
+  useProvider,
+  useAvailableSlots,
+} from "../../hooks/useApi";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clock, CheckCircle2 } from "lucide-react";
 import type { Provider } from "../../lib/types";
 
 interface BookingModalProps {
   provider: Provider;
+  initialServiceId?: string;
   onClose: () => void;
 }
 
-function generateTimeSlots(startTime: string, endTime: string): string[] {
-  const slots: string[] = [];
-  const [startH, startM] = startTime.split(":").map(Number);
-  const [endH, endM] = endTime.split(":").map(Number);
-  const startMinutes = startH * 60 + startM;
-  const endMinutes = endH * 60 + endM;
-
-  for (let m = startMinutes; m < endMinutes; m += 60) {
-    const h = Math.floor(m / 60);
-    const min = m % 60;
-    slots.push(`${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`);
-  }
-  return slots;
-}
-
-export function BookingModal({ provider, onClose }: BookingModalProps) {
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [selectedServiceId, setSelectedServiceId] = useState("");
+export function BookingModal({
+  provider,
+  initialServiceId,
+  onClose,
+}: BookingModalProps) {
+  const [date, setDate] = useState<Date | undefined>(undefined);
+  const [selectedServiceId, setSelectedServiceId] = useState(
+    initialServiceId || "",
+  );
   const [selectedTime, setSelectedTime] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [notes, setNotes] = useState("");
@@ -56,26 +52,55 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
 
   const services = resolvedProvider.services || [];
   const selectedService = services.find((s) => s.id === selectedServiceId);
-  const availability = resolvedProvider.availability || [];
 
-  // Get time slots for the selected date based on provider availability
-  const timeSlots = useMemo(() => {
-    if (!date) return [];
-    const dayOfWeek = date.getDay(); // 0=Sun, 1=Mon, ...6=Sat
-    const dayAvail = availability.find(
-      (a) => a.dayOfWeek === dayOfWeek && a.isEnabled,
-    );
-    if (dayAvail) {
-      return generateTimeSlots(dayAvail.startTime, dayAvail.endTime);
+  // Derive availability from members to disable calendar days
+  const availability = useMemo(() => {
+    const members = resolvedProvider.members || [];
+    if (selectedMemberId) {
+      const member = members.find((m) => m.id === selectedMemberId);
+      return member?.availability || [];
     }
-    // Fallback: if no availability data at all, show default slots
-    if (availability.length === 0) {
-      return generateTimeSlots("08:00", "18:00");
+    const merged = new Map<
+      number,
+      {
+        dayOfWeek: number;
+        startTime: string;
+        endTime: string;
+        isEnabled: boolean;
+      }
+    >();
+    for (const member of members) {
+      for (const a of member.availability || []) {
+        if (!a.isEnabled) continue;
+        const existing = merged.get(a.dayOfWeek);
+        if (!existing) {
+          merged.set(a.dayOfWeek, { ...a });
+        } else {
+          if (a.startTime < existing.startTime)
+            existing.startTime = a.startTime;
+          if (a.endTime > existing.endTime) existing.endTime = a.endTime;
+        }
+      }
     }
-    return []; // Provider not available on this day
-  }, [date, availability]);
+    return Array.from(merged.values());
+  }, [resolvedProvider.members, selectedMemberId]);
 
-  // Disable days where provider is not available
+  // Fetch available slots from API when we have all required data
+  const dateStr = date ? date.toISOString().split("T")[0] : "";
+  const slotsParams =
+    selectedServiceId && dateStr
+      ? {
+          providerId: provider.id,
+          serviceId: selectedServiceId,
+          date: dateStr,
+          memberId: selectedMemberId || undefined,
+        }
+      : null;
+  const { data: slotsData, isLoading: loadingSlots } =
+    useAvailableSlots(slotsParams);
+  const timeSlots = slotsData?.data?.slots || [];
+
+  // Disable days where provider is not available or in the past
   const disabledDays = (checkDate: Date) => {
     if (checkDate < new Date(new Date().setHours(0, 0, 0, 0))) return true;
     if (availability.length === 0) return false;
@@ -120,16 +145,20 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
         <DialogHeader>
           <DialogTitle>Foglalás - {provider.businessName}</DialogTitle>
           <DialogDescription>
-            Válaszd ki a szolgáltatást, dátumot és időpontot
+            Válaszd ki a szolgáltatást, dátumot és szabad időpontot
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Service selection */}
           <div>
             <Label>Szolgáltatás</Label>
             <Select
               value={selectedServiceId}
-              onValueChange={setSelectedServiceId}
+              onValueChange={(v) => {
+                setSelectedServiceId(v);
+                setSelectedTime("");
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Válassz szolgáltatást" />
@@ -138,47 +167,47 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
                 {services.map((service) => (
                   <SelectItem key={service.id} value={service.id}>
                     {service.name} - {Number(service.priceAmount)}{" "}
-                    {service.priceCurrency}
-                    {service.priceType === "PER_HOUR" ? "/óra" : ""} (
-                    {service.durationMin} perc)
+                    {service.priceCurrency} ({service.durationMin} perc)
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Member selection for COMPANY providers */}
-          {resolvedProvider.providerType === "COMPANY" &&
-            resolvedProvider.members &&
-            resolvedProvider.members.length > 0 && (
-              <div>
-                <Label>Szakember kiválasztása</Label>
-                <Select
-                  value={selectedMemberId}
-                  onValueChange={setSelectedMemberId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Válassz szakembert (opcionális)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Bárki</SelectItem>
-                    {resolvedProvider.members.map((member) => {
-                      const name =
-                        member.displayName ||
-                        `${member.user?.firstName || ""} ${member.user?.lastName || ""}`.trim() ||
-                        "Munkatárs";
-                      return (
-                        <SelectItem key={member.id} value={member.id}>
-                          {name}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+          {/* Member selection when provider has team members */}
+          {resolvedProvider.members && resolvedProvider.members.length > 1 && (
+            <div>
+              <Label>Szakember kiválasztása</Label>
+              <Select
+                value={selectedMemberId}
+                onValueChange={(v) => {
+                  setSelectedMemberId(v);
+                  setSelectedTime("");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Válassz szakembert (opcionális)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Bárki elérhető</SelectItem>
+                  {resolvedProvider.members.map((member) => {
+                    const name =
+                      member.displayName ||
+                      `${member.user?.firstName || ""} ${member.user?.lastName || ""}`.trim() ||
+                      "Munkatárs";
+                    return (
+                      <SelectItem key={member.id} value={member.id}>
+                        {name}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Calendar */}
             <div>
               <Label>Dátum</Label>
               <div className="border rounded-lg p-3">
@@ -195,35 +224,75 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
               </div>
             </div>
 
+            {/* Time slots */}
             <div className="space-y-4">
               <div>
-                <Label>Időpont</Label>
-                {timeSlots.length === 0 ? (
+                <Label>Elérhető időpontok</Label>
+                {!selectedServiceId ? (
                   <p className="text-sm text-muted-foreground mt-2">
-                    A szolgáltató ezen a napon nem elérhető
+                    Válassz először szolgáltatást
+                  </p>
+                ) : !date ? (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Válassz dátumot az időpontok megjelenítéséhez
+                  </p>
+                ) : loadingSlots ? (
+                  <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Időpontok betöltése...
+                  </div>
+                ) : timeSlots.length === 0 ? (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Nincs elérhető időpont ezen a napon
                   </p>
                 ) : (
-                  <Select value={selectedTime} onValueChange={setSelectedTime}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Válassz időpontot" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {timeSlots.map((time) => (
-                        <SelectItem key={time} value={time}>
-                          {time}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="grid grid-cols-3 gap-2 mt-2 max-h-[260px] overflow-y-auto pr-1">
+                    {timeSlots.map((slot) => {
+                      const isSelected = selectedTime === slot.startTime;
+                      return (
+                        <button
+                          key={slot.startTime}
+                          disabled={!slot.isAvailable}
+                          onClick={() =>
+                            setSelectedTime(isSelected ? "" : slot.startTime)
+                          }
+                          className={`
+                            relative flex items-center justify-center gap-1 px-2 py-2 rounded-lg border text-sm font-medium transition-all
+                            ${
+                              !slot.isAvailable
+                                ? "bg-muted/50 text-muted-foreground/40 border-muted cursor-not-allowed line-through"
+                                : isSelected
+                                  ? "bg-primary text-primary-foreground border-primary ring-2 ring-primary/30"
+                                  : "bg-background hover:bg-primary/5 hover:border-primary/50 border-border cursor-pointer"
+                            }
+                          `}
+                        >
+                          <Clock className="h-3 w-3" />
+                          {slot.startTime}
+                          {isSelected && (
+                            <CheckCircle2 className="h-3 w-3 ml-0.5" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
+              {/* Service summary */}
               {selectedService && (
                 <div className="p-4 bg-muted rounded-lg">
                   <h4 className="font-semibold mb-2">{selectedService.name}</h4>
                   <p className="text-sm text-muted-foreground mb-1">
                     Időtartam: {selectedService.durationMin} perc
                   </p>
+                  {selectedTime && (
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Időpont: {selectedTime} –{" "}
+                      {timeSlots.find((s) => s.startTime === selectedTime)
+                        ?.endTime || ""}
+                    </p>
+                  )}
                   <p className="text-lg font-bold text-primary">
                     {Number(selectedService.priceAmount)}{" "}
                     {selectedService.priceCurrency}
@@ -250,7 +319,12 @@ export function BookingModal({ provider, onClose }: BookingModalProps) {
             <Button
               className="flex-1"
               onClick={handleSubmit}
-              disabled={createBooking.isPending}
+              disabled={
+                createBooking.isPending ||
+                !selectedServiceId ||
+                !date ||
+                !selectedTime
+              }
             >
               {createBooking.isPending && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -1,28 +1,17 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { ProgressIndicator } from "../onboarding/ProgressIndicator";
-import {
-  Briefcase,
-  Clock,
-  CheckCircle2,
-  Loader2,
-  User,
-  Building2,
-} from "lucide-react";
+import { Briefcase, Clock, CheckCircle2, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import {
-  useCreateProvider,
-  useAddService,
-  useSetAvailability,
-} from "../../hooks/useApi";
 import { useCategories } from "../../hooks/useApi";
-import type { ProviderType } from "../../lib/types";
+import { providerApi } from "../../lib/api-services";
 
 interface ProviderOnboardingFlowProps {
   onComplete?: () => void;
@@ -57,17 +46,16 @@ export function ProviderOnboardingFlow({
   onBack,
 }: ProviderOnboardingFlowProps) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [currentStep, setCurrentStep] = useState(0);
-  const createProvider = useCreateProvider();
-  const addService = useAddService();
-  const useSetAvailabilityFn = useSetAvailability();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: categoriesData } = useCategories();
 
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
   const [phone, setPhone] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [providerType, setProviderType] = useState<ProviderType>("SOLO");
+  const [ownerMemberId, setOwnerMemberId] = useState<string | null>(null);
 
   const [serviceName, setServiceName] = useState("");
   const [serviceDescription, setServiceDescription] = useState("");
@@ -79,29 +67,29 @@ export function ProviderOnboardingFlow({
   const categories = categoriesData?.data || [];
 
   const handleNext = async () => {
-    if (currentStep === 0) {
-      if (!businessName) {
-        toast.error("Kérlek add meg az üzlet nevét!");
-        return;
-      }
-      try {
-        await createProvider.mutateAsync({
+    setIsSubmitting(true);
+    try {
+      if (currentStep === 0) {
+        if (!businessName) {
+          toast.error("Kérlek add meg az üzlet nevét!");
+          setIsSubmitting(false);
+          return;
+        }
+        const createResult = await providerApi.create({
           businessName,
           description,
           phone,
-          providerType,
           categoryIds: selectedCategory ? [selectedCategory] : [],
         });
+        const ownerMember = createResult.data?.members?.find(
+          (m) => m.role === "OWNER",
+        );
+        if (ownerMember) setOwnerMemberId(ownerMember.id);
         toast.success("Szolgáltatói profil létrehozva!");
-      } catch {
-        toast.error("Hiba a profil létrehozásakor");
-        return;
       }
-    }
 
-    if (currentStep === 1 && serviceName && servicePrice) {
-      try {
-        await addService.mutateAsync({
+      if (currentStep === 1 && serviceName && servicePrice) {
+        await providerApi.addService({
           name: serviceName,
           description: serviceDescription,
           priceAmount: parseFloat(servicePrice),
@@ -109,31 +97,33 @@ export function ProviderOnboardingFlow({
           durationMin: parseInt(serviceDuration),
         });
         toast.success("Szolgáltatás hozzáadva!");
-      } catch {
-        toast.error("Hiba a szolgáltatás hozzáadásakor");
-        return;
       }
-    }
 
-    if (currentStep === 2) {
-      const enabledSlots = availability.filter((a) => a.isEnabled);
-      if (enabledSlots.length > 0) {
-        try {
-          const setAvail = useSetAvailabilityFn;
-          await setAvail.mutateAsync(enabledSlots);
+      if (currentStep === 2) {
+        const enabledSlots = availability.filter((a) => a.isEnabled);
+        if (enabledSlots.length > 0 && ownerMemberId) {
+          await providerApi.setAvailability(ownerMemberId, enabledSlots);
           toast.success("Időpontok mentve!");
-        } catch {
-          toast.error("Hiba az időpontok mentésekor");
-          return;
         }
       }
-    }
 
-    if (currentStep < onboardingSteps.length - 1) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      toast.success("Minden kész! Üdvözlünk a Qvick-ben!");
-      onComplete ? onComplete() : navigate("/szolgaltato", { replace: true });
+      if (currentStep < onboardingSteps.length - 1) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        toast.success("Minden kész! Üdvözlünk a Qvick-ben!");
+        queryClient.invalidateQueries({ queryKey: ["providers"] });
+        onComplete ? onComplete() : navigate("/szolgaltato", { replace: true });
+      }
+    } catch {
+      const msgs = [
+        "Hiba a profil létrehozásakor",
+        "Hiba a szolgáltatás hozzáadásakor",
+        "Hiba az időpontok mentésekor",
+        "Hiba történt",
+      ];
+      toast.error(msgs[currentStep] || msgs[3]);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -167,47 +157,6 @@ export function ProviderOnboardingFlow({
             </div>
 
             <div className="space-y-4">
-              {/* Provider Type Selection */}
-              <div>
-                <Label>Fiók típusa *</Label>
-                <div className="grid grid-cols-2 gap-3 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setProviderType("SOLO")}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                      providerType === "SOLO"
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <User
-                      className={`h-8 w-8 ${providerType === "SOLO" ? "text-primary" : "text-muted-foreground"}`}
-                    />
-                    <span className="font-medium text-sm">Egyéni</span>
-                    <span className="text-xs text-muted-foreground text-center">
-                      Egyedül nyújtom a szolgáltatást
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProviderType("COMPANY")}
-                    className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all ${
-                      providerType === "COMPANY"
-                        ? "border-primary bg-primary/5 shadow-sm"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <Building2
-                      className={`h-8 w-8 ${providerType === "COMPANY" ? "text-primary" : "text-muted-foreground"}`}
-                    />
-                    <span className="font-medium text-sm">Céges</span>
-                    <span className="text-xs text-muted-foreground text-center">
-                      Cégem van alkalmazottakkal
-                    </span>
-                  </button>
-                </div>
-              </div>
-
               <div>
                 <Label htmlFor="businessName">Üzlet neve *</Label>
                 <Input
@@ -451,15 +400,9 @@ export function ProviderOnboardingFlow({
             <Button
               onClick={handleNext}
               className="flex-1"
-              disabled={
-                createProvider.isPending ||
-                addService.isPending ||
-                useSetAvailabilityFn.isPending
-              }
+              disabled={isSubmitting}
             >
-              {(createProvider.isPending ||
-                addService.isPending ||
-                useSetAvailabilityFn.isPending) && (
+              {isSubmitting && (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               )}
               {currentStep === onboardingSteps.length - 1

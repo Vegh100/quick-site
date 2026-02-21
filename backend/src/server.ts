@@ -113,6 +113,10 @@ app.use("/api/reviews", reviewRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/categories", categoryRoutes);
 
+// Public invite info endpoint (no auth required)
+import * as memberController from "./controllers/member.controller.js";
+app.get("/api/invites/:token", memberController.getInviteInfo as any);
+
 // ============================================================================
 // 404 HANDLER
 // ============================================================================

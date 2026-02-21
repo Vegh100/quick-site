@@ -22,6 +22,14 @@ export function useCategories() {
   });
 }
 
+export function useServiceTypes(categoryId?: string) {
+  return useQuery({
+    queryKey: ["categories", "service-types", categoryId],
+    queryFn: () => categoryApi.getServiceTypes(categoryId),
+    staleTime: 1000 * 60 * 30,
+  });
+}
+
 // ============================================================================
 // PROVIDERS
 // ============================================================================
@@ -63,27 +71,28 @@ export function useMyProvider() {
   });
 }
 
-export function useProviderStats() {
+export function useProviderStats(enabled = true) {
   return useQuery({
     queryKey: ["providers", "me", "stats"],
     queryFn: () => providerApi.getStats(),
+    enabled,
   });
 }
 
-export function useProviderClients(page = 1, limit = 20) {
+export function useProviderClients(page = 1, limit = 20, enabled = true) {
   return useQuery({
     queryKey: ["providers", "me", "clients", page, limit],
     queryFn: () => providerApi.getClients(page, limit),
+    enabled,
   });
 }
 
 export function useCreateProvider() {
-  const qc = useQueryClient();
   return useMutation({
     mutationFn: providerApi.create,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["providers"] });
-    },
+    // NOTE: no auto-invalidation here — the onboarding flow
+    // manually invalidates ["providers","me"] when all steps are done,
+    // otherwise ProviderApp would unmount the flow mid-onboarding.
   });
 }
 
@@ -136,9 +145,16 @@ export function useDeleteService() {
 export function useSetAvailability() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: providerApi.setAvailability,
+    mutationFn: ({
+      memberId,
+      availability,
+    }: {
+      memberId: string;
+      availability: Parameters<typeof providerApi.setAvailability>[1];
+    }) => providerApi.setAvailability(memberId, availability),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["providers", "me"] });
+      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
     },
   });
 }
@@ -168,14 +184,14 @@ export function useCustomerBookings(params?: {
   });
 }
 
-export function useProviderBookings(params?: {
-  status?: string;
-  page?: number;
-  limit?: number;
-}) {
+export function useProviderBookings(
+  params?: { status?: string; page?: number; limit?: number },
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["bookings", "provider", params],
     queryFn: () => bookingApi.getProviderBookings(params),
+    enabled,
   });
 }
 
@@ -193,7 +209,25 @@ export function useCreateBooking() {
     mutationFn: (data: CreateBookingInput) => bookingApi.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["bookings"] });
+      qc.invalidateQueries({ queryKey: ["available-slots"] });
     },
+  });
+}
+
+export function useAvailableSlots(
+  params: {
+    providerId: string;
+    serviceId: string;
+    date: string;
+    memberId?: string;
+  } | null,
+) {
+  return useQuery({
+    queryKey: ["available-slots", params],
+    queryFn: () => bookingApi.getAvailableSlots(params!),
+    enabled:
+      !!params && !!params.providerId && !!params.serviceId && !!params.date,
+    staleTime: 1000 * 30, // 30 seconds
   });
 }
 
@@ -363,21 +397,18 @@ export function useTeamMembers() {
   });
 }
 
+export function useMemberDetail(memberId: string | null) {
+  return useQuery({
+    queryKey: ["providers", "me", "members", memberId, "detail"],
+    queryFn: () => memberApi.getDetail(memberId!),
+    enabled: !!memberId,
+  });
+}
+
 export function useInviteMember() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: memberApi.invite,
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
-      qc.invalidateQueries({ queryKey: ["providers", "me"] });
-    },
-  });
-}
-
-export function useAcceptInvite() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: memberApi.acceptInvite,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
       qc.invalidateQueries({ queryKey: ["providers", "me"] });
@@ -419,12 +450,59 @@ export function useDeactivateMember() {
   });
 }
 
-export function useUpgradeToCompany() {
+export function useAssignServiceToMember() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: memberApi.upgradeToCompany,
+    mutationFn: ({
+      memberId,
+      serviceId,
+    }: {
+      memberId: string;
+      serviceId: string;
+    }) => memberApi.assignService(memberId, serviceId),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
+    },
+  });
+}
+
+export function useRemoveServiceFromMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      serviceId,
+    }: {
+      memberId: string;
+      serviceId: string;
+    }) => memberApi.removeService(memberId, serviceId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
+    },
+  });
+}
+
+export function useSetMemberAvailability() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      memberId,
+      availability,
+    }: {
+      memberId: string;
+      availability: Parameters<typeof memberApi.setAvailability>[1];
+    }) => memberApi.setAvailability(memberId, availability),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
       qc.invalidateQueries({ queryKey: ["providers", "me"] });
     },
+  });
+}
+
+export function useInviteInfo(token: string | undefined) {
+  return useQuery({
+    queryKey: ["invites", token],
+    queryFn: () => memberApi.getInviteInfo(token!),
+    enabled: !!token,
   });
 }

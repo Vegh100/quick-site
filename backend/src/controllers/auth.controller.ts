@@ -170,3 +170,27 @@ export async function changePassword(
     next(error);
   }
 }
+
+export async function registerFromInvite(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const result = await authService.registerFromInvite(
+      req.params.token,
+      req.body,
+      req.headers["user-agent"],
+      req.ip,
+    );
+
+    setSessionCookie(res, result.token);
+
+    res.status(201).json({
+      success: true,
+      data: { user: result.user, provider: result.provider },
+    });
+  } catch (error) {
+    next(error);
+  }
+}

@@ -47,6 +47,7 @@ model User {
 enum UserRole {
   CUSTOMER
   PROVIDER
+  EMPLOYEE
   ADMIN
 
   @@map("user_role")
@@ -93,7 +94,6 @@ model Session {
 model Provider {
   id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId          String       @unique @map("user_id") @db.Uuid
-  providerType    ProviderType @default(SOLO) @map("provider_type")
   businessName    String       @map("business_name") @db.VarChar(255)
   description     String?      @db.Text
   phone           String?      @db.VarChar(50)
@@ -101,7 +101,6 @@ model Provider {
   logoUrl         String?      @map("logo_url") @db.VarChar(500)
   coverImageUrl   String?      @map("cover_image_url") @db.VarChar(500)
   serviceArea     String?      @map("service_area") @db.VarChar(500)
-  teamSize        String?      @map("team_size") @db.VarChar(20)
   taxNumber       String?      @map("tax_number") @db.VarChar(50)
   regNumber       String?      @map("reg_number") @db.VarChar(50)
   rating          Decimal      @default(0) @db.Decimal(2, 1)
@@ -119,7 +118,6 @@ model Provider {
   members         ProviderMember[]
   categories      ProviderCategory[]
   services        Service[]
-  availability    Availability[]
   documents       ProviderDocument[]
   bookings        Booking[]
   subscription    Subscription?
@@ -131,15 +129,9 @@ model Provider {
   @@map("providers")
 }
 
-enum ProviderType {
-  SOLO
-  COMPANY
-
-  @@map("provider_type_enum")
-}
-
 // ============================================================================
 // PROVIDER MEMBERS (TEAM)
+// Owner = the PROVIDER user. Employees = invited EMPLOYEE users.
 // ============================================================================
 
 model ProviderMember {
@@ -150,22 +142,25 @@ model ProviderMember {
   status        MemberStatus @default(INVITED)
   invitedEmail  String       @map("invited_email") @db.VarChar(255)
   displayName   String?      @map("display_name") @db.VarChar(200)
+  inviteToken   String?      @unique @map("invite_token") @db.VarChar(100)
   invitedAt     DateTime     @default(now()) @map("invited_at") @db.Timestamptz(6)
   joinedAt      DateTime?    @map("joined_at") @db.Timestamptz(6)
 
-  provider      Provider     @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-  assignedBookings Booking[] @relation("AssignedMember")
+  provider         Provider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user             User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignedBookings Booking[]       @relation("AssignedMember")
+  memberServices   MemberService[]
+  availability     Availability[]
 
   @@index([providerId])
   @@index([userId])
   @@index([invitedEmail])
+  @@index([inviteToken])
   @@map("provider_members")
 }
 
 enum MemberRole {
   OWNER
-  MANAGER
   EMPLOYEE
 
   @@map("member_role")
@@ -177,6 +172,25 @@ enum MemberStatus {
   DEACTIVATED
 
   @@map("member_status")
+}
+
+// ============================================================================
+// MEMBER ↔ SERVICE ASSIGNMENT
+// Which services each team member (including owner) can perform.
+// ============================================================================
+
+model MemberService {
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  memberId  String         @map("member_id") @db.Uuid
+  serviceId String         @map("service_id") @db.Uuid
+
+  member    ProviderMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  service   Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, serviceId])
+  @@index([memberId])
+  @@index([serviceId])
+  @@map("member_services")
 }
 
 model ProviderDocument {
@@ -209,9 +223,32 @@ model Category {
   sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  providers   ProviderCategory[]
+  providers    ProviderCategory[]
+  serviceTypes ServiceType[]
 
   @@map("categories")
+}
+
+// ============================================================================
+// SERVICE TYPES (predefined per category — providers pick from these)
+// ============================================================================
+
+model ServiceType {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  categoryId  String   @map("category_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  defaultDurationMin Int @default(60) @map("default_duration_min")
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  category    Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  services    Service[]
+
+  @@unique([categoryId, name])
+  @@index([categoryId])
+  @@map("service_types")
 }
 
 model ProviderCategory {
@@ -226,23 +263,28 @@ model ProviderCategory {
 }
 
 model Service {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  providerId    String    @map("provider_id") @db.Uuid
-  name          String    @db.VarChar(255)
-  description   String?   @db.Text
-  priceAmount   Decimal   @map("price_amount") @db.Decimal(10, 2)
-  priceCurrency String    @default("RON") @map("price_currency") @db.VarChar(3)
-  priceType     PriceType @default(PER_HOUR) @map("price_type")
-  durationMin   Int       @map("duration_min")
-  isActive      Boolean   @default(true) @map("is_active")
-  sortOrder     Int       @default(0) @map("sort_order")
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId      String    @map("provider_id") @db.Uuid
+  serviceTypeId   String?   @map("service_type_id") @db.Uuid
+  name            String    @db.VarChar(255)
+  description     String?   @db.Text
+  priceAmount     Decimal   @map("price_amount") @db.Decimal(10, 2)
+  priceCurrency   String    @default("RON") @map("price_currency") @db.VarChar(3)
+  priceType       PriceType @default(FIXED) @map("price_type")
+  durationMin     Int       @map("duration_min")
+  slotIntervalMin Int       @default(60) @map("slot_interval_min")
+  isActive        Boolean   @default(true) @map("is_active")
+  sortOrder       Int       @default(0) @map("sort_order")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  provider      Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  bookings      Booking[]
+  provider        Provider        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  serviceType     ServiceType?    @relation(fields: [serviceTypeId], references: [id], onDelete: SetNull)
+  bookings        Booking[]
+  memberServices  MemberService[]
 
   @@index([providerId])
+  @@index([serviceTypeId])
   @@index([isActive])
   @@map("services")
 }
@@ -260,17 +302,19 @@ enum PriceType {
 // ============================================================================
 
 model Availability {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  providerId  String   @map("provider_id") @db.Uuid
-  dayOfWeek   Int      @map("day_of_week")
-  startTime   String   @map("start_time") @db.VarChar(5)
-  endTime     String   @map("end_time") @db.VarChar(5)
-  isEnabled   Boolean  @default(true) @map("is_enabled")
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId  String         @map("provider_id") @db.Uuid
+  memberId    String         @map("member_id") @db.Uuid
+  dayOfWeek   Int            @map("day_of_week")
+  startTime   String         @map("start_time") @db.VarChar(5)
+  endTime     String         @map("end_time") @db.VarChar(5)
+  isEnabled   Boolean        @default(true) @map("is_enabled")
 
-  provider    Provider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  member      ProviderMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  @@unique([providerId, dayOfWeek])
+  @@unique([memberId, dayOfWeek])
   @@index([providerId])
+  @@index([memberId])
   @@map("availability")
 }
 
@@ -287,6 +331,7 @@ model Booking {
   status           BookingStatus   @default(PENDING)
   scheduledDate    DateTime        @map("scheduled_date") @db.Date
   scheduledTime    String          @map("scheduled_time") @db.VarChar(5)
+  scheduledEndTime String?         @map("scheduled_end_time") @db.VarChar(5)
   durationMin      Int             @map("duration_min")
   totalAmount      Decimal         @map("total_amount") @db.Decimal(10, 2)
   currency         String          @default("RON") @db.VarChar(3)

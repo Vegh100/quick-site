@@ -2,7 +2,7 @@
 // USER & AUTH TYPES
 // ============================================================================
 
-export type UserRole = "CUSTOMER" | "PROVIDER" | "ADMIN";
+export type UserRole = "CUSTOMER" | "PROVIDER" | "EMPLOYEE" | "ADMIN";
 
 export interface User {
   id: string;
@@ -42,8 +42,7 @@ export interface LoginInput {
 // PROVIDER TYPES
 // ============================================================================
 
-export type ProviderType = "SOLO" | "COMPANY";
-export type MemberRole = "OWNER" | "MANAGER" | "EMPLOYEE";
+export type MemberRole = "OWNER" | "EMPLOYEE";
 export type MemberStatus = "INVITED" | "ACTIVE" | "DEACTIVATED";
 
 export interface Category {
@@ -56,6 +55,28 @@ export interface Category {
   sortOrder: number;
 }
 
+export interface ServiceType {
+  id: string;
+  categoryId: string;
+  name: string;
+  description: string | null;
+  defaultDurationMin: number;
+  sortOrder: number;
+  isActive: boolean;
+  category?: {
+    id: string;
+    name: string;
+    slug: string;
+    icon: string | null;
+  };
+}
+
+export interface TimeSlot {
+  startTime: string;
+  endTime: string;
+  isAvailable: boolean;
+}
+
 export interface ProviderCategory {
   providerId: string;
   categoryId: string;
@@ -65,19 +86,23 @@ export interface ProviderCategory {
 export interface Service {
   id: string;
   providerId: string;
+  serviceTypeId: string | null;
   name: string;
   description: string | null;
   priceAmount: string; // Decimal as string
   priceCurrency: string;
   priceType: "PER_HOUR" | "FIXED" | "PER_SERVICE";
   durationMin: number;
+  slotIntervalMin: number;
   isActive: boolean;
   sortOrder: number;
+  serviceType?: ServiceType;
 }
 
 export interface Availability {
   id: string;
   providerId: string;
+  memberId: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;
@@ -87,7 +112,6 @@ export interface Availability {
 export interface Provider {
   id: string;
   userId: string;
-  providerType: ProviderType;
   businessName: string;
   description: string | null;
   phone: string | null;
@@ -95,7 +119,6 @@ export interface Provider {
   logoUrl: string | null;
   coverImageUrl: string | null;
   serviceArea: string | null;
-  teamSize: string | null;
   taxNumber: string | null;
   regNumber: string | null;
   rating: string; // Decimal
@@ -117,7 +140,6 @@ export interface Provider {
   };
   categories?: ProviderCategory[];
   services?: Service[];
-  availability?: Availability[];
   members?: ProviderMember[];
   subscription?: Subscription | null;
 }
@@ -130,6 +152,7 @@ export interface ProviderMember {
   status: MemberStatus;
   invitedEmail: string;
   displayName: string | null;
+  inviteToken?: string | null;
   invitedAt: string;
   joinedAt: string | null;
   user?: {
@@ -144,6 +167,29 @@ export interface ProviderMember {
     businessName: string;
     logoUrl?: string | null;
   };
+  memberServices?: MemberService[];
+  availability?: Availability[];
+}
+
+export interface MemberBookingStats {
+  totalBookings: number;
+  completedBookings: number;
+  pendingBookings: number;
+  cancelledBookings: number;
+  totalRevenue: number;
+}
+
+export interface MemberDetail extends ProviderMember {
+  bookingStats: MemberBookingStats;
+  upcomingBookings: Booking[];
+  recentBookings: Booking[];
+}
+
+export interface MemberService {
+  id: string;
+  memberId: string;
+  serviceId: string;
+  service?: Service;
 }
 
 export interface Subscription {
@@ -176,6 +222,7 @@ export interface Booking {
   status: BookingStatus;
   scheduledDate: string;
   scheduledTime: string;
+  scheduledEndTime: string | null;
   durationMin: number;
   totalAmount: string;
   currency: string;

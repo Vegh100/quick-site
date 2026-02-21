@@ -35,9 +35,11 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
+  User,
 } from "lucide-react";
 import { CustomerSettingsPanel } from "../settings/CustomerSettingsPanel";
 import { BookingModal } from "../booking/BookingModal";
+import { ProviderDetailPage } from "./ProviderDetailPage";
 import { Toaster } from "../ui/sonner";
 import { toast } from "sonner";
 import type { Provider, BookingStatus, Booking } from "../../lib/types";
@@ -93,6 +95,7 @@ export function CustomerApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [bookingProvider, setBookingProvider] = useState<Provider | null>(null);
+  const [detailProviderId, setDetailProviderId] = useState<string | null>(null);
   const [bookingTab, setBookingTab] = useState("upcoming");
   const [page, setPage] = useState(1);
 
@@ -277,558 +280,602 @@ export function CustomerApp() {
       </div>
 
       <main className="flex-1 container mx-auto px-4 py-8">
-        {/* Discovery Tab */}
-        {activeTab === "discover" && (
-          <div className="space-y-6">
-            {/* Search Bar */}
-            <div className="flex gap-3">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input
-                  placeholder="Szolgáltatás vagy szolgáltató keresése..."
-                  className="pl-10"
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                />
-              </div>
-              <Button onClick={handleSearch}>
-                <Search className="h-5 w-5 mr-2" />
-                Keresés
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowFilters(!showFilters)}
-                className={showFilters ? "bg-primary text-white" : ""}
-              >
-                <SlidersHorizontal className="h-5 w-5 mr-2" />
-                Szűrők
-              </Button>
-            </div>
-
-            {/* Filters Panel */}
-            {showFilters && (
-              <Card className="p-6">
-                <div className="grid md:grid-cols-4 gap-6">
-                  <div>
-                    <h3 className="mb-3">Max. ár (RON/óra)</h3>
-                    <div className="space-y-2">
-                      {[
-                        { label: "Bármennyi", value: undefined },
-                        { label: "Max 50 RON", value: 50 },
-                        { label: "Max 100 RON", value: 100 },
-                        { label: "Max 200 RON", value: 200 },
-                      ].map((opt) => (
-                        <label
-                          key={opt.label}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <input
-                            type="radio"
-                            name="maxPrice"
-                            className="h-4 w-4"
-                            checked={maxPrice === opt.value}
-                            onChange={() => {
-                              setMaxPrice(opt.value);
-                              setPage(1);
-                            }}
-                          />
-                          <span className="text-sm">{opt.label}</span>
-                        </label>
-                      ))}
-                    </div>
+        {/* Provider Detail Page */}
+        {detailProviderId ? (
+          <ProviderDetailPage
+            providerId={detailProviderId}
+            onBack={() => setDetailProviderId(null)}
+          />
+        ) : (
+          <>
+            {/* Discovery Tab */}
+            {activeTab === "discover" && (
+              <div className="space-y-6">
+                {/* Search Bar */}
+                <div className="flex gap-3">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      placeholder="Szolgáltatás vagy szolgáltató keresése..."
+                      className="pl-10"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    />
                   </div>
+                  <Button onClick={handleSearch}>
+                    <Search className="h-5 w-5 mr-2" />
+                    Keresés
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={showFilters ? "bg-primary text-white" : ""}
+                  >
+                    <SlidersHorizontal className="h-5 w-5 mr-2" />
+                    Szűrők
+                  </Button>
+                </div>
 
-                  <div>
-                    <h3 className="mb-3">Min. értékelés</h3>
-                    <div className="space-y-2">
-                      {[
-                        { label: "Bármennyi", value: undefined },
-                        { label: "4.5+ csillag", value: 4.5 },
-                        { label: "4.0+ csillag", value: 4.0 },
-                        { label: "3.0+ csillag", value: 3.0 },
-                      ].map((opt) => (
-                        <label
-                          key={opt.label}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <input
-                            type="radio"
-                            name="minRating"
-                            className="h-4 w-4"
-                            checked={minRating === opt.value}
-                            onChange={() => {
-                              setMinRating(opt.value);
-                              setPage(1);
-                            }}
-                          />
-                          <span className="text-sm">{opt.label}</span>
-                        </label>
-                      ))}
+                {/* Filters Panel */}
+                {showFilters && (
+                  <Card className="p-6">
+                    <div className="grid md:grid-cols-4 gap-6">
+                      <div>
+                        <h3 className="mb-3">Max. ár (RON/óra)</h3>
+                        <div className="space-y-2">
+                          {[
+                            { label: "Bármennyi", value: undefined },
+                            { label: "Max 50 RON", value: 50 },
+                            { label: "Max 100 RON", value: 100 },
+                            { label: "Max 200 RON", value: 200 },
+                          ].map((opt) => (
+                            <label
+                              key={opt.label}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <input
+                                type="radio"
+                                name="maxPrice"
+                                className="h-4 w-4"
+                                checked={maxPrice === opt.value}
+                                onChange={() => {
+                                  setMaxPrice(opt.value);
+                                  setPage(1);
+                                }}
+                              />
+                              <span className="text-sm">{opt.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="mb-3">Min. értékelés</h3>
+                        <div className="space-y-2">
+                          {[
+                            { label: "Bármennyi", value: undefined },
+                            { label: "4.5+ csillag", value: 4.5 },
+                            { label: "4.0+ csillag", value: 4.0 },
+                            { label: "3.0+ csillag", value: 3.0 },
+                          ].map((opt) => (
+                            <label
+                              key={opt.label}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <input
+                                type="radio"
+                                name="minRating"
+                                className="h-4 w-4"
+                                checked={minRating === opt.value}
+                                onChange={() => {
+                                  setMinRating(opt.value);
+                                  setPage(1);
+                                }}
+                              />
+                              <span className="text-sm">{opt.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="mb-3">Rendezés</h3>
+                        <div className="space-y-2">
+                          {[
+                            {
+                              label: "Értékelés szerint",
+                              sortBy: "rating",
+                              sortOrder: "desc" as const,
+                            },
+                            {
+                              label: "Ár (növekvő)",
+                              sortBy: "price",
+                              sortOrder: "asc" as const,
+                            },
+                            {
+                              label: "Ár (csökkenő)",
+                              sortBy: "price",
+                              sortOrder: "desc" as const,
+                            },
+                            {
+                              label: "Legújabb",
+                              sortBy: "newest",
+                              sortOrder: "desc" as const,
+                            },
+                          ].map((opt) => (
+                            <label
+                              key={opt.label}
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <input
+                                type="radio"
+                                name="sortBy"
+                                className="h-4 w-4"
+                                checked={
+                                  sortBy === opt.sortBy &&
+                                  sortOrder === opt.sortOrder
+                                }
+                                onChange={() => {
+                                  setSortBy(opt.sortBy);
+                                  setSortOrder(opt.sortOrder);
+                                  setPage(1);
+                                }}
+                              />
+                              <span className="text-sm">{opt.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex items-end">
+                        <Button variant="outline" onClick={clearFilters}>
+                          Szűrők törlése
+                        </Button>
+                      </div>
                     </div>
-                  </div>
+                  </Card>
+                )}
 
-                  <div>
-                    <h3 className="mb-3">Rendezés</h3>
-                    <div className="space-y-2">
-                      {[
-                        {
-                          label: "Értékelés szerint",
-                          sortBy: "rating",
-                          sortOrder: "desc" as const,
-                        },
-                        {
-                          label: "Ár (növekvő)",
-                          sortBy: "price",
-                          sortOrder: "asc" as const,
-                        },
-                        {
-                          label: "Ár (csökkenő)",
-                          sortBy: "price",
-                          sortOrder: "desc" as const,
-                        },
-                        {
-                          label: "Legújabb",
-                          sortBy: "newest",
-                          sortOrder: "desc" as const,
-                        },
-                      ].map((opt) => (
-                        <label
-                          key={opt.label}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <input
-                            type="radio"
-                            name="sortBy"
-                            className="h-4 w-4"
-                            checked={
-                              sortBy === opt.sortBy &&
-                              sortOrder === opt.sortOrder
-                            }
-                            onChange={() => {
-                              setSortBy(opt.sortBy);
-                              setSortOrder(opt.sortOrder);
-                              setPage(1);
-                            }}
-                          />
-                          <span className="text-sm">{opt.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex items-end">
-                    <Button variant="outline" onClick={clearFilters}>
-                      Szűrők törlése
+                {/* Categories */}
+                <div>
+                  <h3 className="mb-4">Kategóriák</h3>
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    <Button
+                      variant={selectedCategory === "" ? "default" : "outline"}
+                      onClick={() => setSelectedCategory("")}
+                      className="flex-shrink-0"
+                    >
+                      ✨ Összes
                     </Button>
+                    {apiCategories.map((category) => (
+                      <Button
+                        key={category.id}
+                        variant={
+                          selectedCategory === category.slug
+                            ? "default"
+                            : "outline"
+                        }
+                        onClick={() => setSelectedCategory(category.slug)}
+                        className="flex-shrink-0"
+                      >
+                        {category.icon && (
+                          <span className="mr-2">{category.icon}</span>
+                        )}
+                        {category.name}
+                      </Button>
+                    ))}
                   </div>
                 </div>
-              </Card>
+
+                {/* Results */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3>
+                      {loadingProviders
+                        ? "Keresés..."
+                        : `${providersMeta?.total || 0} szolgáltató található`}
+                    </h3>
+                  </div>
+
+                  {loadingProviders ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  ) : providers.length === 0 ? (
+                    <Card className="p-8 text-center">
+                      <p className="text-muted-foreground">
+                        Nincs találat. Próbálj más keresési feltételeket!
+                      </p>
+                    </Card>
+                  ) : (
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {providers.map((provider) => {
+                        const lowestPrice = provider.services?.[0];
+                        return (
+                          <Card
+                            key={provider.id}
+                            className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                            onClick={() => setDetailProviderId(provider.id)}
+                          >
+                            <div className="aspect-video bg-muted relative">
+                              {provider.coverImageUrl ? (
+                                <img
+                                  src={provider.coverImageUrl}
+                                  alt={provider.businessName}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                                  <span className="text-4xl">
+                                    {provider.categories?.[0]?.category?.icon ||
+                                      "🔧"}
+                                  </span>
+                                </div>
+                              )}
+                              {provider.isVerified && (
+                                <Badge className="absolute top-3 right-3 bg-green-500">
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Hitelesített
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="p-5">
+                              <div className="flex items-start justify-between mb-2">
+                                <h3 className="text-lg">
+                                  {provider.businessName}
+                                </h3>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 -mt-1"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleFavorite(provider.id);
+                                  }}
+                                >
+                                  <Heart
+                                    className={`h-4 w-4 ${favoriteIds.has(provider.id) ? "fill-red-500 text-red-500" : ""}`}
+                                  />
+                                </Button>
+                              </div>
+
+                              <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                                {provider.description ||
+                                  "Professzionális szolgáltatás"}
+                              </p>
+
+                              <div className="flex items-center gap-4 mb-3 text-sm">
+                                <div className="flex items-center gap-1">
+                                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                  <span>
+                                    {Number(provider.rating).toFixed(1)}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    ({provider.reviewCount})
+                                  </span>
+                                </div>
+                                {provider.serviceArea && (
+                                  <div className="flex items-center gap-1 text-muted-foreground">
+                                    <MapPin className="h-4 w-4" />
+                                    {provider.serviceArea}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center justify-between">
+                                {lowestPrice && (
+                                  <span className="font-semibold text-primary">
+                                    {Number(lowestPrice.priceAmount)}{" "}
+                                    {lowestPrice.priceCurrency}
+                                    {lowestPrice.priceType === "PER_HOUR"
+                                      ? "/óra"
+                                      : ""}
+                                  </span>
+                                )}
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setDetailProviderId(provider.id);
+                                  }}
+                                >
+                                  Részletek
+                                </Button>
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Pagination */}
+                  {providersMeta && providersMeta.totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 mt-6">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page <= 1}
+                        onClick={() => setPage((p) => p - 1)}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Előző
+                      </Button>
+                      <span className="text-sm text-muted-foreground">
+                        {page} / {providersMeta.totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={page >= providersMeta.totalPages}
+                        onClick={() => setPage((p) => p + 1)}
+                      >
+                        Következő
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
 
-            {/* Categories */}
-            <div>
-              <h3 className="mb-4">Kategóriák</h3>
-              <div className="flex gap-3 overflow-x-auto pb-2">
-                <Button
-                  variant={selectedCategory === "" ? "default" : "outline"}
-                  onClick={() => setSelectedCategory("")}
-                  className="flex-shrink-0"
-                >
-                  ✨ Összes
-                </Button>
-                {apiCategories.map((category) => (
-                  <Button
-                    key={category.id}
-                    variant={
-                      selectedCategory === category.slug ? "default" : "outline"
-                    }
-                    onClick={() => setSelectedCategory(category.slug)}
-                    className="flex-shrink-0"
-                  >
-                    {category.icon && (
-                      <span className="mr-2">{category.icon}</span>
-                    )}
-                    {category.name}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Results */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3>
-                  {loadingProviders
-                    ? "Keresés..."
-                    : `${providersMeta?.total || 0} szolgáltató található`}
-                </h3>
-              </div>
-
-              {loadingProviders ? (
-                <div className="flex justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </div>
-              ) : providers.length === 0 ? (
-                <Card className="p-8 text-center">
+            {/* My Bookings Tab */}
+            {activeTab === "bookings" && (
+              <div className="space-y-6">
+                <div>
+                  <h1>Foglalásaim</h1>
                   <p className="text-muted-foreground">
-                    Nincs találat. Próbálj más keresési feltételeket!
+                    Kövesd és kezeld a foglalásaidat
                   </p>
-                </Card>
-              ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {providers.map((provider) => {
-                    const lowestPrice = provider.services?.[0];
-                    return (
-                      <Card
-                        key={provider.id}
-                        className="overflow-hidden hover:shadow-lg transition-shadow"
-                      >
-                        <div className="aspect-video bg-muted relative">
-                          {provider.coverImageUrl ? (
-                            <img
-                              src={provider.coverImageUrl}
-                              alt={provider.businessName}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                              <span className="text-4xl">
-                                {provider.categories?.[0]?.category?.icon ||
-                                  "🔧"}
-                              </span>
+                </div>
+
+                <Tabs value={bookingTab} onValueChange={setBookingTab}>
+                  <TabsList>
+                    <TabsTrigger value="upcoming">Közelgő</TabsTrigger>
+                    <TabsTrigger value="past">Korábbi</TabsTrigger>
+                    <TabsTrigger value="cancelled">Lemondott</TabsTrigger>
+                  </TabsList>
+
+                  <div className="mt-6">
+                    {loadingBookings ? (
+                      <div className="flex justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : bookings.length === 0 ? (
+                      <Card className="p-8 text-center">
+                        <p className="text-muted-foreground">
+                          Nincsenek foglalások
+                        </p>
+                      </Card>
+                    ) : (
+                      <div className="space-y-4">
+                        {bookings.map((booking) => (
+                          <Card key={booking.id} className="p-6">
+                            <div className="flex items-start justify-between">
+                              <div className="flex gap-4">
+                                <div className="h-16 w-16 bg-muted rounded-lg flex items-center justify-center">
+                                  <Calendar className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                                <div>
+                                  <h3>
+                                    {booking.service?.name || "Szolgáltatás"}
+                                  </h3>
+                                  <p className="text-sm text-muted-foreground mb-2">
+                                    {booking.provider?.businessName ||
+                                      "Szolgáltató"}
+                                  </p>
+                                  <div className="flex gap-4 text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-4 w-4" />
+                                      {new Date(
+                                        booking.scheduledDate,
+                                      ).toLocaleDateString("hu-HU")}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Clock className="h-4 w-4" />
+                                      {booking.scheduledTime}
+                                      {booking.scheduledEndTime
+                                        ? ` – ${booking.scheduledEndTime}`
+                                        : ""}
+                                    </div>
+                                  </div>
+                                  {booking.assignedMember && (
+                                    <div className="flex items-center gap-1 text-sm text-muted-foreground mt-1">
+                                      <User className="h-4 w-4" />
+                                      Szakember:{" "}
+                                      {booking.assignedMember.displayName ||
+                                        `${booking.assignedMember.user?.firstName || ""} ${booking.assignedMember.user?.lastName || ""}`.trim() ||
+                                        "—"}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-right space-y-2">
+                                <Badge
+                                  className={STATUS_COLORS[booking.status]}
+                                >
+                                  {STATUS_HU[booking.status]}
+                                </Badge>
+                                <p className="text-sm font-semibold">
+                                  {Number(booking.totalAmount)}{" "}
+                                  {booking.currency}
+                                </p>
+                                {/* Cancel button for PENDING/CONFIRMED */}
+                                {(booking.status === "PENDING" ||
+                                  booking.status === "CONFIRMED") && (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() =>
+                                      handleCancelBooking(booking.id)
+                                    }
+                                    disabled={cancelBooking.isPending}
+                                  >
+                                    <XCircle className="h-3 w-3 mr-1" />
+                                    Lemondás
+                                  </Button>
+                                )}
+                                {/* Review button for COMPLETED (hide if already reviewed) */}
+                                {booking.status === "COMPLETED" &&
+                                  (!booking.reviews ||
+                                    booking.reviews.length === 0) && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setReviewBooking(booking);
+                                        setReviewRating(5);
+                                        setReviewComment("");
+                                      }}
+                                    >
+                                      <MessageSquare className="h-3 w-3 mr-1" />
+                                      Értékelés
+                                    </Button>
+                                  )}
+                              </div>
                             </div>
-                          )}
-                          {provider.isVerified && (
-                            <Badge className="absolute top-3 right-3 bg-green-500">
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Hitelesített
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="p-5">
+                          </Card>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </Tabs>
+              </div>
+            )}
+
+            {/* Favorites Tab */}
+            {activeTab === "favorites" && (
+              <div className="space-y-6">
+                <div>
+                  <h1>Kedvenc szolgáltatók</h1>
+                  <p className="text-muted-foreground">
+                    Az elmentett szolgáltatóid
+                  </p>
+                </div>
+
+                {loadingFavorites ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                ) : favorites.length === 0 ? (
+                  <Card className="p-8 text-center">
+                    <Heart className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">
+                      Még nincsenek kedvenceid
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Kattints a szív ikonra a szolgáltatóknál
+                    </p>
+                  </Card>
+                ) : (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {favorites.map((fav) => {
+                      const p = fav.provider;
+                      if (!p) return null;
+                      return (
+                        <Card
+                          key={fav.id}
+                          className="overflow-hidden hover:shadow-lg transition-shadow p-5"
+                        >
                           <div className="flex items-start justify-between mb-2">
-                            <h3 className="text-lg">{provider.businessName}</h3>
+                            <h3 className="text-lg">{p.businessName}</h3>
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 -mt-1"
-                              onClick={() => toggleFavorite(provider.id)}
+                              onClick={() => toggleFavorite(p.id)}
                             >
-                              <Heart
-                                className={`h-4 w-4 ${favoriteIds.has(provider.id) ? "fill-red-500 text-red-500" : ""}`}
-                              />
+                              <Heart className="h-4 w-4 fill-red-500 text-red-500" />
                             </Button>
                           </div>
-
-                          <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                            {provider.description ||
-                              "Professzionális szolgáltatás"}
+                          <p className="text-sm text-muted-foreground mb-3">
+                            {p.description}
                           </p>
-
-                          <div className="flex items-center gap-4 mb-3 text-sm">
-                            <div className="flex items-center gap-1">
-                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                              <span>{Number(provider.rating).toFixed(1)}</span>
-                              <span className="text-muted-foreground">
-                                ({provider.reviewCount})
-                              </span>
-                            </div>
-                            {provider.serviceArea && (
-                              <div className="flex items-center gap-1 text-muted-foreground">
-                                <MapPin className="h-4 w-4" />
-                                {provider.serviceArea}
-                              </div>
-                            )}
+                          <div className="flex items-center gap-2 text-sm">
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                            <span>{Number(p.rating).toFixed(1)}</span>
+                            <span className="text-muted-foreground">
+                              ({p.reviewCount})
+                            </span>
                           </div>
-
-                          <div className="flex items-center justify-between">
-                            {lowestPrice && (
-                              <span className="font-semibold text-primary">
-                                {Number(lowestPrice.priceAmount)}{" "}
-                                {lowestPrice.priceCurrency}
-                                {lowestPrice.priceType === "PER_HOUR"
-                                  ? "/óra"
-                                  : ""}
-                              </span>
-                            )}
-                            <Button
-                              size="sm"
-                              onClick={() => setBookingProvider(provider)}
-                            >
-                              Foglalás
-                            </Button>
-                          </div>
-                        </div>
-                      </Card>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Pagination */}
-              {providersMeta && providersMeta.totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-6">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    Előző
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    {page} / {providersMeta.totalPages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= providersMeta.totalPages}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Következő
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* My Bookings Tab */}
-        {activeTab === "bookings" && (
-          <div className="space-y-6">
-            <div>
-              <h1>Foglalásaim</h1>
-              <p className="text-muted-foreground">
-                Kövesd és kezeld a foglalásaidat
-              </p>
-            </div>
-
-            <Tabs value={bookingTab} onValueChange={setBookingTab}>
-              <TabsList>
-                <TabsTrigger value="upcoming">Közelgő</TabsTrigger>
-                <TabsTrigger value="past">Korábbi</TabsTrigger>
-                <TabsTrigger value="cancelled">Lemondott</TabsTrigger>
-              </TabsList>
-
-              <div className="mt-6">
-                {loadingBookings ? (
-                  <div className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : bookings.length === 0 ? (
-                  <Card className="p-8 text-center">
-                    <p className="text-muted-foreground">
-                      Nincsenek foglalások
-                    </p>
-                  </Card>
-                ) : (
-                  <div className="space-y-4">
-                    {bookings.map((booking) => (
-                      <Card key={booking.id} className="p-6">
-                        <div className="flex items-start justify-between">
-                          <div className="flex gap-4">
-                            <div className="h-16 w-16 bg-muted rounded-lg flex items-center justify-center">
-                              <Calendar className="h-6 w-6 text-muted-foreground" />
-                            </div>
-                            <div>
-                              <h3>{booking.service?.name || "Szolgáltatás"}</h3>
-                              <p className="text-sm text-muted-foreground mb-2">
-                                {booking.provider?.businessName ||
-                                  "Szolgáltató"}
-                              </p>
-                              <div className="flex gap-4 text-sm text-muted-foreground">
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="h-4 w-4" />
-                                  {new Date(
-                                    booking.scheduledDate,
-                                  ).toLocaleDateString("hu-HU")}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-4 w-4" />
-                                  {booking.scheduledTime}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="text-right space-y-2">
-                            <Badge className={STATUS_COLORS[booking.status]}>
-                              {STATUS_HU[booking.status]}
-                            </Badge>
-                            <p className="text-sm font-semibold">
-                              {Number(booking.totalAmount)} {booking.currency}
-                            </p>
-                            {/* Cancel button for PENDING/CONFIRMED */}
-                            {(booking.status === "PENDING" ||
-                              booking.status === "CONFIRMED") && (
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => handleCancelBooking(booking.id)}
-                                disabled={cancelBooking.isPending}
-                              >
-                                <XCircle className="h-3 w-3 mr-1" />
-                                Lemondás
-                              </Button>
-                            )}
-                            {/* Review button for COMPLETED (hide if already reviewed) */}
-                            {booking.status === "COMPLETED" &&
-                              (!booking.reviews ||
-                                booking.reviews.length === 0) && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    setReviewBooking(booking);
-                                    setReviewRating(5);
-                                    setReviewComment("");
-                                  }}
-                                >
-                                  <MessageSquare className="h-3 w-3 mr-1" />
-                                  Értékelés
-                                </Button>
-                              )}
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
+                          <Button
+                            size="sm"
+                            className="mt-3"
+                            onClick={() => setDetailProviderId(p.id)}
+                          >
+                            Részletek
+                          </Button>
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
               </div>
-            </Tabs>
-          </div>
-        )}
+            )}
 
-        {/* Favorites Tab */}
-        {activeTab === "favorites" && (
-          <div className="space-y-6">
-            <div>
-              <h1>Kedvenc szolgáltatók</h1>
-              <p className="text-muted-foreground">
-                Az elmentett szolgáltatóid
-              </p>
-            </div>
+            {/* Analytics Tab */}
+            {activeTab === "analytics" && (
+              <div className="space-y-6">
+                <div>
+                  <h1>Tevékenységed</h1>
+                  <p className="text-muted-foreground">
+                    Foglalási előzmények és kiadások
+                  </p>
+                </div>
 
-            {loadingFavorites ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </div>
-            ) : favorites.length === 0 ? (
-              <Card className="p-8 text-center">
-                <Heart className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                <p className="text-muted-foreground">
-                  Még nincsenek kedvenceid
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Kattints a szív ikonra a szolgáltatóknál
-                </p>
-              </Card>
-            ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {favorites.map((fav) => {
-                  const p = fav.provider;
-                  if (!p) return null;
-                  return (
-                    <Card
-                      key={fav.id}
-                      className="overflow-hidden hover:shadow-lg transition-shadow p-5"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="text-lg">{p.businessName}</h3>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 -mt-1"
-                          onClick={() => toggleFavorite(p.id)}
-                        >
-                          <Heart className="h-4 w-4 fill-red-500 text-red-500" />
-                        </Button>
+                <div className="grid md:grid-cols-3 gap-6">
+                  <Card className="p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                        <CheckCircle2 className="h-5 w-5 text-primary" />
                       </div>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {p.description}
-                      </p>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span>{Number(p.rating).toFixed(1)}</span>
-                        <span className="text-muted-foreground">
-                          ({p.reviewCount})
-                        </span>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Összes foglalás
+                        </p>
+                        <p className="text-2xl">{bookings.length}</p>
                       </div>
-                      <Button
-                        size="sm"
-                        className="mt-3"
-                        onClick={() => setBookingProvider(p)}
-                      >
-                        Foglalás
-                      </Button>
-                    </Card>
-                  );
-                })}
+                    </div>
+                  </Card>
+
+                  <Card className="p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
+                        <DollarSign className="h-5 w-5 text-secondary" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Össz. kiadás
+                        </p>
+                        <p className="text-2xl">
+                          {bookings.reduce(
+                            (sum, b) => sum + Number(b.totalAmount),
+                            0,
+                          )}{" "}
+                          RON
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
+                        <Heart className="h-5 w-5 text-accent" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Kedvencek
+                        </p>
+                        <p className="text-2xl">{favorites.length}</p>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
               </div>
             )}
-          </div>
-        )}
-
-        {/* Analytics Tab */}
-        {activeTab === "analytics" && (
-          <div className="space-y-6">
-            <div>
-              <h1>Tevékenységed</h1>
-              <p className="text-muted-foreground">
-                Foglalási előzmények és kiadások
-              </p>
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-6">
-              <Card className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                    <CheckCircle2 className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Összes foglalás
-                    </p>
-                    <p className="text-2xl">{bookings.length}</p>
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-secondary/10">
-                    <DollarSign className="h-5 w-5 text-secondary" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Össz. kiadás
-                    </p>
-                    <p className="text-2xl">
-                      {bookings.reduce(
-                        (sum, b) => sum + Number(b.totalAmount),
-                        0,
-                      )}{" "}
-                      RON
-                    </p>
-                  </div>
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10">
-                    <Heart className="h-5 w-5 text-accent" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Kedvencek</p>
-                    <p className="text-2xl">{favorites.length}</p>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
+          </>
         )}
       </main>
 

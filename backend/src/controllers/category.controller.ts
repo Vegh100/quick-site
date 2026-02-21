@@ -48,3 +48,32 @@ export async function getCategoryBySlug(
     next(error);
   }
 }
+
+export async function getServiceTypes(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const { categoryId } = req.query as { categoryId?: string };
+
+    const where: any = { isActive: true };
+    if (categoryId) {
+      where.categoryId = categoryId;
+    }
+
+    const serviceTypes = await prisma.serviceType.findMany({
+      where,
+      orderBy: [{ category: { sortOrder: "asc" } }, { sortOrder: "asc" }],
+      include: {
+        category: {
+          select: { id: true, name: true, slug: true, icon: true },
+        },
+      },
+    });
+
+    res.json({ success: true, data: serviceTypes });
+  } catch (error) {
+    next(error);
+  }
+}

@@ -7,6 +7,7 @@ import {
   loginSchema,
   googleAuthSchema,
   changePasswordSchema,
+  registerFromInviteSchema,
 } from "../validators/auth.validators.js";
 
 const router = Router();
@@ -15,6 +16,11 @@ const router = Router();
 router.post("/register", validate(registerSchema), authController.register);
 router.post("/login", validate(loginSchema), authController.login);
 router.post("/google", validate(googleAuthSchema), authController.googleAuth);
+router.post(
+  "/register-from-invite/:token",
+  validate(registerFromInviteSchema),
+  authController.registerFromInvite,
+);
 
 // Authenticated
 router.get("/me", authenticate, authController.me);

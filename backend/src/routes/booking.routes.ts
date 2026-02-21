@@ -14,6 +14,9 @@ const router = Router();
 // All routes require authentication
 router.use(authenticate);
 
+// Get available time slots for a service (any authenticated user)
+router.get("/available-slots", bookingController.getAvailableSlots);
+
 // Create booking (customers only)
 router.post(
   "/",
@@ -30,10 +33,10 @@ router.get(
   bookingController.getCustomerBookings,
 );
 
-// Get bookings (provider view)
+// Get bookings (provider view — both PROVIDER owner and EMPLOYEE)
 router.get(
   "/provider",
-  requireRole("PROVIDER"),
+  requireRole("PROVIDER", "EMPLOYEE"),
   validate(bookingFilterSchema, "query"),
   bookingController.getProviderBookings,
 );

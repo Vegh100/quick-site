@@ -9,6 +9,151 @@ import {
 } from "../validators/booking.validators.js";
 
 // ============================================================================
+// HELPER: compute end time from start time + duration
+// ============================================================================
+
+function addMinutesToTime(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  const newH = Math.floor(total / 60) % 24;
+  const newM = total % 60;
+  return `${String(newH).padStart(2, "0")}:${String(newM).padStart(2, "0")}`;
+}
+
+// ============================================================================
+// GET AVAILABLE SLOTS for a given service + date + optional member
+// ============================================================================
+
+export async function getAvailableSlots(
+  providerId: string,
+  serviceId: string,
+  date: string,
+  memberId?: string,
+) {
+  // Verify service
+  const service = await prisma.service.findFirst({
+    where: { id: serviceId, providerId, isActive: true },
+  });
+  if (!service) throw new NotFoundError("Service");
+
+  const scheduledDate = new Date(date);
+  const dayOfWeek = scheduledDate.getDay();
+
+  // Get relevant availability
+  let availabilities;
+  if (memberId) {
+    const avail = await prisma.availability.findUnique({
+      where: { memberId_dayOfWeek: { memberId, dayOfWeek } },
+    });
+    availabilities = avail ? [avail] : [];
+  } else {
+    availabilities = await prisma.availability.findMany({
+      where: { providerId, dayOfWeek, isEnabled: true },
+      include: { member: { select: { id: true, status: true } } },
+    });
+    // Only keep active members' availability
+    availabilities = availabilities.filter(
+      (a) => (a as any).member?.status === "ACTIVE",
+    );
+  }
+
+  if (availabilities.length === 0 || !availabilities.some((a) => a.isEnabled)) {
+    return { slots: [], date, serviceId };
+  }
+
+  // Merge availability windows to find the widest window
+  let earliestStart = "23:59";
+  let latestEnd = "00:00";
+  const memberIds: string[] = [];
+  for (const a of availabilities) {
+    if (!a.isEnabled) continue;
+    if (a.startTime < earliestStart) earliestStart = a.startTime;
+    if (a.endTime > latestEnd) latestEnd = a.endTime;
+    memberIds.push(a.memberId);
+  }
+
+  const interval = service.slotIntervalMin;
+  const serviceDuration = service.durationMin;
+
+  // Generate all possible start times at interval steps
+  const allSlots: string[] = [];
+  const startMinutes =
+    parseInt(earliestStart.split(":")[0]) * 60 +
+    parseInt(earliestStart.split(":")[1]);
+  const endMinutes =
+    parseInt(latestEnd.split(":")[0]) * 60 + parseInt(latestEnd.split(":")[1]);
+
+  for (let m = startMinutes; m + serviceDuration <= endMinutes; m += interval) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    allSlots.push(
+      `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`,
+    );
+  }
+
+  // Fetch existing bookings for this provider on this date that overlap
+  const existingBookings = await prisma.booking.findMany({
+    where: {
+      providerId,
+      scheduledDate: scheduledDate,
+      status: { in: ["PENDING", "CONFIRMED", "IN_PROGRESS"] },
+      ...(memberId ? { assignedMemberId: memberId } : {}),
+    },
+    select: {
+      scheduledTime: true,
+      scheduledEndTime: true,
+      durationMin: true,
+      assignedMemberId: true,
+    },
+  });
+
+  // For each slot, check if at least one member is free
+  const slots = allSlots.map((startTime) => {
+    const endTime = addMinutesToTime(startTime, serviceDuration);
+
+    // Check if any available member is free at this slot
+    let isAvailable = false;
+
+    if (memberId) {
+      // Specific member requested — check only them
+      const conflict = existingBookings.some((b) => {
+        const bEnd =
+          b.scheduledEndTime ||
+          addMinutesToTime(b.scheduledTime, b.durationMin);
+        return b.scheduledTime < endTime && bEnd > startTime;
+      });
+      isAvailable = !conflict;
+    } else {
+      // Any member — check if at least one is free
+      for (const mId of memberIds) {
+        // Check this member's availability window
+        const memberAvail = availabilities.find((a) => a.memberId === mId);
+        if (!memberAvail || !memberAvail.isEnabled) continue;
+        if (startTime < memberAvail.startTime || endTime > memberAvail.endTime)
+          continue;
+
+        // Check conflicts for this specific member
+        const conflict = existingBookings.some((b) => {
+          if (b.assignedMemberId !== mId) return false;
+          const bEnd =
+            b.scheduledEndTime ||
+            addMinutesToTime(b.scheduledTime, b.durationMin);
+          return b.scheduledTime < endTime && bEnd > startTime;
+        });
+        if (!conflict) {
+          isAvailable = true;
+          break;
+        }
+      }
+    }
+
+    return { startTime, endTime, isAvailable };
+  });
+
+  return { slots, date, serviceId };
+}
+
+// ============================================================================
 // CREATE BOOKING
 // ============================================================================
 
@@ -37,21 +182,36 @@ export async function createBooking(
   // Check availability
   const scheduledDate = new Date(data.scheduledDate);
   const dayOfWeek = scheduledDate.getDay();
-  const availability = await prisma.availability.findUnique({
-    where: {
-      providerId_dayOfWeek: { providerId: data.providerId, dayOfWeek },
-    },
-  });
+
+  // If assigned to a specific member, check their availability
+  // Otherwise check any member of the provider has availability
+  let availability;
+  if (data.assignedMemberId) {
+    availability = await prisma.availability.findUnique({
+      where: {
+        memberId_dayOfWeek: { memberId: data.assignedMemberId, dayOfWeek },
+      },
+    });
+  } else {
+    // Check if any active member is available on this day
+    availability = await prisma.availability.findFirst({
+      where: {
+        providerId: data.providerId,
+        dayOfWeek,
+        isEnabled: true,
+      },
+    });
+  }
 
   if (!availability || !availability.isEnabled) {
-    throw new AppError("Provider is not available on this day", 400);
+    throw new AppError("No one is available on this day", 400);
   }
 
   if (
     data.scheduledTime < availability.startTime ||
     data.scheduledTime >= availability.endTime
   ) {
-    throw new AppError("Selected time is outside provider availability", 400);
+    throw new AppError("Selected time is outside availability", 400);
   }
 
   // Calculate total amount
@@ -82,6 +242,90 @@ export async function createBooking(
     if (!member) throw new NotFoundError("Team member");
   }
 
+  // Check for slot conflicts
+  const bookingEndTime = addMinutesToTime(
+    data.scheduledTime,
+    service.durationMin,
+  );
+
+  const conflictWhere: Prisma.BookingWhereInput = {
+    providerId: data.providerId,
+    scheduledDate: new Date(data.scheduledDate),
+    status: { in: ["PENDING", "CONFIRMED", "IN_PROGRESS"] },
+  };
+
+  if (data.assignedMemberId) {
+    conflictWhere.assignedMemberId = data.assignedMemberId;
+  }
+
+  const overlapping = await prisma.booking.findMany({
+    where: conflictWhere,
+    select: {
+      scheduledTime: true,
+      scheduledEndTime: true,
+      durationMin: true,
+      assignedMemberId: true,
+    },
+  });
+
+  // If no specific member, find an available member to auto-assign
+  let autoAssignMemberId: string | null = null;
+  if (!data.assignedMemberId) {
+    // Find members with the service assigned AND available on this day
+    const availableMembers = await prisma.providerMember.findMany({
+      where: {
+        providerId: data.providerId,
+        status: "ACTIVE",
+        memberServices: { some: { serviceId: data.serviceId } },
+        availability: {
+          some: { dayOfWeek, isEnabled: true },
+        },
+      },
+      include: {
+        availability: { where: { dayOfWeek } },
+      },
+    });
+
+    for (const am of availableMembers) {
+      const avail = am.availability[0];
+      if (
+        !avail ||
+        data.scheduledTime < avail.startTime ||
+        bookingEndTime > avail.endTime
+      )
+        continue;
+
+      const memberConflict = overlapping.some((b) => {
+        if (b.assignedMemberId !== am.id) return false;
+        const bEnd =
+          b.scheduledEndTime ||
+          addMinutesToTime(b.scheduledTime, b.durationMin);
+        return b.scheduledTime < bookingEndTime && bEnd > data.scheduledTime;
+      });
+
+      if (!memberConflict) {
+        autoAssignMemberId = am.id;
+        break;
+      }
+    }
+
+    if (!autoAssignMemberId) {
+      throw new AppError("No available team member for this time slot", 400);
+    }
+  } else {
+    // Check the specific member doesn't have a conflict
+    const hasConflict = overlapping.some((b) => {
+      const bEnd =
+        b.scheduledEndTime || addMinutesToTime(b.scheduledTime, b.durationMin);
+      return b.scheduledTime < bookingEndTime && bEnd > data.scheduledTime;
+    });
+    if (hasConflict) {
+      throw new AppError("This time slot is already booked", 400);
+    }
+  }
+
+  const assignedMemberId = data.assignedMemberId || autoAssignMemberId;
+
   const status = provider.autoAccept ? "CONFIRMED" : "PENDING";
 
   const booking = await prisma.booking.create({
@@ -89,9 +333,10 @@ export async function createBooking(
       customerId,
       providerId: data.providerId,
       serviceId: data.serviceId,
-      assignedMemberId: data.assignedMemberId || null,
+      assignedMemberId,
       scheduledDate: new Date(data.scheduledDate),
       scheduledTime: data.scheduledTime,
+      scheduledEndTime: bookingEndTime,
       durationMin: service.durationMin,
       totalAmount: new Prisma.Decimal(totalAmount),
       notes: data.notes,

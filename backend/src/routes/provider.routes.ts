@@ -38,15 +38,15 @@ router.post(
   providerController.createProvider,
 );
 
-// Get own provider profile
+// Get own provider profile (both PROVIDER owner and EMPLOYEE)
 router.get(
   "/me/profile",
   authenticate,
-  requireRole("PROVIDER"),
+  requireRole("PROVIDER", "EMPLOYEE"),
   providerController.getMyProvider,
 );
 
-// Update own provider profile
+// Update own provider profile (PROVIDER owner only)
 router.patch(
   "/me/profile",
   authenticate,
@@ -101,7 +101,7 @@ router.patch(
 router.get(
   "/me/stats",
   authenticate,
-  requireRole("PROVIDER"),
+  requireRole("PROVIDER", "EMPLOYEE"),
   providerController.getStats,
 );
 

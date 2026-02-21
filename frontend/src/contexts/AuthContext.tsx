@@ -6,6 +6,8 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { googleLogout } from "@react-oauth/google";
 import { authApi } from "../lib/api-services";
 import type { User, LoginInput, RegisterInput, UserRole } from "../lib/types";
 
@@ -24,6 +26,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -39,11 +42,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Listen for forced logouts (401)
   useEffect(() => {
     const handler = () => {
+      googleLogout();
+      queryClient.clear();
       setUser(null);
     };
     window.addEventListener("auth:logout", handler);
     return () => window.removeEventListener("auth:logout", handler);
-  }, []);
+  }, [queryClient]);
 
   const login = useCallback(async (data: LoginInput) => {
     const res = await authApi.login(data);
@@ -68,8 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await authApi.logout().catch(() => {});
+    googleLogout();
+    queryClient.clear();
     setUser(null);
-  }, []);
+  }, [queryClient]);
 
   const refreshUser = useCallback(async () => {
     try {

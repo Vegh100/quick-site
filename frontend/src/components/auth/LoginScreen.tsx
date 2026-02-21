@@ -47,6 +47,11 @@ const ROLE_CONFIG: Record<
     title: "Regisztráció",
     subtitle: "Hozz létre egy fiókot",
   },
+  EMPLOYEE: {
+    icon: Briefcase,
+    title: "Alkalmazott regisztráció",
+    subtitle: "Csatlakozz meghívó linken keresztül",
+  },
 };
 
 export function LoginScreen({
@@ -61,7 +66,14 @@ export function LoginScreen({
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const navigateAfterAuth = (user: User) => {
-    if (user.role === "PROVIDER") {
+    // If redirected here from a protected route, go back there
+    const from = (location.state as any)?.from?.pathname;
+    if (from && from !== "/") {
+      navigate(from, { replace: true });
+      return;
+    }
+    // Otherwise go to the user's dashboard
+    if (user.role === "PROVIDER" || user.role === "EMPLOYEE") {
       navigate("/szolgaltato", { replace: true });
     } else {
       navigate("/ugyfel", { replace: true });

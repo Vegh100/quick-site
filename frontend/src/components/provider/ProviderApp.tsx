@@ -19,6 +19,7 @@ import { ProviderSettingsPanel } from "../settings/ProviderSettingsPanel";
 import { ProviderOnboardingFlow } from "./ProviderOnboardingFlow";
 import { ClientManagement } from "../clients/ClientManagement";
 import { TeamManagement } from "./TeamManagement";
+import { CalendarView } from "../booking/CalendarView";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -54,22 +55,31 @@ const STATUS_HU: Record<BookingStatus, string> = {
 };
 
 // Provider navigation items
-const providerNavItems = [
+const ownerNavItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "bookings", label: "Foglalások" },
+  { id: "calendar", label: "Naptár" },
   { id: "clients", label: "Ügyfelek" },
   { id: "team", label: "Csapat" },
+];
+
+const employeeNavItems = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "bookings", label: "Foglalásaim" },
+  { id: "calendar", label: "Naptár" },
 ];
 
 // Map URL segments to internal tab names
 const TAB_FROM_URL: Record<string, string> = {
   foglalasok: "bookings",
+  naptar: "calendar",
   ugyfelek: "clients",
   csapat: "team",
   beallitasok: "settings",
 };
 const TAB_TO_URL: Record<string, string> = {
   bookings: "foglalasok",
+  calendar: "naptar",
   clients: "ugyfelek",
   team: "csapat",
   settings: "beallitasok",
@@ -79,6 +89,7 @@ export function ProviderApp() {
   const { tab: urlTab } = useParams<{ tab?: string }>();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const isOwner = user?.role === "PROVIDER";
 
   const activeTab = urlTab ? TAB_FROM_URL[urlTab] || "dashboard" : "dashboard";
   const setActiveTab = (tab: string) => {
@@ -98,13 +109,17 @@ export function ProviderApp() {
     isLoading: loadingProvider,
     refetch: refetchProvider,
   } = useMyProvider();
-  const { data: statsData } = useProviderStats();
-  const { data: bookingsData, isLoading: loadingBookings } =
-    useProviderBookings({ page: 1, limit: 20 });
-  const { data: reviewsData } = useProviderReviews(providerData?.data?.id);
-  const updateStatus = useUpdateBookingStatus();
 
   const provider = providerData?.data;
+
+  // These queries only run once we know a provider profile exists
+  const { data: statsData } = useProviderStats(!!provider);
+  const { data: bookingsData, isLoading: loadingBookings } =
+    useProviderBookings({ page: 1, limit: 20 }, !!provider);
+  const { data: clientsData } = useProviderClients(1, 20, !!provider);
+  const { data: reviewsData } = useProviderReviews(provider?.id);
+  const updateStatus = useUpdateBookingStatus();
+
   const stats = statsData?.data;
   const bookings = bookingsData?.data?.bookings || [];
   const reviews = reviewsData?.data?.reviews || [];
@@ -187,7 +202,7 @@ export function ProviderApp() {
       <nav className="border-b bg-background">
         <div className="container mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto">
-            {providerNavItems.map((item) => (
+            {(isOwner ? ownerNavItems : employeeNavItems).map((item) => (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
@@ -426,6 +441,19 @@ export function ProviderApp() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Calendar Tab */}
+        {activeTab === "calendar" && (
+          <div className="space-y-6">
+            <div>
+              <h1>Naptár</h1>
+              <p className="text-muted-foreground">
+                Foglalásaid naptári nézete
+              </p>
+            </div>
+            <CalendarView />
           </div>
         )}
 

@@ -6,7 +6,12 @@ import { ProviderOnboardingFlow } from "./components/provider/ProviderOnboarding
 import { CustomerApp } from "./components/customer/CustomerApp";
 import { ProviderApp } from "./components/provider/ProviderApp";
 import { LoginScreen } from "./components/auth/LoginScreen";
-import { ProtectedRoute, RequireRole } from "./components/auth/ProtectedRoute";
+import { InviteAcceptPage } from "./components/auth/InviteAcceptPage";
+import {
+  ProtectedRoute,
+  GuestRoute,
+  RequireRole,
+} from "./components/auth/ProtectedRoute";
 import { Toaster } from "./components/ui/sonner";
 import { Loader2 } from "lucide-react";
 
@@ -24,17 +29,22 @@ export default function App() {
   return (
     <>
       <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<WelcomeScreen />} />
-        <Route path="/bejelentkezes" element={<LoginScreen mode="login" />} />
-        <Route
-          path="/regisztracio/ugyfel"
-          element={<LoginScreen mode="register" role="CUSTOMER" />}
-        />
-        <Route
-          path="/regisztracio/szolgaltato"
-          element={<LoginScreen mode="register" role="PROVIDER" />}
-        />
+        {/* Guest-only routes — authenticated users are redirected to dashboard */}
+        <Route element={<GuestRoute />}>
+          <Route path="/" element={<WelcomeScreen />} />
+          <Route path="/bejelentkezes" element={<LoginScreen mode="login" />} />
+          <Route
+            path="/regisztracio/ugyfel"
+            element={<LoginScreen mode="register" role="CUSTOMER" />}
+          />
+          <Route
+            path="/regisztracio/szolgaltato"
+            element={<LoginScreen mode="register" role="PROVIDER" />}
+          />
+        </Route>
+
+        {/* Public invite acceptance page */}
+        <Route path="/meghivas/:token" element={<InviteAcceptPage />} />
 
         {/* Protected routes — require authentication */}
         <Route element={<ProtectedRoute />}>

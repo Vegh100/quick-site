@@ -1,16 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Badge } from "../ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -21,33 +15,51 @@ import {
 import {
   useTeamMembers,
   useInviteMember,
-  useUpdateMember,
   useDeactivateMember,
-  useUpgradeToCompany,
+  useMemberDetail,
+  useAssignServiceToMember,
+  useRemoveServiceFromMember,
+  useSetMemberAvailability,
+  useMyProvider,
 } from "../../hooks/useApi";
 import {
   UserPlus,
   Users,
-  Shield,
   ShieldCheck,
   Loader2,
   Mail,
   Trash2,
-  ArrowUpCircle,
-  Building2,
+  Link2,
+  Copy,
+  Check,
+  ChevronRight,
+  ArrowLeft,
+  Clock,
+  Calendar,
+  Briefcase,
+  BarChart3,
+  Plus,
+  X,
+  TrendingUp,
+  CalendarCheck,
+  CalendarClock,
+  Ban,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { ProviderMember, MemberRole, Provider } from "../../lib/types";
+import type {
+  ProviderMember,
+  MemberRole,
+  Provider,
+  Service,
+} from "../../lib/types";
 
 const ROLE_LABELS: Record<MemberRole, string> = {
   OWNER: "Tulajdonos",
-  MANAGER: "Menedzser",
   EMPLOYEE: "Alkalmazott",
 };
 
 const ROLE_COLORS: Record<MemberRole, string> = {
   OWNER: "bg-amber-500",
-  MANAGER: "bg-blue-500",
   EMPLOYEE: "bg-green-500",
 };
 
@@ -57,26 +69,537 @@ const STATUS_LABELS: Record<string, string> = {
   DEACTIVATED: "Deaktiválva",
 };
 
+const DAYS_HU = [
+  "Hétfő",
+  "Kedd",
+  "Szerda",
+  "Csütörtök",
+  "Péntek",
+  "Szombat",
+  "Vasárnap",
+];
+const DAY_MAP = [1, 2, 3, 4, 5, 6, 0]; // index → dayOfWeek (Mon=1..Sat=6,Sun=0)
+
 interface TeamManagementProps {
   provider: Provider;
 }
 
+function getMemberName(member: ProviderMember) {
+  if (member.displayName) return member.displayName;
+  if (member.user?.firstName || member.user?.lastName) {
+    return `${member.user.firstName || ""} ${member.user.lastName || ""}`.trim();
+  }
+  return member.invitedEmail;
+}
+
+// ============================================================================
+// STAT CARD sub-component
+// ============================================================================
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  color,
+}: {
+  icon: typeof BarChart3;
+  label: string;
+  value: string | number;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-lg border bg-background">
+      <div
+        className={`flex h-9 w-9 items-center justify-center rounded-lg ${color}`}
+      >
+        <Icon className="h-4 w-4 text-white" />
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="font-semibold text-sm">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MEMBER DETAIL PANEL
+// ============================================================================
+
+function MemberDetailPanel({
+  memberId,
+  onBack,
+}: {
+  memberId: string;
+  onBack: () => void;
+}) {
+  const { data: detailData, isLoading } = useMemberDetail(memberId);
+  const { data: providerData } = useMyProvider();
+  const assignService = useAssignServiceToMember();
+  const removeService = useRemoveServiceFromMember();
+  const setMemberAvailability = useSetMemberAvailability();
+
+  const detail = detailData?.data;
+  const allServices = providerData?.data?.services || [];
+
+  // Availability editing state
+  const [availSlots, setAvailSlots] = useState(
+    DAYS_HU.map((_, i) => ({
+      dayOfWeek: DAY_MAP[i],
+      startTime: "08:00",
+      endTime: "17:00",
+      isEnabled: i < 5,
+    })),
+  );
+  const [availDirty, setAvailDirty] = useState(false);
+
+  // Load member availability into local state
+  useEffect(() => {
+    if (detail?.availability && detail.availability.length > 0) {
+      const loaded = DAYS_HU.map((_, i) => {
+        const dow = DAY_MAP[i];
+        const existing = detail.availability?.find((a) => a.dayOfWeek === dow);
+        return existing
+          ? {
+              dayOfWeek: dow,
+              startTime: existing.startTime,
+              endTime: existing.endTime,
+              isEnabled: existing.isEnabled,
+            }
+          : {
+              dayOfWeek: dow,
+              startTime: "08:00",
+              endTime: "17:00",
+              isEnabled: false,
+            };
+      });
+      setAvailSlots(loaded);
+      setAvailDirty(false);
+    }
+  }, [detail?.availability]);
+
+  if (isLoading || !detail) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const assignedServiceIds = new Set(
+    detail.memberServices?.map((ms) => ms.serviceId) || [],
+  );
+  const unassignedServices = allServices.filter(
+    (s) => !assignedServiceIds.has(s.id),
+  );
+
+  const handleAssignService = async (serviceId: string) => {
+    try {
+      await assignService.mutateAsync({ memberId, serviceId });
+      toast.success("Szolgáltatás hozzárendelve!");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Hiba történt");
+    }
+  };
+
+  const handleRemoveService = async (serviceId: string) => {
+    try {
+      await removeService.mutateAsync({ memberId, serviceId });
+      toast.success("Szolgáltatás eltávolítva!");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Hiba történt");
+    }
+  };
+
+  const handleSaveAvailability = async () => {
+    try {
+      await setMemberAvailability.mutateAsync({
+        memberId,
+        availability: availSlots,
+      });
+      toast.success("Időpontok mentve!");
+      setAvailDirty(false);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Hiba az időpontok mentésekor");
+    }
+  };
+
+  const stats = detail.bookingStats;
+
+  return (
+    <div className="space-y-6">
+      {/* Header with back button */}
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div className="flex items-center gap-3 flex-1">
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+            {detail.user?.avatarUrl ? (
+              <img
+                src={detail.user.avatarUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="text-lg font-medium text-muted-foreground">
+                {getMemberName(detail).charAt(0).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <div>
+            <h3 className="font-semibold text-lg">{getMemberName(detail)}</h3>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Mail className="h-3 w-3" />
+              {detail.invitedEmail}
+              <Badge className={`ml-2 ${ROLE_COLORS[detail.role]}`}>
+                {detail.role === "OWNER" && (
+                  <ShieldCheck className="mr-1 h-3 w-3" />
+                )}
+                {ROLE_LABELS[detail.role]}
+              </Badge>
+              <Badge variant="outline">{STATUS_LABELS[detail.status]}</Badge>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats cards */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <StatCard
+          icon={BarChart3}
+          label="Összes foglalás"
+          value={stats.totalBookings}
+          color="bg-blue-500"
+        />
+        <StatCard
+          icon={CalendarCheck}
+          label="Befejezett"
+          value={stats.completedBookings}
+          color="bg-green-500"
+        />
+        <StatCard
+          icon={CalendarClock}
+          label="Függőben"
+          value={stats.pendingBookings}
+          color="bg-yellow-500"
+        />
+        <StatCard
+          icon={Ban}
+          label="Lemondva"
+          value={stats.cancelledBookings}
+          color="bg-red-500"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Bevétel"
+          value={`${stats.totalRevenue.toLocaleString("hu-HU")} RON`}
+          color="bg-emerald-600"
+        />
+      </div>
+
+      {/* Tabbed detail */}
+      <Tabs defaultValue="bookings" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="bookings">
+            <Calendar className="h-4 w-4 mr-1" />
+            Foglalások
+          </TabsTrigger>
+          <TabsTrigger value="services">
+            <Briefcase className="h-4 w-4 mr-1" />
+            Szolgáltatások
+          </TabsTrigger>
+          <TabsTrigger value="availability">
+            <Clock className="h-4 w-4 mr-1" />
+            Időpontok
+          </TabsTrigger>
+        </TabsList>
+
+        {/* BOOKINGS TAB */}
+        <TabsContent value="bookings" className="space-y-4">
+          {/* Upcoming */}
+          <div>
+            <h4 className="font-medium text-sm mb-3 text-muted-foreground uppercase tracking-wider">
+              Közelgő foglalások
+            </h4>
+            {detail.upcomingBookings.length === 0 ? (
+              <Card className="p-4 text-center text-sm text-muted-foreground">
+                Nincs közelgő foglalás
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {detail.upcomingBookings.map((b) => (
+                  <Card key={b.id} className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
+                          <Calendar className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">
+                            {b.service?.name || "Szolgáltatás"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {b.customer?.firstName} {b.customer?.lastName}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">
+                          {new Date(b.scheduledDate).toLocaleDateString(
+                            "hu-HU",
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {b.scheduledTime}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Recent completed */}
+          <div>
+            <h4 className="font-medium text-sm mb-3 text-muted-foreground uppercase tracking-wider">
+              Utolsó befejezett foglalások
+            </h4>
+            {detail.recentBookings.length === 0 ? (
+              <Card className="p-4 text-center text-sm text-muted-foreground">
+                Nincs befejezett foglalás
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {detail.recentBookings.map((b) => (
+                  <Card key={b.id} className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-500/10">
+                          <Check className="h-4 w-4 text-green-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">
+                            {b.service?.name || "Szolgáltatás"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {b.customer?.firstName} {b.customer?.lastName}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-medium">
+                          {Number(b.totalAmount).toLocaleString("hu-HU")} RON
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {b.completedAt
+                            ? new Date(b.completedAt).toLocaleDateString(
+                                "hu-HU",
+                              )
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* SERVICES TAB */}
+        <TabsContent value="services" className="space-y-4">
+          <div>
+            <h4 className="font-medium text-sm mb-3 text-muted-foreground uppercase tracking-wider">
+              Hozzárendelt szolgáltatások
+            </h4>
+            {(detail.memberServices?.length || 0) === 0 ? (
+              <Card className="p-4 text-center text-sm text-muted-foreground">
+                Nincs hozzárendelt szolgáltatás
+              </Card>
+            ) : (
+              <div className="space-y-2">
+                {detail.memberServices?.map((ms) => (
+                  <Card key={ms.id} className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                          <Briefcase className="h-4 w-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">
+                            {ms.service?.name || "Szolgáltatás"}
+                          </p>
+                          {ms.service && (
+                            <p className="text-xs text-muted-foreground">
+                              {Number(ms.service.priceAmount).toLocaleString(
+                                "hu-HU",
+                              )}{" "}
+                              {ms.service.priceCurrency} ·{" "}
+                              {ms.service.durationMin} perc
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={() => handleRemoveService(ms.serviceId)}
+                        disabled={removeService.isPending}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {unassignedServices.length > 0 && (
+            <div>
+              <h4 className="font-medium text-sm mb-3 text-muted-foreground uppercase tracking-wider">
+                Elérhető szolgáltatások
+              </h4>
+              <div className="space-y-2">
+                {unassignedServices.map((svc: Service) => (
+                  <Card key={svc.id} className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                          <Briefcase className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{svc.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {Number(svc.priceAmount).toLocaleString("hu-HU")}{" "}
+                            {svc.priceCurrency} · {svc.durationMin} perc
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAssignService(svc.id)}
+                        disabled={assignService.isPending}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Hozzáadás
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* AVAILABILITY TAB */}
+        <TabsContent value="availability" className="space-y-4">
+          <div className="space-y-3">
+            {DAYS_HU.map((dayName, index) => {
+              const slot = availSlots[index];
+              return (
+                <div
+                  key={index}
+                  className="flex items-center gap-3 p-3 border rounded-lg"
+                >
+                  <label className="flex items-center gap-2 w-28">
+                    <input
+                      type="checkbox"
+                      checked={slot.isEnabled}
+                      onChange={(e) => {
+                        const updated = [...availSlots];
+                        updated[index] = {
+                          ...updated[index],
+                          isEnabled: e.target.checked,
+                        };
+                        setAvailSlots(updated);
+                        setAvailDirty(true);
+                      }}
+                      className="h-4 w-4"
+                    />
+                    <span className="text-sm font-medium">{dayName}</span>
+                  </label>
+                  {slot.isEnabled && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="time"
+                        value={slot.startTime}
+                        onChange={(e) => {
+                          const updated = [...availSlots];
+                          updated[index] = {
+                            ...updated[index],
+                            startTime: e.target.value,
+                          };
+                          setAvailSlots(updated);
+                          setAvailDirty(true);
+                        }}
+                        className="w-32"
+                      />
+                      <span className="text-muted-foreground">-</span>
+                      <Input
+                        type="time"
+                        value={slot.endTime}
+                        onChange={(e) => {
+                          const updated = [...availSlots];
+                          updated[index] = {
+                            ...updated[index],
+                            endTime: e.target.value,
+                          };
+                          setAvailSlots(updated);
+                          setAvailDirty(true);
+                        }}
+                        className="w-32"
+                      />
+                    </div>
+                  )}
+                  {!slot.isEnabled && (
+                    <span className="text-sm text-muted-foreground">Zárva</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {availDirty && (
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSaveAvailability}
+                disabled={setMemberAvailability.isPending}
+              >
+                {setMemberAvailability.isPending && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Időpontok mentése
+              </Button>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+// ============================================================================
+// MAIN TEAM MANAGEMENT COMPONENT
+// ============================================================================
+
 export function TeamManagement({ provider }: TeamManagementProps) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"MANAGER" | "EMPLOYEE">(
-    "EMPLOYEE",
-  );
   const [inviteDisplayName, setInviteDisplayName] = useState("");
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
 
   const { data: membersData, isLoading } = useTeamMembers();
   const inviteMember = useInviteMember();
-  const updateMember = useUpdateMember();
   const deactivateMember = useDeactivateMember();
-  const upgradeToCompany = useUpgradeToCompany();
 
   const members = membersData?.data || [];
-  const isCompany = provider.providerType === "COMPANY";
 
   const handleInvite = async () => {
     if (!inviteEmail) {
@@ -85,34 +608,44 @@ export function TeamManagement({ provider }: TeamManagementProps) {
     }
 
     try {
-      await inviteMember.mutateAsync({
+      const result = await inviteMember.mutateAsync({
         email: inviteEmail,
-        role: inviteRole,
         displayName: inviteDisplayName || undefined,
       });
-      toast.success("Meghívó elküldve!");
-      setInviteOpen(false);
-      setInviteEmail("");
-      setInviteRole("EMPLOYEE");
-      setInviteDisplayName("");
+      const token = result.data?.inviteToken;
+      if (token) {
+        const link = `${window.location.origin}/meghivas/${token}`;
+        setInviteLink(link);
+      }
+      toast.success("Meghívó létrehozva!");
     } catch (err: any) {
       toast.error(err?.response?.data?.error || "Hiba a meghívó küldésekor");
     }
   };
 
-  const handleRoleChange = async (
-    memberId: string,
-    newRole: "MANAGER" | "EMPLOYEE",
-  ) => {
-    try {
-      await updateMember.mutateAsync({ memberId, data: { role: newRole } });
-      toast.success("Szerepkör frissítve!");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || "Hiba a frissítéskor");
+  const handleCopyLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      toast.success("Link másolva!");
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const handleDeactivate = async (memberId: string, name: string) => {
+  const handleCloseInvite = () => {
+    setInviteOpen(false);
+    setInviteEmail("");
+    setInviteDisplayName("");
+    setInviteLink(null);
+    setCopied(false);
+  };
+
+  const handleDeactivate = async (
+    e: React.MouseEvent,
+    memberId: string,
+    name: string,
+  ) => {
+    e.stopPropagation();
     if (!confirm(`Biztosan deaktiválod: ${name}?`)) return;
     try {
       await deactivateMember.mutateAsync(memberId);
@@ -122,51 +655,13 @@ export function TeamManagement({ provider }: TeamManagementProps) {
     }
   };
 
-  const handleUpgrade = async () => {
-    if (
-      !confirm(
-        "Biztosan átváltasz céges fiókra? Ezután alkalmazottakat tudsz hozzáadni.",
-      )
-    )
-      return;
-    try {
-      await upgradeToCompany.mutateAsync();
-      toast.success("Sikeresen átváltottál céges fiókra!");
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || "Hiba az átváltáskor");
-    }
-  };
-
-  const getMemberName = (member: ProviderMember) => {
-    if (member.displayName) return member.displayName;
-    if (member.user?.firstName || member.user?.lastName) {
-      return `${member.user.firstName || ""} ${member.user.lastName || ""}`.trim();
-    }
-    return member.invitedEmail;
-  };
-
-  // SOLO provider: show upgrade button
-  if (!isCompany) {
+  // If a member is selected, show their detail view
+  if (selectedMemberId) {
     return (
-      <Card className="p-8 text-center space-y-4">
-        <div className="flex justify-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
-            <ArrowUpCircle className="h-8 w-8 text-primary" />
-          </div>
-        </div>
-        <h3 className="text-lg font-semibold">Egyéni fiók</h3>
-        <p className="text-muted-foreground max-w-md mx-auto">
-          Jelenleg egyéni szolgáltatóként működsz. Ha alkalmazottakat szeretnél
-          hozzáadni, váltsd át a fiókodat céges fiókra.
-        </p>
-        <Button onClick={handleUpgrade} disabled={upgradeToCompany.isPending}>
-          {upgradeToCompany.isPending && (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          )}
-          <Building2 className="mr-2 h-4 w-4" />
-          Átváltás céges fiókra
-        </Button>
-      </Card>
+      <MemberDetailPanel
+        memberId={selectedMemberId}
+        onBack={() => setSelectedMemberId(null)}
+      />
     );
   }
 
@@ -181,7 +676,7 @@ export function TeamManagement({ provider }: TeamManagementProps) {
           <div>
             <h3 className="font-semibold">Csapat ({members.length} tag)</h3>
             <p className="text-sm text-muted-foreground">
-              Alkalmazottak kezelése
+              Alkalmazottak kezelése — kattints egy tagra a részletekért
             </p>
           </div>
         </div>
@@ -207,7 +702,11 @@ export function TeamManagement({ provider }: TeamManagementProps) {
           {members
             .filter((m) => m.status !== "DEACTIVATED")
             .map((member) => (
-              <Card key={member.id} className="p-4">
+              <Card
+                key={member.id}
+                className="p-4 cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => setSelectedMemberId(member.id)}
+              >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center overflow-hidden">
@@ -233,12 +732,24 @@ export function TeamManagement({ provider }: TeamManagementProps) {
                   </div>
 
                   <div className="flex items-center gap-3">
+                    {/* Quick stats preview */}
+                    {member.memberServices &&
+                      member.memberServices.length > 0 && (
+                        <span className="text-xs text-muted-foreground hidden sm:inline">
+                          {member.memberServices.length} szolg.
+                        </span>
+                      )}
+                    {member.availability && member.availability.length > 0 && (
+                      <span className="text-xs text-muted-foreground hidden sm:inline">
+                        {member.availability.filter((a) => a.isEnabled).length}{" "}
+                        nap
+                      </span>
+                    )}
+
                     <Badge className={ROLE_COLORS[member.role]}>
-                      {member.role === "OWNER" ? (
+                      {member.role === "OWNER" && (
                         <ShieldCheck className="mr-1 h-3 w-3" />
-                      ) : member.role === "MANAGER" ? (
-                        <Shield className="mr-1 h-3 w-3" />
-                      ) : null}
+                      )}
                       {ROLE_LABELS[member.role]}
                     </Badge>
 
@@ -249,39 +760,19 @@ export function TeamManagement({ provider }: TeamManagementProps) {
                     )}
 
                     {member.role !== "OWNER" && (
-                      <div className="flex items-center gap-1">
-                        <Select
-                          value={member.role}
-                          onValueChange={(val) =>
-                            handleRoleChange(
-                              member.id,
-                              val as "MANAGER" | "EMPLOYEE",
-                            )
-                          }
-                        >
-                          <SelectTrigger className="w-32 h-8 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="MANAGER">Menedzser</SelectItem>
-                            <SelectItem value="EMPLOYEE">
-                              Alkalmazott
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() =>
-                            handleDeactivate(member.id, getMemberName(member))
-                          }
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-destructive hover:text-destructive"
+                        onClick={(e) =>
+                          handleDeactivate(e, member.id, getMemberName(member))
+                        }
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     )}
+
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
                 </div>
               </Card>
@@ -290,78 +781,94 @@ export function TeamManagement({ provider }: TeamManagementProps) {
       )}
 
       {/* Invite Dialog */}
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+      <Dialog open={inviteOpen} onOpenChange={handleCloseInvite}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Csapattag meghívása</DialogTitle>
+            <DialogTitle>Alkalmazott meghívása</DialogTitle>
             <DialogDescription>
-              Add meg az alkalmazott e-mail címét. Ha már regisztrált,
-              automatikusan hozzáadódik. Ha nem, meghívót kap a regisztrációkor.
+              Add meg az alkalmazott adatait. Egy meghívó linket kapsz, amit
+              elküldhetsz neki. A linken keresztül tud regisztrálni és
+              csatlakozni a cégedhez.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 mt-4">
-            <div>
-              <Label htmlFor="invite-email">E-mail cím *</Label>
-              <Input
-                id="invite-email"
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="alkalmazott@example.com"
-              />
+          {inviteLink ? (
+            <div className="space-y-4 mt-4">
+              <div className="rounded-lg bg-muted p-4 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Link2 className="h-4 w-4 text-primary" />
+                  Meghívó link létrehozva
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    readOnly
+                    value={inviteLink}
+                    className="text-xs font-mono"
+                  />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={handleCopyLink}
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Küldd el ezt a linket az alkalmazottnak. A linken keresztül
+                  tud regisztrálni és automatikusan csatlakozik a cégedhez.
+                </p>
+              </div>
+              <Button onClick={handleCloseInvite} className="w-full">
+                Kész
+              </Button>
             </div>
-            <div>
-              <Label htmlFor="invite-name">Megjelenítési név</Label>
-              <Input
-                id="invite-name"
-                value={inviteDisplayName}
-                onChange={(e) => setInviteDisplayName(e.target.value)}
-                placeholder="pl. Kovács Anna"
-              />
-            </div>
-            <div>
-              <Label>Szerepkör</Label>
-              <Select
-                value={inviteRole}
-                onValueChange={(val) =>
-                  setInviteRole(val as "MANAGER" | "EMPLOYEE")
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="EMPLOYEE">
-                    Alkalmazott – Saját foglalások kezelése
-                  </SelectItem>
-                  <SelectItem value="MANAGER">
-                    Menedzser – Minden foglalás + beállítások
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          ) : (
+            <div className="space-y-4 mt-4">
+              <div>
+                <Label htmlFor="invite-email">E-mail cím *</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="alkalmazott@example.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="invite-name">Megjelenítési név</Label>
+                <Input
+                  id="invite-name"
+                  value={inviteDisplayName}
+                  onChange={(e) => setInviteDisplayName(e.target.value)}
+                  placeholder="pl. Kovács Anna"
+                />
+              </div>
 
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => setInviteOpen(false)}
-                className="flex-1"
-              >
-                Mégse
-              </Button>
-              <Button
-                onClick={handleInvite}
-                disabled={inviteMember.isPending}
-                className="flex-1"
-              >
-                {inviteMember.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Meghívás
-              </Button>
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={handleCloseInvite}
+                  className="flex-1"
+                >
+                  Mégse
+                </Button>
+                <Button
+                  onClick={handleInvite}
+                  disabled={inviteMember.isPending}
+                  className="flex-1"
+                >
+                  {inviteMember.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Meghívó létrehozása
+                </Button>
+              </div>
             </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

@@ -15,22 +15,6 @@ export async function inviteMember(
   }
 }
 
-export async function acceptInvite(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const member = await memberService.acceptInvite(
-      req.user!.userId,
-      req.body.memberId,
-    );
-    res.json({ success: true, data: member });
-  } catch (error) {
-    next(error);
-  }
-}
-
 export async function listMembers(
   req: AuthenticatedRequest,
   res: Response,
@@ -77,19 +61,6 @@ export async function deactivateMember(
   }
 }
 
-export async function upgradeToCompany(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
-  try {
-    const provider = await memberService.upgradeToCompany(req.user!.userId);
-    res.json({ success: true, data: provider });
-  } catch (error) {
-    next(error);
-  }
-}
-
 export async function getPendingInvites(
   req: AuthenticatedRequest,
   res: Response,
@@ -98,6 +69,86 @@ export async function getPendingInvites(
   try {
     const invites = await memberService.getPendingInvites(req.user!.email);
     res.json({ success: true, data: invites });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function assignService(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const result = await memberService.assignService(
+      req.user!.userId,
+      req.params.memberId,
+      req.body.serviceId,
+    );
+    res.status(201).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function removeService(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    await memberService.removeService(
+      req.user!.userId,
+      req.params.memberId,
+      req.params.serviceId,
+    );
+    res.json({ success: true, message: "Service assignment removed" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function setMemberAvailability(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const availability = await memberService.setMemberAvailability(
+      req.user!.userId,
+      req.params.memberId,
+      req.body.availability,
+    );
+    res.json({ success: true, data: availability });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getInviteInfo(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const info = await memberService.getInviteInfo(req.params.token);
+    res.json({ success: true, data: info });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getMemberDetail(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const detail = await memberService.getMemberDetail(
+      req.user!.userId,
+      req.params.memberId,
+    );
+    res.json({ success: true, data: detail });
   } catch (error) {
     next(error);
   }
