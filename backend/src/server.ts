@@ -10,6 +10,7 @@ import prisma from "./lib/prisma.js";
 import { AppError } from "./lib/errors.js";
 import { uploadConfig } from "./config/upload.config.js";
 import { authConfig } from "./config/auth.config.js";
+import { verifyEmailConnection } from "./services/email.service.js";
 
 // Routes
 import authRoutes from "./routes/auth.routes.js";
@@ -130,7 +131,7 @@ app.use((_req: Request, res: Response) => {
 // ============================================================================
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("❌ Error:", err.message);
+  console.error("Error:", err.message);
 
   if (process.env.NODE_ENV === "development") {
     console.error(err.stack);
@@ -190,15 +191,18 @@ app.listen(PORT, () => {
     `🌐 Frontend URL: ${process.env.FRONTEND_URL || "http://localhost:5173"}`,
   );
 
+  // Verify email service
+  verifyEmailConnection();
+
   // Security warnings
   if (!process.env.JWT_SECRET) {
     console.warn(
-      "⚠️  JWT_SECRET is not set – using insecure dev default. Set it in .env for production!",
+      "JWT_SECRET is not set – using insecure dev default. Set it in .env for production!",
     );
   }
   if (!process.env.COOKIE_SECRET) {
     console.warn(
-      "⚠️  COOKIE_SECRET is not set – using insecure dev default. Set it in .env for production!",
+      "COOKIE_SECRET is not set – using insecure dev default. Set it in .env for production!",
     );
   }
 });

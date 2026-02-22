@@ -6,6 +6,7 @@ import {
   InviteMemberInput,
   UpdateMemberInput,
 } from "../validators/member.validators.js";
+import { sendInviteEmail } from "./email.service.js";
 
 // ============================================================================
 // HELPER: Resolve which Provider a user belongs to (owner or member)
@@ -118,6 +119,16 @@ export async function inviteMember(userId: string, data: InviteMemberInput) {
       },
     },
   });
+
+  // Send invite email (fire-and-forget — don't block the response)
+  sendInviteEmail({
+    toEmail: email,
+    inviteToken,
+    businessName: provider.businessName,
+    displayName: data.displayName,
+  }).catch((err) =>
+    console.error("Failed to send invite email:", err.message),
+  );
 
   return { ...member, inviteToken };
 }
