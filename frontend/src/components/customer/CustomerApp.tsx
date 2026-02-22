@@ -303,10 +303,12 @@ export function CustomerApp() {
       <main className="flex-1 container mx-auto px-4 py-8">
         {/* Booking Detail Page */}
         {detailBookingId ? (
-          <BookingDetailPage
-            bookingId={detailBookingId}
-            onBack={() => navigate(-1)}
-          />
+          <ErrorBoundary>
+            <BookingDetailPage
+              bookingId={detailBookingId}
+              onBack={() => navigate(-1)}
+            />
+          </ErrorBoundary>
         ) : detailProviderId ? (
           <ErrorBoundary>
             <ProviderDetailPage

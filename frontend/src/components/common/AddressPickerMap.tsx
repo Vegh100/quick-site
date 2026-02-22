@@ -11,6 +11,11 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { Loader2, MapPin, Navigation, Search, X } from "lucide-react";
 import { toast } from "sonner";
+import {
+  geocodingService,
+  type AddressDetails,
+  type GeocodingSearchResult,
+} from "../../services/geocoding";
 
 // Fix default marker icon (leaflet CSS issue with bundlers)
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -25,86 +30,14 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-export interface AddressDetails {
-  street: string;
-  city: string;
-  zipCode: string;
-  country: string;
-  latitude: number;
-  longitude: number;
-  formattedAddress: string;
-}
-
-interface NominatimResult {
-  place_id: number;
-  display_name: string;
-  lat: string;
-  lon: string;
-  address?: {
-    road?: string;
-    house_number?: string;
-    city?: string;
-    town?: string;
-    village?: string;
-    municipality?: string;
-    postcode?: string;
-    country_code?: string;
-    county?: string;
-    state?: string;
-  };
-}
+// Re-export so existing consumers don't break
+export type { AddressDetails } from "../../services/geocoding";
 
 interface AddressPickerMapProps {
   initialLat?: number;
   initialLng?: number;
   onAddressSelect: (address: AddressDetails) => void;
   height?: string;
-}
-
-// Reverse geocode: coordinates → address
-async function reverseGeocode(
-  lat: number,
-  lng: number,
-): Promise<AddressDetails | null> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=hu`,
-      { headers: { "User-Agent": "QvickApp/1.0" } },
-    );
-    const data: NominatimResult = await res.json();
-    if (!data.address) return null;
-
-    const a = data.address;
-    const street = [a.road, a.house_number].filter(Boolean).join(" ") || "";
-    const city = a.city || a.town || a.village || a.municipality || "";
-    const zipCode = a.postcode || "";
-    const country = (a.country_code || "RO").toUpperCase();
-
-    return {
-      street,
-      city,
-      zipCode,
-      country,
-      latitude: lat,
-      longitude: lng,
-      formattedAddress: data.display_name,
-    };
-  } catch {
-    return null;
-  }
-}
-
-// Forward geocode: search text → results
-async function searchAddress(query: string): Promise<NominatimResult[]> {
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=5&accept-language=hu&countrycodes=ro,hu`,
-      { headers: { "User-Agent": "QvickApp/1.0" } },
-    );
-    return await res.json();
-  } catch {
-    return [];
-  }
 }
 
 // Sub-component: handle map click events
@@ -148,7 +81,9 @@ export function AddressPickerMap({
     defaultLng,
   ]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
+  const [searchResults, setSearchResults] = useState<GeocodingSearchResult[]>(
+    [],
+  );
   const [showResults, setShowResults] = useState(false);
   const [locating, setLocating] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
@@ -186,7 +121,7 @@ export function AddressPickerMap({
       return;
     }
     searchTimerRef.current = setTimeout(async () => {
-      const results = await searchAddress(value);
+      const results = await geocodingService.search(value);
       setSearchResults(results);
       setShowResults(results.length > 0);
     }, 400);
@@ -194,29 +129,22 @@ export function AddressPickerMap({
 
   // When search result is selected
   const handleSelectResult = useCallback(
-    async (result: NominatimResult) => {
-      const lat = parseFloat(result.lat);
-      const lng = parseFloat(result.lon);
-      setMarkerPos([lat, lng]);
-      setCenter([lat, lng]);
-      setSearchQuery(result.display_name);
+    async (result: GeocodingSearchResult) => {
+      setMarkerPos([result.lat, result.lng]);
+      setCenter([result.lat, result.lng]);
+      setSearchQuery(result.displayName);
       setShowResults(false);
 
       const a = result.address;
       if (a) {
-        const street = [a.road, a.house_number].filter(Boolean).join(" ") || "";
-        const city = a.city || a.town || a.village || a.municipality || "";
-        const zipCode = a.postcode || "";
-        const country = (a.country_code || "RO").toUpperCase();
-
         onAddressSelect({
-          street,
-          city,
-          zipCode,
-          country,
-          latitude: lat,
-          longitude: lng,
-          formattedAddress: result.display_name,
+          street: a.street,
+          city: a.city,
+          zipCode: a.zipCode,
+          country: a.country,
+          latitude: result.lat,
+          longitude: result.lng,
+          formattedAddress: result.displayName,
         });
       }
     },
@@ -228,7 +156,7 @@ export function AddressPickerMap({
     async (lat: number, lng: number) => {
       setMarkerPos([lat, lng]);
       setGeocoding(true);
-      const address = await reverseGeocode(lat, lng);
+      const address = await geocodingService.reverseGeocode(lat, lng);
       setGeocoding(false);
       if (address) {
         setSearchQuery(address.formattedAddress);
@@ -252,7 +180,7 @@ export function AddressPickerMap({
         setMarkerPos([lat, lng]);
         setCenter([lat, lng]);
         setGeocoding(true);
-        const address = await reverseGeocode(lat, lng);
+        const address = await geocodingService.reverseGeocode(lat, lng);
         setGeocoding(false);
         setLocating(false);
         if (address) {
@@ -299,12 +227,12 @@ export function AddressPickerMap({
             <div className="absolute z-[1000] w-full mt-1 bg-background border rounded-lg shadow-lg max-h-60 overflow-y-auto">
               {searchResults.map((result) => (
                 <button
-                  key={result.place_id}
+                  key={result.id}
                   onClick={() => handleSelectResult(result)}
                   className="w-full text-left px-3 py-2.5 text-sm hover:bg-muted transition-colors border-b last:border-b-0 flex items-start gap-2"
                 >
                   <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                  <span className="line-clamp-2">{result.display_name}</span>
+                  <span className="line-clamp-2">{result.displayName}</span>
                 </button>
               ))}
             </div>
