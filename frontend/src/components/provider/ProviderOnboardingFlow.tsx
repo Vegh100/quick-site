@@ -7,10 +7,10 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { ProgressIndicator } from "../onboarding/ProgressIndicator";
-import { Briefcase, Clock, CheckCircle2, Loader2 } from "lucide-react";
+import { Briefcase, Clock, CheckCircle2, Loader2, MapPin } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
-import { useCategories } from "../../hooks/useApi";
+import { useCategories, useServiceTypes } from "../../hooks/useApi";
 import { providerApi } from "../../lib/api-services";
 
 interface ProviderOnboardingFlowProps {
@@ -19,10 +19,55 @@ interface ProviderOnboardingFlowProps {
 }
 
 const onboardingSteps = [
-  { id: "profile", label: "Profil" },
+  { id: "profile", label: "Cégadatok" },
   { id: "services", label: "Szolgáltatás" },
   { id: "availability", label: "Időpontok" },
   { id: "complete", label: "Kész" },
+];
+
+const JUDETE_RO = [
+  "Alba",
+  "Arad",
+  "Argeș",
+  "Bacău",
+  "Bihor",
+  "Bistrița-Năsăud",
+  "Botoșani",
+  "Brăila",
+  "Brașov",
+  "București",
+  "Buzău",
+  "Călărași",
+  "Caraș-Severin",
+  "Cluj",
+  "Constanța",
+  "Covasna",
+  "Dâmbovița",
+  "Dolj",
+  "Galați",
+  "Giurgiu",
+  "Gorj",
+  "Harghita",
+  "Hunedoara",
+  "Ialomița",
+  "Iași",
+  "Ilfov",
+  "Maramureș",
+  "Mehedinți",
+  "Mureș",
+  "Neamț",
+  "Olt",
+  "Prahova",
+  "Sălaj",
+  "Satu Mare",
+  "Sibiu",
+  "Suceava",
+  "Teleorman",
+  "Timiș",
+  "Tulcea",
+  "Vâlcea",
+  "Vaslui",
+  "Vrancea",
 ];
 
 const DAYS_HU = [
@@ -50,28 +95,48 @@ export function ProviderOnboardingFlow({
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { data: categoriesData } = useCategories();
+  const { data: serviceTypesData } = useServiceTypes();
 
   const [businessName, setBusinessName] = useState("");
   const [description, setDescription] = useState("");
   const [phone, setPhone] = useState("");
+  const [taxNumber, setTaxNumber] = useState("");
+  const [regNumber, setRegNumber] = useState("");
+  const [county, setCounty] = useState("");
+  const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [ownerMemberId, setOwnerMemberId] = useState<string | null>(null);
 
+  const [serviceTypeId, setServiceTypeId] = useState("");
   const [serviceName, setServiceName] = useState("");
   const [serviceDescription, setServiceDescription] = useState("");
   const [servicePrice, setServicePrice] = useState("");
   const [serviceDuration, setServiceDuration] = useState("60");
 
   const [availability, setAvailability] = useState(DEFAULT_AVAILABILITY);
+  const [skippedService, setSkippedService] = useState(false);
+  const [skippedAvailability, setSkippedAvailability] = useState(false);
 
   const categories = categoriesData?.data || [];
+  const serviceTypes = serviceTypesData?.data || [];
 
   const handleNext = async () => {
     setIsSubmitting(true);
     try {
       if (currentStep === 0) {
         if (!businessName) {
-          toast.error("Kérlek add meg az üzlet nevét!");
+          toast.error("Kérlek add meg a cég nevét!");
+          setIsSubmitting(false);
+          return;
+        }
+        if (!taxNumber) {
+          toast.error("Kérlek add meg a CUI számot!");
+          setIsSubmitting(false);
+          return;
+        }
+        if (!phone) {
+          toast.error("Kérlek add meg a telefonszámot!");
           setIsSubmitting(false);
           return;
         }
@@ -79,6 +144,11 @@ export function ProviderOnboardingFlow({
           businessName,
           description,
           phone,
+          taxNumber,
+          regNumber: regNumber || undefined,
+          county: county || undefined,
+          city: city || undefined,
+          address: address || undefined,
           categoryIds: selectedCategory ? [selectedCategory] : [],
         });
         const ownerMember = createResult.data?.members?.find(
@@ -89,12 +159,15 @@ export function ProviderOnboardingFlow({
       }
 
       if (currentStep === 1 && serviceName && servicePrice) {
+        const dur = parseInt(serviceDuration);
         await providerApi.addService({
+          serviceTypeId: serviceTypeId || undefined,
           name: serviceName,
           description: serviceDescription,
           priceAmount: parseFloat(servicePrice),
           priceType: "PER_HOUR" as const,
-          durationMin: parseInt(serviceDuration),
+          durationMin: dur,
+          slotIntervalMin: dur,
         });
         toast.success("Szolgáltatás hozzáadva!");
       }
@@ -149,41 +222,115 @@ export function ProviderOnboardingFlow({
                 <Briefcase className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h2>Üzleti profil</h2>
+                <h2>Cégadatok</h2>
                 <p className="text-muted-foreground">
-                  Add meg az üzleted adatait
+                  Add meg a céged hivatalos adatait
                 </p>
               </div>
             </div>
 
             <div className="space-y-4">
+              {/* --- Cég azonosítók --- */}
               <div>
-                <Label htmlFor="businessName">Üzlet neve *</Label>
+                <Label htmlFor="businessName">Cégnév *</Label>
                 <Input
                   id="businessName"
                   value={businessName}
                   onChange={(e) => setBusinessName(e.target.value)}
+                  placeholder="pl. Qvick Services SRL"
                 />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="taxNumber">
+                    CUI (Cod Unic de Înregistrare) *
+                  </Label>
+                  <Input
+                    id="taxNumber"
+                    value={taxNumber}
+                    onChange={(e) => setTaxNumber(e.target.value)}
+                    placeholder="pl. RO12345678"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="regNumber">Nr. Reg. Comerț</Label>
+                  <Input
+                    id="regNumber"
+                    value={regNumber}
+                    onChange={(e) => setRegNumber(e.target.value)}
+                    placeholder="pl. J12/345/2020"
+                  />
+                </div>
+              </div>
+
+              {/* --- Kontakt --- */}
               <div>
-                <Label htmlFor="phone">Telefon</Label>
+                <Label htmlFor="phone">Telefon *</Label>
                 <Input
                   id="phone"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+36 30 123 4567"
+                  placeholder="+40 7XX XXX XXX"
                 />
+              </div>
+
+              {/* --- Székhely --- */}
+              <div className="flex items-center gap-2 pt-2">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">
+                  Székhely
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="county">Județ (megye)</Label>
+                  <select
+                    id="county"
+                    value={county}
+                    onChange={(e) => setCounty(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="">Válassz megyét...</option>
+                    {JUDETE_RO.map((j) => (
+                      <option key={j} value={j}>
+                        {j}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="city">Város</Label>
+                  <Input
+                    id="city"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="pl. Cluj-Napoca"
+                  />
+                </div>
               </div>
               <div>
-                <Label htmlFor="description">Leírás</Label>
-                <Textarea
-                  id="description"
-                  rows={3}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Rövid leírás a szolgáltatásodról..."
+                <Label htmlFor="address">Cím (utca, szám)</Label>
+                <Input
+                  id="address"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="pl. Str. Memorandumului 12"
                 />
               </div>
+
+              {/* --- Leírás --- */}
+              <div>
+                <Label htmlFor="description">Rövid leírás</Label>
+                <Textarea
+                  id="description"
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Mi jellemzi a cégedet? Miben vagy a legjobb?"
+                />
+              </div>
+
+              {/* --- Kategória --- */}
               {categories.length > 0 && (
                 <div>
                   <Label>Kategória</Label>
@@ -228,14 +375,63 @@ export function ProviderOnboardingFlow({
 
             <div className="space-y-4">
               <div>
-                <Label htmlFor="serviceName">Szolgáltatás neve</Label>
-                <Input
-                  id="serviceName"
-                  value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
-                  placeholder="pl. Mélytisztítás"
-                />
+                <Label>Szolgáltatás típus</Label>
+                <select
+                  value={serviceTypeId}
+                  onChange={(e) => {
+                    const typeId = e.target.value;
+                    setServiceTypeId(typeId);
+                    if (typeId) {
+                      const st = serviceTypes.find((t) => t.id === typeId);
+                      if (st) {
+                        setServiceName(st.name);
+                        setServiceDescription(st.description || "");
+                      }
+                    } else {
+                      setServiceName("");
+                      setServiceDescription("");
+                    }
+                  }}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">-- Válassz típust --</option>
+                  {(() => {
+                    const grouped = serviceTypes.reduce(
+                      (acc, st) => {
+                        const catName = st.category?.name || "Egyéb";
+                        if (!acc[catName]) acc[catName] = [];
+                        acc[catName].push(st);
+                        return acc;
+                      },
+                      {} as Record<string, typeof serviceTypes>,
+                    );
+                    return Object.entries(grouped).map(([catName, types]) => (
+                      <optgroup key={catName} label={catName}>
+                        {types.map((st) => (
+                          <option key={st.id} value={st.id}>
+                            {st.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ));
+                  })()}
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Válaszd ki a szolgáltatás típusát, vagy hagyd üresen és add
+                  meg kézzel
+                </p>
               </div>
+              {!serviceTypeId && (
+                <div>
+                  <Label htmlFor="serviceName">Szolgáltatás neve</Label>
+                  <Input
+                    id="serviceName"
+                    value={serviceName}
+                    onChange={(e) => setServiceName(e.target.value)}
+                    placeholder="pl. Mélytisztítás"
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="serviceDesc">Leírás</Label>
                 <Textarea
@@ -256,13 +452,16 @@ export function ProviderOnboardingFlow({
                   />
                 </div>
                 <div>
-                  <Label htmlFor="duration">Időtartam (perc)</Label>
+                  <Label htmlFor="duration">Kb. időtartam (perc)</Label>
                   <Input
                     id="duration"
                     type="number"
                     value={serviceDuration}
                     onChange={(e) => setServiceDuration(e.target.value)}
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Hozzávetőleg mennyi időt vesz igénybe
+                  </p>
                 </div>
               </div>
             </div>
@@ -375,9 +574,17 @@ export function ProviderOnboardingFlow({
               </p>
             </div>
             <div className="p-6 bg-tertiary/30 rounded-lg max-w-md mx-auto space-y-2">
-              <p>✓ Üzleti profil létrehozva</p>
-              <p>✓ Szolgáltatás hozzáadva</p>
-              <p>✓ Időpontok beállítva</p>
+              <p>✓ Cégprofil létrehozva</p>
+              <p>
+                {skippedService
+                  ? "⏭ Szolgáltatás — később állíthatod be"
+                  : "✓ Szolgáltatás hozzáadva"}
+              </p>
+              <p>
+                {skippedAvailability
+                  ? "⏭ Időpontok — később állíthatod be"
+                  : "✓ Időpontok beállítva"}
+              </p>
             </div>
           </motion.div>
         );
@@ -397,6 +604,20 @@ export function ProviderOnboardingFlow({
             <Button variant="outline" onClick={handleBack} className="flex-1">
               {currentStep === 0 ? "Vissza" : "Előző"}
             </Button>
+            {(currentStep === 1 || currentStep === 2) && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (currentStep === 1) setSkippedService(true);
+                  if (currentStep === 2) setSkippedAvailability(true);
+                  setCurrentStep(currentStep + 1);
+                }}
+                className="text-muted-foreground"
+                disabled={isSubmitting}
+              >
+                Kihagyás
+              </Button>
+            )}
             <Button
               onClick={handleNext}
               className="flex-1"

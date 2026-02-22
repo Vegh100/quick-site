@@ -109,6 +109,14 @@ export interface Availability {
   isEnabled: boolean;
 }
 
+export interface ServiceSlot {
+  id: string;
+  serviceId: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+}
+
 export interface Provider {
   id: string;
   userId: string;
@@ -121,6 +129,9 @@ export interface Provider {
   serviceArea: string | null;
   taxNumber: string | null;
   regNumber: string | null;
+  county: string | null;
+  city: string | null;
+  address: string | null;
   rating: string; // Decimal
   reviewCount: number;
   isVerified: boolean;

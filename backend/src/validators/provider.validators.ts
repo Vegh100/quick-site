@@ -8,6 +8,9 @@ export const createProviderSchema = z.object({
   serviceArea: z.string().max(500).optional(),
   taxNumber: z.string().max(50).optional(),
   regNumber: z.string().max(50).optional(),
+  county: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
+  address: z.string().max(500).optional(),
   categoryIds: z.array(z.string().uuid()).default([]),
 });
 
@@ -33,6 +36,17 @@ export const setAvailabilitySchema = z.object({
       startTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
       endTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
       isEnabled: z.boolean().default(true),
+    }),
+  ),
+});
+
+export const setServiceSlotsSchema = z.object({
+  serviceId: z.string().uuid(),
+  slots: z.array(
+    z.object({
+      dayOfWeek: z.number().int().min(0).max(6),
+      startTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
+      endTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
     }),
   ),
 });
@@ -64,6 +78,7 @@ export type UpdateProviderInput = z.infer<typeof updateProviderSchema>;
 export type AddServiceInput = z.infer<typeof addServiceSchema>;
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 export type SetAvailabilityInput = z.infer<typeof setAvailabilitySchema>;
+export type SetServiceSlotsInput = z.infer<typeof setServiceSlotsSchema>;
 export type UpdatePricingSettingsInput = z.infer<
   typeof updatePricingSettingsSchema
 >;

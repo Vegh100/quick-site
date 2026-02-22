@@ -159,6 +159,31 @@ export function useSetAvailability() {
   });
 }
 
+export function useServiceSlots(serviceId?: string) {
+  return useQuery({
+    queryKey: ["service-slots", serviceId],
+    queryFn: () => providerApi.getServiceSlots(serviceId!),
+    enabled: !!serviceId,
+  });
+}
+
+export function useSetServiceSlots() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      serviceId,
+      slots,
+    }: {
+      serviceId: string;
+      slots: { dayOfWeek: number; startTime: string; endTime: string }[];
+    }) => providerApi.setServiceSlots(serviceId, slots),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["service-slots"] });
+      qc.invalidateQueries({ queryKey: ["providers", "me"] });
+    },
+  });
+}
+
 export function useUpdatePricingSettings() {
   const qc = useQueryClient();
   return useMutation({

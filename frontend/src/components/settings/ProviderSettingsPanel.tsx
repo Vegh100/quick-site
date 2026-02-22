@@ -36,6 +36,7 @@ import {
 import { authApi } from "../../lib/api-services";
 import { toast } from "sonner";
 import type { Service } from "../../lib/types";
+import { ServiceSlotPicker } from "./ServiceSlotPicker";
 
 const DAYS_HU = [
   "Hétfő",
@@ -72,6 +73,11 @@ export function ProviderSettingsPanel() {
   const [description, setDescription] = useState("");
   const [phone, setPhone] = useState("");
   const [serviceArea, setServiceArea] = useState("");
+  const [taxNumber, setTaxNumber] = useState("");
+  const [regNumber, setRegNumber] = useState("");
+  const [county, setCounty] = useState("");
+  const [city, setCity] = useState("");
+  const [address, setAddress] = useState("");
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -85,10 +91,14 @@ export function ProviderSettingsPanel() {
   const [svcDesc, setSvcDesc] = useState("");
   const [svcPrice, setSvcPrice] = useState("");
   const [svcDuration, setSvcDuration] = useState("60");
-  const [svcSlotInterval, setSvcSlotInterval] = useState("60");
   const [svcPriceType, setSvcPriceType] = useState<
     "PER_HOUR" | "FIXED" | "PER_SERVICE"
   >("FIXED");
+
+  // Service slot picker
+  const [slotPickerServiceId, setSlotPickerServiceId] = useState<string | null>(
+    null,
+  );
 
   // Availability
   const [availSlots, setAvailSlots] = useState(
@@ -106,6 +116,11 @@ export function ProviderSettingsPanel() {
       setDescription(provider.description || "");
       setPhone(provider.phone || "");
       setServiceArea(provider.serviceArea || "");
+      setTaxNumber(provider.taxNumber || "");
+      setRegNumber(provider.regNumber || "");
+      setCounty(provider.county || "");
+      setCity(provider.city || "");
+      setAddress(provider.address || "");
 
       // Load availability from the current member
       const memberAvail = currentMember?.availability;
@@ -139,6 +154,11 @@ export function ProviderSettingsPanel() {
         description,
         phone,
         serviceArea,
+        taxNumber,
+        regNumber,
+        county,
+        city,
+        address,
       });
       toast.success("Üzleti profil mentve!");
     } catch {
@@ -180,7 +200,6 @@ export function ProviderSettingsPanel() {
     setSvcDesc("");
     setSvcPrice("");
     setSvcDuration("60");
-    setSvcSlotInterval("60");
     setSvcPriceType("FIXED");
     setEditingService(null);
     setShowServiceForm(false);
@@ -193,7 +212,6 @@ export function ProviderSettingsPanel() {
     setSvcDesc(svc.description || "");
     setSvcPrice(String(Number(svc.priceAmount)));
     setSvcDuration(String(svc.durationMin));
-    setSvcSlotInterval(String(svc.slotIntervalMin));
     setSvcPriceType(svc.priceType);
     setShowServiceForm(true);
   };
@@ -203,14 +221,28 @@ export function ProviderSettingsPanel() {
       toast.error("Név és ár kötelező!");
       return;
     }
+    const duration = parseInt(svcDuration);
+    if (!duration || duration <= 0) {
+      toast.error("Az időtartam legalább 1 perc kell legyen!");
+      return;
+    }
+    if (duration > 480) {
+      toast.error("Az időtartam maximum 8 óra (480 perc) lehet!");
+      return;
+    }
+    const price = parseFloat(svcPrice);
+    if (!price || price <= 0) {
+      toast.error("Az ár pozitív szám kell legyen!");
+      return;
+    }
     const data = {
       serviceTypeId: svcServiceTypeId || undefined,
       name: svcName,
       description: svcDesc || undefined,
-      priceAmount: parseFloat(svcPrice),
+      priceAmount: price,
       priceType: svcPriceType,
-      durationMin: parseInt(svcDuration),
-      slotIntervalMin: parseInt(svcSlotInterval),
+      durationMin: duration,
+      slotIntervalMin: duration,
     };
 
     try {
@@ -226,7 +258,9 @@ export function ProviderSettingsPanel() {
       }
       resetServiceForm();
     } catch {
-      toast.error("Hiba történt");
+      toast.error(
+        "Nem sikerült menteni a szolgáltatást. Ellenőrizd az adatokat!",
+      );
     }
   };
 
@@ -256,16 +290,30 @@ export function ProviderSettingsPanel() {
   };
 
   const notifPrefs = notifPrefsData?.data;
-  const services = provider?.services || [];
+  const allServices = provider?.services || [];
+  const isOwner = currentMember?.role === "OWNER";
+
+  // Employee only sees services assigned to them via memberServices
+  const services = isOwner
+    ? allServices
+    : allServices.filter((svc) =>
+        currentMember?.memberServices?.some((ms) => ms.serviceId === svc.id),
+      );
 
   return (
     <div className="max-w-4xl mx-auto">
-      <Tabs defaultValue="business" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="business">
-            <Briefcase className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Üzlet</span>
-          </TabsTrigger>
+      <Tabs
+        key={isOwner ? "owner" : "employee"}
+        defaultValue={isOwner ? "business" : "services"}
+        className="space-y-6"
+      >
+        <TabsList className="flex w-full">
+          {isOwner && (
+            <TabsTrigger value="business">
+              <Briefcase className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Üzlet</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="services">
             <Plus className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Szolg.</span>
@@ -274,10 +322,12 @@ export function ProviderSettingsPanel() {
             <Clock className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Időpont</span>
           </TabsTrigger>
-          <TabsTrigger value="pricing">
-            <DollarSign className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Árazás</span>
-          </TabsTrigger>
+          {isOwner && (
+            <TabsTrigger value="pricing">
+              <DollarSign className="h-4 w-4 mr-1" />
+              <span className="hidden sm:inline">Árazás</span>
+            </TabsTrigger>
+          )}
           <TabsTrigger value="notifications">
             <Bell className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Értesítés</span>
@@ -288,108 +338,159 @@ export function ProviderSettingsPanel() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Business Profile */}
-        <TabsContent value="business">
-          <Card className="p-6 space-y-6">
-            <div>
-              <h3 className="mb-4">Üzleti profil</h3>
+        {/* Business Profile - Owner only */}
+        {isOwner && (
+          <TabsContent value="business">
+            <Card className="p-6 space-y-6">
+              <div>
+                <h3 className="mb-4">Üzleti profil</h3>
 
-              {/* Avatar upload */}
-              <div className="flex items-center gap-4 mb-6">
-                <div className="relative">
-                  <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center overflow-hidden">
-                    {user?.avatarUrl ? (
-                      <img
-                        src={user.avatarUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
+                {/* Avatar upload */}
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="relative">
+                    <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center overflow-hidden">
+                      {user?.avatarUrl ? (
+                        <img
+                          src={user.avatarUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Camera className="h-8 w-8 text-muted-foreground" />
+                      )}
+                    </div>
+                    <label className="absolute bottom-0 right-0 h-7 w-7 bg-primary text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-primary/90">
+                      <Pencil className="h-3 w-3" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleAvatarUpload}
                       />
-                    ) : (
-                      <Camera className="h-8 w-8 text-muted-foreground" />
-                    )}
+                    </label>
                   </div>
-                  <label className="absolute bottom-0 right-0 h-7 w-7 bg-primary text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-primary/90">
-                    <Pencil className="h-3 w-3" />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleAvatarUpload}
-                    />
-                  </label>
+                  <div>
+                    <p className="text-sm font-medium">Profilkép</p>
+                    <p className="text-xs text-muted-foreground">
+                      JPG, PNG max 5MB
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium">Profilkép</p>
-                  <p className="text-xs text-muted-foreground">
-                    JPG, PNG max 5MB
-                  </p>
-                </div>
-              </div>
 
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="businessName">Üzlet neve</Label>
-                  <Input
-                    id="businessName"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={user?.email || ""}
-                    disabled
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div>
-                    <Label htmlFor="phone">Telefon</Label>
+                    <Label htmlFor="businessName">Cégnév</Label>
                     <Input
-                      id="phone"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      id="businessName"
+                      value={businessName}
+                      onChange={(e) => setBusinessName(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="taxNumber">CUI</Label>
+                      <Input
+                        id="taxNumber"
+                        value={taxNumber}
+                        onChange={(e) => setTaxNumber(e.target.value)}
+                        placeholder="pl. RO12345678"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="regNumber">Nr. Reg. Comerț</Label>
+                      <Input
+                        id="regNumber"
+                        value={regNumber}
+                        onChange={(e) => setRegNumber(e.target.value)}
+                        placeholder="pl. J12/345/2020"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={user?.email || ""}
+                      disabled
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="phone">Telefon</Label>
+                      <Input
+                        id="phone"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="serviceArea">Szolgáltatási terület</Label>
+                      <Input
+                        id="serviceArea"
+                        value={serviceArea}
+                        onChange={(e) => setServiceArea(e.target.value)}
+                        placeholder="pl. Cluj, Kolozs megye"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="county">Județ (megye)</Label>
+                      <Input
+                        id="county"
+                        value={county}
+                        onChange={(e) => setCounty(e.target.value)}
+                        placeholder="pl. Cluj"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="city">Város</Label>
+                      <Input
+                        id="city"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="pl. Cluj-Napoca"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="address">Cím (utca, szám)</Label>
+                    <Input
+                      id="address"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="pl. Str. Memorandumului 12"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="serviceArea">Szolgáltatási terület</Label>
-                    <Input
-                      id="serviceArea"
-                      value={serviceArea}
-                      onChange={(e) => setServiceArea(e.target.value)}
-                      placeholder="pl. Budapest, Pest megye"
+                    <Label htmlFor="description">Leírás</Label>
+                    <Textarea
+                      id="description"
+                      rows={4}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Ez jelenik meg az ügyfeleknek a profilodon
+                    </p>
                   </div>
-                </div>
-                <div>
-                  <Label htmlFor="description">Leírás</Label>
-                  <Textarea
-                    id="description"
-                    rows={4}
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Ez jelenik meg az ügyfeleknek a profilodon
-                  </p>
                 </div>
               </div>
-            </div>
-            <div className="flex justify-end">
-              <Button
-                onClick={handleSaveBusiness}
-                disabled={updateProvider.isPending}
-              >
-                {updateProvider.isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                )}
-                Mentés
-              </Button>
-            </div>
-          </Card>
-        </TabsContent>
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSaveBusiness}
+                  disabled={updateProvider.isPending}
+                >
+                  {updateProvider.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  )}
+                  Mentés
+                </Button>
+              </div>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* Services CRUD */}
         <TabsContent value="services">
@@ -428,8 +529,10 @@ export function ProviderSettingsPanel() {
                           if (st) {
                             setSvcName(st.name);
                             setSvcDesc(st.description || "");
-                            setSvcDuration(String(st.defaultDurationMin));
                           }
+                        } else {
+                          setSvcName("");
+                          setSvcDesc("");
                         }
                       }}
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -450,7 +553,7 @@ export function ProviderSettingsPanel() {
                             <optgroup key={catName} label={catName}>
                               {types.map((st) => (
                                 <option key={st.id} value={st.id}>
-                                  {st.name} ({st.defaultDurationMin} perc)
+                                  {st.name}
                                 </option>
                               ))}
                             </optgroup>
@@ -459,17 +562,20 @@ export function ProviderSettingsPanel() {
                       })()}
                     </select>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Válaszd ki a szolgáltatás típusát a listából
+                      Válaszd ki a szolgáltatás típusát, vagy hagyd üresen és
+                      add meg kézzel
                     </p>
                   </div>
-                  <div>
-                    <Label>Név</Label>
-                    <Input
-                      value={svcName}
-                      onChange={(e) => setSvcName(e.target.value)}
-                      placeholder="pl. Mélytisztítás"
-                    />
-                  </div>
+                  {!svcServiceTypeId && (
+                    <div>
+                      <Label>Név</Label>
+                      <Input
+                        value={svcName}
+                        onChange={(e) => setSvcName(e.target.value)}
+                        placeholder="pl. Mélytisztítás"
+                      />
+                    </div>
+                  )}
                   <div>
                     <Label>Leírás</Label>
                     <Textarea
@@ -500,36 +606,16 @@ export function ProviderSettingsPanel() {
                       </select>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label>Időtartam (perc)</Label>
-                      <Input
-                        type="number"
-                        value={svcDuration}
-                        onChange={(e) => setSvcDuration(e.target.value)}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Mennyi ideig tart a szolgáltatás
-                      </p>
-                    </div>
-                    <div>
-                      <Label>Foglalási intervallum (perc)</Label>
-                      <select
-                        value={svcSlotInterval}
-                        onChange={(e) => setSvcSlotInterval(e.target.value)}
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                      >
-                        <option value="15">15 perc</option>
-                        <option value="30">30 perc</option>
-                        <option value="45">45 perc</option>
-                        <option value="60">1 óra</option>
-                        <option value="90">1.5 óra</option>
-                        <option value="120">2 óra</option>
-                      </select>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Milyen időközönként lehet foglalni
-                      </p>
-                    </div>
+                  <div>
+                    <Label>Kb. időtartam (perc)</Label>
+                    <Input
+                      type="number"
+                      value={svcDuration}
+                      onChange={(e) => setSvcDuration(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Hozzávetőleg mennyi időt vesz igénybe a szolgáltatás
+                    </p>
                   </div>
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -561,33 +647,54 @@ export function ProviderSettingsPanel() {
                 {services.map((svc) => (
                   <div
                     key={svc.id}
-                    className="flex items-center justify-between p-4 border rounded-lg"
+                    className="border rounded-lg overflow-hidden"
                   >
-                    <div>
-                      <h4 className="font-medium">{svc.name}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {Number(svc.priceAmount)} {svc.priceCurrency}
-                        {svc.priceType === "PER_HOUR" ? "/óra" : ""} ·{" "}
-                        {svc.durationMin} perc
-                      </p>
+                    <div className="flex items-center justify-between p-4">
+                      <div>
+                        <h4 className="font-medium">{svc.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {Number(svc.priceAmount)} {svc.priceCurrency}
+                          {svc.priceType === "PER_HOUR" ? "/óra" : ""} ·{" "}
+                          {svc.durationMin} perc
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={
+                            slotPickerServiceId === svc.id ? "default" : "ghost"
+                          }
+                          size="icon"
+                          title="Időpontok kezelése"
+                          onClick={() =>
+                            setSlotPickerServiceId(
+                              slotPickerServiceId === svc.id ? null : svc.id,
+                            )
+                          }
+                        >
+                          <Clock className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => openEditService(svc)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-destructive"
+                          onClick={() => handleDeleteService(svc.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditService(svc)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-destructive"
-                        onClick={() => handleDeleteService(svc.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {slotPickerServiceId === svc.id && (
+                      <div className="px-4 pb-4">
+                        <ServiceSlotPicker service={svc} />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -681,60 +788,62 @@ export function ProviderSettingsPanel() {
           </Card>
         </TabsContent>
 
-        {/* Pricing */}
-        <TabsContent value="pricing">
-          <Card className="p-6 space-y-6">
-            <div>
-              <h3 className="mb-4">Árazási beállítások</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4>Dinamikus árazás</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Árak igazítása a kereslet alapján
-                    </p>
+        {/* Pricing - Owner only */}
+        {isOwner && (
+          <TabsContent value="pricing">
+            <Card className="p-6 space-y-6">
+              <div>
+                <h3 className="mb-4">Árazási beállítások</h3>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4>Dinamikus árazás</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Árak igazítása a kereslet alapján
+                      </p>
+                    </div>
+                    <Switch
+                      checked={provider?.dynamicPricing ?? false}
+                      onCheckedChange={(val) =>
+                        updatePricing.mutate({ dynamicPricing: val })
+                      }
+                    />
                   </div>
-                  <Switch
-                    checked={provider?.dynamicPricing ?? false}
-                    onCheckedChange={(val) =>
-                      updatePricing.mutate({ dynamicPricing: val })
-                    }
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4>Hétvégi felár</h4>
-                    <p className="text-sm text-muted-foreground">
-                      20% felár hétvégi foglalásokra
-                    </p>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4>Hétvégi felár</h4>
+                      <p className="text-sm text-muted-foreground">
+                        20% felár hétvégi foglalásokra
+                      </p>
+                    </div>
+                    <Switch
+                      checked={provider?.weekendPremium ?? false}
+                      onCheckedChange={(val) =>
+                        updatePricing.mutate({ weekendPremium: val })
+                      }
+                    />
                   </div>
-                  <Switch
-                    checked={provider?.weekendPremium ?? false}
-                    onCheckedChange={(val) =>
-                      updatePricing.mutate({ weekendPremium: val })
-                    }
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4>Automatikus elfogadás</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Foglalások automatikus elfogadása
-                    </p>
+                  <Separator />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4>Automatikus elfogadás</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Foglalások automatikus elfogadása
+                      </p>
+                    </div>
+                    <Switch
+                      checked={provider?.autoAccept ?? false}
+                      onCheckedChange={(val) =>
+                        updatePricing.mutate({ autoAccept: val })
+                      }
+                    />
                   </div>
-                  <Switch
-                    checked={provider?.autoAccept ?? false}
-                    onCheckedChange={(val) =>
-                      updatePricing.mutate({ autoAccept: val })
-                    }
-                  />
                 </div>
               </div>
-            </div>
-          </Card>
-        </TabsContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* Notifications */}
         <TabsContent value="notifications">

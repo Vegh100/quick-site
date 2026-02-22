@@ -8,6 +8,7 @@ import {
   AddServiceInput,
   UpdateServiceInput,
   SetAvailabilityInput,
+  SetServiceSlotsInput,
   UpdatePricingSettingsInput,
   ProviderSearchInput,
 } from "../validators/provider.validators.js";
@@ -143,7 +144,11 @@ export async function getProviderByUserId(userId: string) {
         },
       },
       categories: { include: { category: true } },
-      services: { where: { isActive: true }, orderBy: { sortOrder: "asc" } },
+      services: {
+        where: { isActive: true },
+        orderBy: { sortOrder: "asc" },
+        include: { serviceType: { include: { category: true } } },
+      },
       members: {
         where: { status: { not: "DEACTIVATED" } },
         include: {
@@ -180,7 +185,11 @@ export async function getProviderById(providerId: string) {
         select: { id: true, firstName: true, lastName: true, avatarUrl: true },
       },
       categories: { include: { category: true } },
-      services: { where: { isActive: true }, orderBy: { sortOrder: "asc" } },
+      services: {
+        where: { isActive: true },
+        orderBy: { sortOrder: "asc" },
+        include: { serviceType: { include: { category: true } } },
+      },
       members: {
         where: { status: "ACTIVE" },
         select: {
@@ -298,7 +307,8 @@ export async function searchProviders(filters: ProviderSearchInput) {
         services: {
           where: { isActive: true },
           orderBy: { priceAmount: "asc" },
-          take: 3,
+          take: 5,
+          include: { serviceType: { include: { category: true } } },
         },
       },
       orderBy,
@@ -325,10 +335,8 @@ export async function searchProviders(filters: ProviderSearchInput) {
 
 export async function addService(userId: string, data: AddServiceInput) {
   const { provider, memberRole, member } = await getProviderForUser(userId);
-  if (memberRole !== "OWNER") {
-    throw new ForbiddenError("Only the owner can add services");
-  }
 
+  // Both OWNER and EMPLOYEE can add services
   const service = await prisma.service.create({
     data: {
       ...data,
@@ -337,7 +345,7 @@ export async function addService(userId: string, data: AddServiceInput) {
     },
   });
 
-  // Auto-assign the OWNER to this service so booking auto-assign works
+  // Auto-assign the creator (OWNER or EMPLOYEE) to this service
   if (member) {
     await prisma.memberService
       .create({
@@ -359,15 +367,22 @@ export async function updateService(
   serviceId: string,
   data: UpdateServiceInput,
 ) {
-  const { provider, memberRole } = await getProviderForUser(userId);
-  if (memberRole !== "OWNER") {
-    throw new ForbiddenError("Only the owner can update services");
-  }
+  const { provider, memberRole, member } = await getProviderForUser(userId);
 
   const service = await prisma.service.findFirst({
     where: { id: serviceId, providerId: provider.id },
   });
   if (!service) throw new NotFoundError("Service");
+
+  // Employee can only update services assigned to them
+  if (memberRole !== "OWNER" && member) {
+    const assignment = await prisma.memberService.findFirst({
+      where: { memberId: member.id, serviceId },
+    });
+    if (!assignment) {
+      throw new ForbiddenError("You can only update your own services");
+    }
+  }
 
   return prisma.service.update({
     where: { id: serviceId },
@@ -381,15 +396,22 @@ export async function updateService(
 }
 
 export async function deleteService(userId: string, serviceId: string) {
-  const { provider, memberRole } = await getProviderForUser(userId);
-  if (memberRole !== "OWNER") {
-    throw new ForbiddenError("Only the owner can delete services");
-  }
+  const { provider, memberRole, member } = await getProviderForUser(userId);
 
   const service = await prisma.service.findFirst({
     where: { id: serviceId, providerId: provider.id },
   });
   if (!service) throw new NotFoundError("Service");
+
+  // Employee can only delete services assigned to them
+  if (memberRole !== "OWNER" && member) {
+    const assignment = await prisma.memberService.findFirst({
+      where: { memberId: member.id, serviceId },
+    });
+    if (!assignment) {
+      throw new ForbiddenError("You can only delete your own services");
+    }
+  }
 
   // Soft delete by deactivating
   await prisma.service.update({
@@ -469,6 +491,59 @@ export async function updatePricingSettings(
   return prisma.provider.update({
     where: { id: provider.id },
     data,
+  });
+}
+
+// ============================================================================
+// SERVICE SLOTS (per-service, per-member bookable time blocks)
+// ============================================================================
+
+export async function setServiceSlots(
+  userId: string,
+  data: SetServiceSlotsInput,
+) {
+  const { provider } = await getProviderForUser(userId);
+
+  // Verify service belongs to this provider
+  const service = await prisma.service.findFirst({
+    where: { id: data.serviceId, providerId: provider.id, isActive: true },
+  });
+  if (!service) throw new NotFoundError("Service");
+
+  // Delete all existing slots for this service, then recreate
+  await prisma.serviceSlot.deleteMany({
+    where: { serviceId: data.serviceId },
+  });
+
+  if (data.slots.length > 0) {
+    await prisma.serviceSlot.createMany({
+      data: data.slots.map((slot) => ({
+        serviceId: data.serviceId,
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+      })),
+    });
+  }
+
+  return prisma.serviceSlot.findMany({
+    where: { serviceId: data.serviceId },
+    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+  });
+}
+
+export async function getServiceSlots(userId: string, serviceId: string) {
+  const { provider } = await getProviderForUser(userId);
+
+  // Verify service belongs to this provider
+  const service = await prisma.service.findFirst({
+    where: { id: serviceId, providerId: provider.id },
+  });
+  if (!service) throw new NotFoundError("Service");
+
+  return prisma.serviceSlot.findMany({
+    where: { serviceId },
+    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
   });
 }
 

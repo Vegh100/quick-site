@@ -9,6 +9,7 @@ import {
   addServiceSchema,
   updateServiceSchema,
   setAvailabilitySchema,
+  setServiceSlotsSchema,
   updatePricingSettingsSchema,
   providerSearchSchema,
 } from "../validators/provider.validators.js";
@@ -59,7 +60,7 @@ router.patch(
 router.post(
   "/me/services",
   authenticate,
-  requireRole("PROVIDER"),
+  requireRole("PROVIDER", "EMPLOYEE"),
   validate(addServiceSchema),
   providerController.addService,
 );
@@ -67,7 +68,7 @@ router.post(
 router.patch(
   "/me/services/:serviceId",
   authenticate,
-  requireRole("PROVIDER"),
+  requireRole("PROVIDER", "EMPLOYEE"),
   validate(updateServiceSchema),
   providerController.updateService,
 );
@@ -75,7 +76,7 @@ router.patch(
 router.delete(
   "/me/services/:serviceId",
   authenticate,
-  requireRole("PROVIDER"),
+  requireRole("PROVIDER", "EMPLOYEE"),
   providerController.deleteService,
 );
 
@@ -83,9 +84,25 @@ router.delete(
 router.put(
   "/me/availability",
   authenticate,
-  requireRole("PROVIDER"),
+  requireRole("PROVIDER", "EMPLOYEE"),
   validate(setAvailabilitySchema),
   providerController.setAvailability,
+);
+
+// Service Slots (per-service bookable time blocks)
+router.put(
+  "/me/service-slots",
+  authenticate,
+  requireRole("PROVIDER", "EMPLOYEE"),
+  validate(setServiceSlotsSchema),
+  providerController.setServiceSlots,
+);
+
+router.get(
+  "/me/service-slots/:serviceId",
+  authenticate,
+  requireRole("PROVIDER", "EMPLOYEE"),
+  providerController.getServiceSlots,
 );
 
 // Pricing settings
@@ -108,7 +125,7 @@ router.get(
 router.get(
   "/me/clients",
   authenticate,
-  requireRole("PROVIDER"),
+  requireRole("PROVIDER", "EMPLOYEE"),
   providerController.getClients,
 );
 

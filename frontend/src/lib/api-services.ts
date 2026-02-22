@@ -11,6 +11,7 @@ import type {
   ServiceType,
   TimeSlot,
   Availability,
+  ServiceSlot,
   Booking,
   CreateBookingInput,
   Review,
@@ -147,6 +148,9 @@ export const providerApi = {
     serviceArea?: string;
     taxNumber?: string;
     regNumber?: string;
+    county?: string;
+    city?: string;
+    address?: string;
     categoryIds: string[];
   }) => api.post<ApiResponse<Provider>>("/providers", data).then((r) => r.data),
 
@@ -159,6 +163,11 @@ export const providerApi = {
     phone?: string;
     website?: string;
     serviceArea?: string;
+    taxNumber?: string;
+    regNumber?: string;
+    county?: string;
+    city?: string;
+    address?: string;
     categoryIds?: string[];
   }) =>
     api
@@ -210,6 +219,23 @@ export const providerApi = {
       .put<
         ApiResponse<Availability[]>
       >("/providers/me/availability", { memberId, availability })
+      .then((r) => r.data),
+
+  getServiceSlots: (serviceId: string) =>
+    api
+      .get<
+        ApiResponse<ServiceSlot[]>
+      >(`/providers/me/service-slots/${serviceId}`)
+      .then((r) => r.data),
+
+  setServiceSlots: (
+    serviceId: string,
+    slots: { dayOfWeek: number; startTime: string; endTime: string }[],
+  ) =>
+    api
+      .put<
+        ApiResponse<ServiceSlot[]>
+      >("/providers/me/service-slots", { serviceId, slots })
       .then((r) => r.data),
 
   updatePricingSettings: (data: {

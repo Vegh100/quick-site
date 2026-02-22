@@ -3,6 +3,8 @@ import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import { ServiceSlotPicker } from "../settings/ServiceSlotPicker";
 import { Badge } from "../ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
@@ -21,6 +23,8 @@ import {
   useRemoveServiceFromMember,
   useSetMemberAvailability,
   useMyProvider,
+  useUpdateService,
+  useServiceTypes,
 } from "../../hooks/useApi";
 import {
   UserPlus,
@@ -44,6 +48,7 @@ import {
   CalendarCheck,
   CalendarClock,
   Ban,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -138,9 +143,24 @@ function MemberDetailPanel({
   const assignService = useAssignServiceToMember();
   const removeService = useRemoveServiceFromMember();
   const setMemberAvailability = useSetMemberAvailability();
+  const updateServiceMut = useUpdateService();
+  const { data: serviceTypesData } = useServiceTypes();
 
   const detail = detailData?.data;
   const allServices = providerData?.data?.services || [];
+  const serviceTypes = serviceTypesData?.data || [];
+
+  // Service editing state
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editSvcName, setEditSvcName] = useState("");
+  const [editSvcDesc, setEditSvcDesc] = useState("");
+  const [editSvcPrice, setEditSvcPrice] = useState("");
+  const [editSvcDuration, setEditSvcDuration] = useState("60");
+  const [editSvcPriceType, setEditSvcPriceType] = useState<
+    "FIXED" | "PER_HOUR" | "PER_SERVICE"
+  >("FIXED");
+  const [editSvcServiceTypeId, setEditSvcServiceTypeId] = useState("");
+  const [showSlotPicker, setShowSlotPicker] = useState<string | null>(null);
 
   // Availability editing state
   const [availSlots, setAvailSlots] = useState(
@@ -199,6 +219,66 @@ function MemberDetailPanel({
       toast.success("Szolgáltatás hozzárendelve!");
     } catch (err: any) {
       toast.error(err?.response?.data?.error || "Hiba történt");
+    }
+  };
+
+  const openEditService = (svc: Service) => {
+    setEditingService(svc);
+    setEditSvcServiceTypeId(svc.serviceTypeId || "");
+    setEditSvcName(svc.name);
+    setEditSvcDesc(svc.description || "");
+    setEditSvcPrice(String(Number(svc.priceAmount)));
+    setEditSvcDuration(String(svc.durationMin));
+    setEditSvcPriceType(svc.priceType);
+  };
+
+  const closeEditService = () => {
+    setEditingService(null);
+    setEditSvcName("");
+    setEditSvcDesc("");
+    setEditSvcPrice("");
+    setEditSvcDuration("60");
+    setEditSvcPriceType("FIXED");
+    setEditSvcServiceTypeId("");
+  };
+
+  const handleSaveEditService = async () => {
+    if (!editingService) return;
+    if (!editSvcName || !editSvcPrice) {
+      toast.error("Név és ár kötelező!");
+      return;
+    }
+    const duration = parseInt(editSvcDuration);
+    if (!duration || duration <= 0) {
+      toast.error("Az időtartam legalább 1 perc kell legyen!");
+      return;
+    }
+    if (duration > 480) {
+      toast.error("Az időtartam maximum 8 óra (480 perc) lehet!");
+      return;
+    }
+    const price = parseFloat(editSvcPrice);
+    if (!price || price <= 0) {
+      toast.error("Az ár pozitív szám kell legyen!");
+      return;
+    }
+    try {
+      await updateServiceMut.mutateAsync({
+        serviceId: editingService.id,
+        data: {
+          serviceTypeId: editSvcServiceTypeId || undefined,
+          name: editSvcName,
+          description: editSvcDesc || undefined,
+          priceAmount: price,
+          priceType: editSvcPriceType,
+          durationMin: duration,
+          slotIntervalMin: duration,
+        },
+      });
+      toast.success("Szolgáltatás frissítve!");
+      closeEditService();
+    } catch {
+      toast.error("Nem sikerült menteni a szolgáltatást.");
     }
   };
 
@@ -421,38 +501,217 @@ function MemberDetailPanel({
             ) : (
               <div className="space-y-2">
                 {detail.memberServices?.map((ms) => (
-                  <Card key={ms.id} className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                          <Briefcase className="h-4 w-4 text-primary" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium">
-                            {ms.service?.name || "Szolgáltatás"}
-                          </p>
-                          {ms.service && (
-                            <p className="text-xs text-muted-foreground">
-                              {Number(ms.service.priceAmount).toLocaleString(
-                                "hu-HU",
-                              )}{" "}
-                              {ms.service.priceCurrency} ·{" "}
-                              {ms.service.durationMin} perc
+                  <div
+                    key={ms.id}
+                    className="border rounded-lg overflow-hidden"
+                  >
+                    <Card className="p-3 border-0 shadow-none">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                            <Briefcase className="h-4 w-4 text-primary" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">
+                              {ms.service?.name || "Szolgáltatás"}
                             </p>
+                            {ms.service && (
+                              <p className="text-xs text-muted-foreground">
+                                {Number(ms.service.priceAmount).toLocaleString(
+                                  "hu-HU",
+                                )}{" "}
+                                {ms.service.priceCurrency} ·{" "}
+                                {ms.service.durationMin} perc
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          {ms.service && (
+                            <>
+                              <Button
+                                variant={
+                                  showSlotPicker === ms.serviceId
+                                    ? "default"
+                                    : "ghost"
+                                }
+                                size="icon"
+                                className="h-8 w-8"
+                                title="Időpontok kezelése"
+                                onClick={() =>
+                                  setShowSlotPicker(
+                                    showSlotPicker === ms.serviceId
+                                      ? null
+                                      : ms.serviceId,
+                                  )
+                                }
+                              >
+                                <Clock className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                title="Szerkesztés"
+                                onClick={() => openEditService(ms.service!)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </>
                           )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleRemoveService(ms.serviceId)}
+                            disabled={removeService.isPending}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive"
-                        onClick={() => handleRemoveService(ms.serviceId)}
-                        disabled={removeService.isPending}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </Card>
+                    </Card>
+
+                    {/* Inline edit form */}
+                    {editingService?.id === ms.serviceId && (
+                      <div className="px-4 pb-4 space-y-4 border-t bg-muted/30">
+                        <h4 className="text-sm font-medium pt-3">
+                          Szolgáltatás szerkesztése
+                        </h4>
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-xs">
+                              Szolgáltatás típus
+                            </Label>
+                            <select
+                              value={editSvcServiceTypeId}
+                              onChange={(e) => {
+                                const typeId = e.target.value;
+                                setEditSvcServiceTypeId(typeId);
+                                if (typeId) {
+                                  const st = serviceTypes.find(
+                                    (t: any) => t.id === typeId,
+                                  );
+                                  if (st) {
+                                    setEditSvcName(st.name);
+                                    setEditSvcDesc(st.description || "");
+                                  }
+                                }
+                              }}
+                              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                            >
+                              <option value="">-- Válassz típust --</option>
+                              {(() => {
+                                const grouped = serviceTypes.reduce(
+                                  (acc: Record<string, any[]>, st: any) => {
+                                    const catName =
+                                      st.category?.name || "Egyéb";
+                                    if (!acc[catName]) acc[catName] = [];
+                                    acc[catName].push(st);
+                                    return acc;
+                                  },
+                                  {},
+                                );
+                                return Object.entries(grouped).map(
+                                  ([catName, types]) => (
+                                    <optgroup key={catName} label={catName}>
+                                      {(types as any[]).map((st) => (
+                                        <option key={st.id} value={st.id}>
+                                          {st.name}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  ),
+                                );
+                              })()}
+                            </select>
+                          </div>
+                          {!editSvcServiceTypeId && (
+                            <div>
+                              <Label className="text-xs">Név</Label>
+                              <Input
+                                value={editSvcName}
+                                onChange={(e) => setEditSvcName(e.target.value)}
+                                placeholder="pl. Mélytisztítás"
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <Label className="text-xs">Leírás</Label>
+                            <Textarea
+                              value={editSvcDesc}
+                              onChange={(e) => setEditSvcDesc(e.target.value)}
+                              rows={2}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-xs">Ár (RON)</Label>
+                              <Input
+                                type="number"
+                                value={editSvcPrice}
+                                onChange={(e) =>
+                                  setEditSvcPrice(e.target.value)
+                                }
+                              />
+                            </div>
+                            <div>
+                              <Label className="text-xs">Típus</Label>
+                              <select
+                                value={editSvcPriceType}
+                                onChange={(e) =>
+                                  setEditSvcPriceType(e.target.value as any)
+                                }
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                              >
+                                <option value="FIXED">Fix ár</option>
+                                <option value="PER_HOUR">Óradíj</option>
+                                <option value="PER_SERVICE">Szolg. díj</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs">
+                              Kb. időtartam (perc)
+                            </Label>
+                            <Input
+                              type="number"
+                              value={editSvcDuration}
+                              onChange={(e) =>
+                                setEditSvcDuration(e.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={closeEditService}
+                          >
+                            Mégse
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={handleSaveEditService}
+                            disabled={updateServiceMut.isPending}
+                          >
+                            {updateServiceMut.isPending && (
+                              <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                            )}
+                            Mentés
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Slot picker */}
+                    {ms.service && showSlotPicker === ms.serviceId && (
+                      <div className="px-4 pb-4 border-t">
+                        <ServiceSlotPicker service={ms.service} />
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}

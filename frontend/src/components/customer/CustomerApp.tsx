@@ -42,7 +42,12 @@ import { BookingModal } from "../booking/BookingModal";
 import { ProviderDetailPage } from "./ProviderDetailPage";
 import { Toaster } from "../ui/sonner";
 import { toast } from "sonner";
-import type { Provider, BookingStatus, Booking } from "../../lib/types";
+import type {
+  Provider,
+  BookingStatus,
+  Booking,
+  Service,
+} from "../../lib/types";
 
 const STATUS_COLORS: Record<BookingStatus, string> = {
   PENDING: "bg-yellow-500",
@@ -96,6 +101,7 @@ export function CustomerApp() {
   const [showFilters, setShowFilters] = useState(false);
   const [bookingProvider, setBookingProvider] = useState<Provider | null>(null);
   const [detailProviderId, setDetailProviderId] = useState<string | null>(null);
+  const [detailServiceId, setDetailServiceId] = useState<string | null>(null);
   const [bookingTab, setBookingTab] = useState("upcoming");
   const [page, setPage] = useState(1);
 
@@ -142,6 +148,12 @@ export function CustomerApp() {
   const apiCategories = categoriesData?.data || [];
   const providers = providersData?.data?.providers || [];
   const providersMeta = providersData?.data?.meta;
+  const serviceItems = providers.flatMap((provider: Provider) =>
+    (provider.services || []).map((service: Service) => ({
+      service,
+      provider,
+    })),
+  );
   const bookings = bookingsData?.data?.bookings || [];
   const favorites = favoritesData?.data || [];
   const favoriteIds = new Set(favorites.map((f) => f.providerId));
@@ -284,7 +296,11 @@ export function CustomerApp() {
         {detailProviderId ? (
           <ProviderDetailPage
             providerId={detailProviderId}
-            onBack={() => setDetailProviderId(null)}
+            initialServiceId={detailServiceId}
+            onBack={() => {
+              setDetailProviderId(null);
+              setDetailServiceId(null);
+            }}
           />
         ) : (
           <>
@@ -474,7 +490,7 @@ export function CustomerApp() {
                     <h3>
                       {loadingProviders
                         ? "Keresés..."
-                        : `${providersMeta?.total || 0} szolgáltató található`}
+                        : `${serviceItems.length} szolgáltatás található`}
                     </h3>
                   </div>
 
@@ -482,7 +498,7 @@ export function CustomerApp() {
                     <div className="flex justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : providers.length === 0 ? (
+                  ) : serviceItems.length === 0 ? (
                     <Card className="p-8 text-center">
                       <p className="text-muted-foreground">
                         Nincs találat. Próbálj más keresési feltételeket!
@@ -490,103 +506,109 @@ export function CustomerApp() {
                     </Card>
                   ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {providers.map((provider) => {
-                        const lowestPrice = provider.services?.[0];
-                        return (
-                          <Card
-                            key={provider.id}
-                            className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                            onClick={() => setDetailProviderId(provider.id)}
-                          >
-                            <div className="aspect-video bg-muted relative">
-                              {provider.coverImageUrl ? (
-                                <img
-                                  src={provider.coverImageUrl}
-                                  alt={provider.businessName}
-                                  className="w-full h-full object-cover"
+                      {serviceItems.map(({ service, provider }) => (
+                        <Card
+                          key={`${provider.id}-${service.id}`}
+                          className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                          onClick={() => {
+                            setDetailProviderId(provider.id);
+                            setDetailServiceId(service.id);
+                          }}
+                        >
+                          <div className="p-5 space-y-3">
+                            {/* Category badge + favorite */}
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1 min-w-0">
+                                {service.serviceType?.category && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="mb-2 text-xs"
+                                  >
+                                    {service.serviceType.category.icon && (
+                                      <span className="mr-1">
+                                        {service.serviceType.category.icon}
+                                      </span>
+                                    )}
+                                    {service.serviceType.category.name}
+                                  </Badge>
+                                )}
+                                <h3 className="text-lg font-semibold leading-tight">
+                                  {service.name}
+                                </h3>
+                                {service.description && (
+                                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                    {service.description}
+                                  </p>
+                                )}
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 -mt-1 flex-shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleFavorite(provider.id);
+                                }}
+                              >
+                                <Heart
+                                  className={`h-4 w-4 ${favoriteIds.has(provider.id) ? "fill-red-500 text-red-500" : ""}`}
                                 />
-                              ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
-                                  <span className="text-4xl">
-                                    {provider.categories?.[0]?.category?.icon ||
-                                      "🔧"}
-                                  </span>
-                                </div>
+                              </Button>
+                            </div>
+
+                            {/* Price - prominent */}
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="text-xl font-bold text-primary">
+                                {Number(service.priceAmount)}{" "}
+                                {service.priceCurrency}
+                              </span>
+                              {service.priceType === "PER_HOUR" && (
+                                <span className="text-sm text-muted-foreground">
+                                  /óra
+                                </span>
                               )}
+                            </div>
+
+                            {/* Rating + Duration */}
+                            <div className="flex items-center gap-4 text-sm">
+                              <div className="flex items-center gap-1">
+                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                <span className="font-medium">
+                                  {Number(provider.rating).toFixed(1)}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  ({provider.reviewCount})
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Clock className="h-4 w-4" />
+                                {service.durationMin} perc
+                              </div>
+                            </div>
+
+                            {/* Provider info - secondary */}
+                            <div className="flex items-center gap-2 pt-2 border-t">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-muted-foreground truncate">
+                                  {provider.businessName}
+                                </p>
+                                {(provider.city || provider.serviceArea) && (
+                                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                    <MapPin className="h-3 w-3 flex-shrink-0" />
+                                    {provider.city || provider.serviceArea}
+                                  </p>
+                                )}
+                              </div>
                               {provider.isVerified && (
-                                <Badge className="absolute top-3 right-3 bg-green-500">
+                                <Badge className="bg-green-500 text-xs flex-shrink-0">
                                   <CheckCircle2 className="h-3 w-3 mr-1" />
                                   Hitelesített
                                 </Badge>
                               )}
                             </div>
-                            <div className="p-5">
-                              <div className="flex items-start justify-between mb-2">
-                                <h3 className="text-lg">
-                                  {provider.businessName}
-                                </h3>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 -mt-1"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleFavorite(provider.id);
-                                  }}
-                                >
-                                  <Heart
-                                    className={`h-4 w-4 ${favoriteIds.has(provider.id) ? "fill-red-500 text-red-500" : ""}`}
-                                  />
-                                </Button>
-                              </div>
-
-                              <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                                {provider.description ||
-                                  "Professzionális szolgáltatás"}
-                              </p>
-
-                              <div className="flex items-center gap-4 mb-3 text-sm">
-                                <div className="flex items-center gap-1">
-                                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                  <span>
-                                    {Number(provider.rating).toFixed(1)}
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    ({provider.reviewCount})
-                                  </span>
-                                </div>
-                                {provider.serviceArea && (
-                                  <div className="flex items-center gap-1 text-muted-foreground">
-                                    <MapPin className="h-4 w-4" />
-                                    {provider.serviceArea}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="flex items-center justify-between">
-                                {lowestPrice && (
-                                  <span className="font-semibold text-primary">
-                                    {Number(lowestPrice.priceAmount)}{" "}
-                                    {lowestPrice.priceCurrency}
-                                    {lowestPrice.priceType === "PER_HOUR"
-                                      ? "/óra"
-                                      : ""}
-                                  </span>
-                                )}
-                                <Button
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setDetailProviderId(provider.id);
-                                  }}
-                                >
-                                  Részletek
-                                </Button>
-                              </div>
-                            </div>
-                          </Card>
-                        );
-                      })}
+                          </div>
+                        </Card>
+                      ))}
                     </div>
                   )}
 

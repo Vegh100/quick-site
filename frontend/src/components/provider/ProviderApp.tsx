@@ -116,7 +116,11 @@ export function ProviderApp() {
   const { data: statsData } = useProviderStats(!!provider);
   const { data: bookingsData, isLoading: loadingBookings } =
     useProviderBookings({ page: 1, limit: 20 }, !!provider);
-  const { data: clientsData } = useProviderClients(1, 20, !!provider);
+  const { data: clientsData } = useProviderClients(
+    1,
+    20,
+    !!provider && isOwner,
+  );
   const { data: reviewsData } = useProviderReviews(provider?.id);
   const updateStatus = useUpdateBookingStatus();
 

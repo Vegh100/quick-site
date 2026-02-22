@@ -162,6 +162,42 @@ export async function setAvailability(
 }
 
 // ============================================================================
+// SERVICE SLOTS
+// ============================================================================
+
+export async function setServiceSlots(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const slots = await providerService.setServiceSlots(
+      req.user!.userId,
+      req.body,
+    );
+    res.json({ success: true, data: slots });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getServiceSlots(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const slots = await providerService.getServiceSlots(
+      req.user!.userId,
+      req.params.serviceId,
+    );
+    res.json({ success: true, data: slots });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ============================================================================
 // PRICING SETTINGS
 // ============================================================================
 
