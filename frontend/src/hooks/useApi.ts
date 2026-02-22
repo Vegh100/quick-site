@@ -159,11 +159,11 @@ export function useSetAvailability() {
   });
 }
 
-export function useServiceSlots(serviceId?: string) {
+export function useServiceSlots(serviceId?: string, memberId?: string) {
   return useQuery({
-    queryKey: ["service-slots", serviceId],
-    queryFn: () => providerApi.getServiceSlots(serviceId!),
-    enabled: !!serviceId,
+    queryKey: ["service-slots", serviceId, memberId],
+    queryFn: () => providerApi.getServiceSlots(serviceId!, memberId),
+    enabled: !!serviceId && !!memberId,
   });
 }
 
@@ -172,11 +172,13 @@ export function useSetServiceSlots() {
   return useMutation({
     mutationFn: ({
       serviceId,
+      memberId,
       slots,
     }: {
       serviceId: string;
+      memberId: string;
       slots: { dayOfWeek: number; startTime: string; endTime: string }[];
-    }) => providerApi.setServiceSlots(serviceId, slots),
+    }) => providerApi.setServiceSlots(serviceId, memberId, slots),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["service-slots"] });
       qc.invalidateQueries({ queryKey: ["providers", "me"] });
@@ -210,7 +212,13 @@ export function useCustomerBookings(params?: {
 }
 
 export function useProviderBookings(
-  params?: { status?: string; page?: number; limit?: number },
+  params?: {
+    status?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    page?: number;
+    limit?: number;
+  },
   enabled = true,
 ) {
   return useQuery({

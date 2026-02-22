@@ -14,13 +14,6 @@ import { Label } from "../ui/label";
 import { Textarea } from "../ui/textarea";
 import { Calendar as CalendarWidget } from "../ui/calendar";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
-import {
   Star,
   Clock,
   MapPin,
@@ -32,12 +25,13 @@ import {
   User,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { Provider } from "../../lib/types";
+import type { Provider, TimeSlot } from "../../lib/types";
 
 interface ProviderDetailPageProps {
   providerId: string;
   initialServiceId?: string | null;
   onBack: () => void;
+  onBookingCreated?: (bookingId: string) => void;
 }
 
 const DAY_NAMES = ["Va", "Hé", "Ke", "Sze", "Csü", "Pé", "Szo"];
@@ -46,6 +40,7 @@ export function ProviderDetailPage({
   providerId,
   initialServiceId,
   onBack,
+  onBookingCreated,
 }: ProviderDetailPageProps) {
   const { data: providerData, isLoading } = useProvider(providerId);
   const { data: reviewsData } = useProviderReviews(providerId, {
@@ -97,22 +92,19 @@ export function ProviderDetailPage({
     );
   }, [members, featuredService]);
 
-  // Calendar disabled days based on member availability
+  // Calendar disabled days: merge all service members' availability + service slot days
   const disabledDays = useMemo(() => {
-    let enabledSet: Set<number>;
-    if (selectedMemberId) {
-      const member = members.find((m) => m.id === selectedMemberId);
-      enabledSet = new Set(
-        (member?.availability || [])
-          .filter((a: any) => a.isEnabled)
-          .map((a: any) => a.dayOfWeek),
-      );
-    } else {
-      enabledSet = new Set<number>();
-      for (const m of serviceMembers) {
-        for (const a of m.availability || []) {
-          if ((a as any).isEnabled) enabledSet.add((a as any).dayOfWeek);
-        }
+    const enabledSet = new Set<number>();
+    // Enable days from availability records
+    for (const m of serviceMembers) {
+      for (const a of m.availability || []) {
+        if ((a as any).isEnabled) enabledSet.add((a as any).dayOfWeek);
+      }
+    }
+    // Also enable days that have service slots for the featured service
+    if (featuredService?.serviceSlots) {
+      for (const slot of featuredService.serviceSlots) {
+        enabledSet.add(slot.dayOfWeek);
       }
     }
     return (date: Date) => {
@@ -120,9 +112,9 @@ export function ProviderDetailPage({
       today.setHours(0, 0, 0, 0);
       return !enabledSet.has(date.getDay()) || date < today;
     };
-  }, [members, serviceMembers, selectedMemberId]);
+  }, [serviceMembers, featuredService]);
 
-  // Fetch available time slots
+  // Fetch available time slots (all members merged)
   const dateStr = bookingDate ? bookingDate.toISOString().split("T")[0] : "";
   const slotsParams =
     featuredService && dateStr
@@ -130,13 +122,12 @@ export function ProviderDetailPage({
           providerId,
           serviceId: featuredService.id,
           date: dateStr,
-          memberId: selectedMemberId || undefined,
         }
       : null;
   const { data: slotsData, isLoading: slotsLoading } =
     useAvailableSlots(slotsParams);
   const slotsPayload = slotsData?.data;
-  const timeSlots: any[] = Array.isArray(slotsPayload)
+  const timeSlots: TimeSlot[] = Array.isArray(slotsPayload)
     ? slotsPayload
     : (slotsPayload as any)?.slots || [];
 
@@ -168,12 +159,17 @@ export function ProviderDetailPage({
         assignedMemberId: selectedMemberId || undefined,
       },
       {
-        onSuccess: () => {
+        onSuccess: (data: any) => {
           toast.success("Foglalás sikeresen létrehozva!");
           setBookingDate(undefined);
           setSelectedTime("");
           setSelectedMemberId("");
           setBookingNotes("");
+          // Navigate to booking detail
+          const bookingId = data?.data?.id;
+          if (bookingId && onBookingCreated) {
+            onBookingCreated(bookingId);
+          }
         },
         onError: (err: any) => {
           toast.error(
@@ -353,40 +349,6 @@ export function ProviderDetailPage({
                 Időpont foglalás
               </h3>
 
-              {/* Member selector */}
-              {serviceMembers.length > 1 && (
-                <div className="mb-4">
-                  <Label className="text-sm mb-1.5 block">
-                    Szakember kiválasztása
-                  </Label>
-                  <Select
-                    value={selectedMemberId}
-                    onValueChange={(v: string) => {
-                      setSelectedMemberId(v === "__any__" ? "" : v);
-                      setSelectedTime("");
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Bárki elérhető" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__any__">Bárki elérhető</SelectItem>
-                      {serviceMembers.map((m: any) => {
-                        const mName =
-                          m.displayName ||
-                          `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim() ||
-                          "Munkatárs";
-                        return (
-                          <SelectItem key={m.id} value={m.id}>
-                            {mName}
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
               {/* Calendar */}
               <div className="mb-4">
                 <Label className="text-sm mb-1.5 block">Dátum</Label>
@@ -396,6 +358,7 @@ export function ProviderDetailPage({
                   onSelect={(d: Date | undefined) => {
                     setBookingDate(d);
                     setSelectedTime("");
+                    setSelectedMemberId("");
                   }}
                   disabled={disabledDays}
                   className="rounded-md border w-fit"
@@ -411,34 +374,106 @@ export function ProviderDetailPage({
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Időpontok betöltése...
                     </div>
-                  ) : timeSlots.filter((s: any) => s.isAvailable).length ===
-                    0 ? (
+                  ) : timeSlots.filter((s: TimeSlot) => s.isAvailable)
+                      .length === 0 ? (
                     <p className="text-sm text-muted-foreground py-2">
                       Nincs elérhető időpont ezen a napon.
                     </p>
                   ) : (
                     <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
                       {timeSlots
-                        .filter((s: any) => s.isAvailable)
-                        .map((slot: any) => (
-                          <Button
-                            key={slot.startTime}
-                            size="sm"
-                            variant={
-                              selectedTime === slot.startTime
-                                ? "default"
-                                : "outline"
-                            }
-                            className="text-xs"
-                            onClick={() => setSelectedTime(slot.startTime)}
-                          >
-                            {slot.startTime}
-                          </Button>
-                        ))}
+                        .filter((s: TimeSlot) => s.isAvailable)
+                        .map((slot: TimeSlot) => {
+                          const memberCount =
+                            slot.availableMembers?.length || 0;
+                          return (
+                            <Button
+                              key={slot.startTime}
+                              size="sm"
+                              variant={
+                                selectedTime === slot.startTime
+                                  ? "default"
+                                  : "outline"
+                              }
+                              className="text-xs gap-1.5"
+                              onClick={() => {
+                                setSelectedTime(slot.startTime);
+                                setSelectedMemberId("");
+                              }}
+                            >
+                              {slot.startTime}
+                              {memberCount > 1 && (
+                                <span
+                                  className={`text-[10px] rounded-full h-4 w-4 flex items-center justify-center shrink-0 ${
+                                    selectedTime === slot.startTime
+                                      ? "bg-primary-foreground/20 text-primary-foreground"
+                                      : "bg-primary text-primary-foreground"
+                                  }`}
+                                >
+                                  {memberCount}
+                                </span>
+                              )}
+                            </Button>
+                          );
+                        })}
                     </div>
                   )}
                 </div>
               )}
+
+              {/* Member picker – shown after time selection */}
+              {selectedTime &&
+                (() => {
+                  const selectedSlot = timeSlots.find(
+                    (s: TimeSlot) => s.startTime === selectedTime,
+                  );
+                  const slotMembers = selectedSlot?.availableMembers || [];
+                  if (slotMembers.length <= 1) {
+                    // Auto-select the only member (or let backend auto-assign)
+                    return null;
+                  }
+                  return (
+                    <div className="mb-4">
+                      <Label className="text-sm mb-1.5 block">
+                        Válassz szakembert
+                      </Label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {slotMembers.map((m) => (
+                          <button
+                            key={m.id}
+                            onClick={() => setSelectedMemberId(m.id)}
+                            className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${
+                              selectedMemberId === m.id
+                                ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                                : "border-border hover:border-primary/50 hover:bg-muted/50"
+                            }`}
+                          >
+                            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+                              {m.avatarUrl ? (
+                                <img
+                                  src={m.avatarUrl}
+                                  alt=""
+                                  className="h-8 w-8 rounded-full object-cover"
+                                />
+                              ) : (
+                                <User className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
+                            <span className="text-sm font-medium">
+                              {m.displayName}
+                            </span>
+                            {selectedMemberId === m.id && (
+                              <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Ha nem választasz, automatikusan lesz hozzárendelve.
+                      </p>
+                    </div>
+                  );
+                })()}
 
               {/* Notes */}
               {selectedTime && (

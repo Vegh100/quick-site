@@ -39,11 +39,13 @@ export async function getAvailableSlots(
   const scheduledDate = new Date(date);
   const dayOfWeek = scheduledDate.getDay();
 
-  // Check for service-specific slots first
+  // Check for service-specific slots first (per-member)
   const serviceSlots = await prisma.serviceSlot.findMany({
     where: {
       serviceId,
       dayOfWeek,
+      ...(memberId ? { memberId } : {}),
+      member: { status: "ACTIVE" },
     },
   });
 
@@ -96,58 +98,107 @@ export async function getAvailableSlots(
   });
 
   if (useServiceSlots) {
-    // SERVICE SLOTS MODE: each slot is a pre-defined bookable time block
-    // Find all active members assigned to this service
-    const assignedMembers = await prisma.providerMember.findMany({
-      where: {
-        providerId,
-        status: "ACTIVE",
-        memberServices: { some: { serviceId } },
-        ...(memberId ? { id: memberId } : {}),
+    // SERVICE SLOTS MODE: each slot is a pre-defined bookable time block per member
+    // Fetch member details for all members who have slots
+    const slotMemberIds = [...new Set(serviceSlots.map((s) => s.memberId))];
+    const memberDetails = await prisma.providerMember.findMany({
+      where: { id: { in: slotMemberIds } },
+      select: {
+        id: true,
+        displayName: true,
+        user: { select: { firstName: true, lastName: true, avatarUrl: true } },
       },
-      select: { id: true },
     });
-    const memberIds = assignedMembers.map((m) => m.id);
+    const memberMap = new Map(memberDetails.map((m) => [m.id, m]));
 
-    const sortedSlots = [...serviceSlots].sort((a, b) =>
-      a.startTime.localeCompare(b.startTime),
-    );
-    const slots = sortedSlots.map((ss) => {
-      const endTime = addMinutesToTime(ss.startTime, serviceDuration);
+    // Deduplicate by startTime (multiple members may have the same time)
+    const uniqueStartTimes = [
+      ...new Set(serviceSlots.map((s) => s.startTime)),
+    ].sort();
 
-      let isAvailable = false;
+    const slots = uniqueStartTimes.map((startTime) => {
+      const endTime = addMinutesToTime(startTime, serviceDuration);
+      const availableMembers: {
+        id: string;
+        displayName: string;
+        avatarUrl: string | null;
+      }[] = [];
+
       if (memberId) {
         const conflict = existingBookings.some((b) => {
           const bEnd =
             b.scheduledEndTime ||
             addMinutesToTime(b.scheduledTime, b.durationMin);
-          return b.scheduledTime < endTime && bEnd > ss.startTime;
+          return b.scheduledTime < endTime && bEnd > startTime;
         });
-        isAvailable = !conflict;
+        if (!conflict) {
+          const m = memberMap.get(memberId);
+          if (m) {
+            availableMembers.push({
+              id: m.id,
+              displayName:
+                m.displayName ||
+                `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim() ||
+                "Munkatárs",
+              avatarUrl: m.user?.avatarUrl || null,
+            });
+          }
+        }
       } else {
-        // Check if ANY assigned member is free at this slot
-        for (const mId of memberIds) {
+        // Check each member who has this slot defined
+        const membersWithSlot = serviceSlots
+          .filter((s) => s.startTime === startTime)
+          .map((s) => s.memberId);
+        for (const mId of membersWithSlot) {
           const conflict = existingBookings.some((b) => {
             if (b.assignedMemberId !== mId) return false;
             const bEnd =
               b.scheduledEndTime ||
               addMinutesToTime(b.scheduledTime, b.durationMin);
-            return b.scheduledTime < endTime && bEnd > ss.startTime;
+            return b.scheduledTime < endTime && bEnd > startTime;
           });
           if (!conflict) {
-            isAvailable = true;
-            break;
+            const m = memberMap.get(mId);
+            if (m) {
+              availableMembers.push({
+                id: m.id,
+                displayName:
+                  m.displayName ||
+                  `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim() ||
+                  "Munkatárs",
+                avatarUrl: m.user?.avatarUrl || null,
+              });
+            }
           }
         }
       }
 
-      return { startTime: ss.startTime, endTime, isAvailable };
+      return {
+        startTime,
+        endTime,
+        isAvailable: availableMembers.length > 0,
+        availableMembers,
+      };
     });
 
     return { slots, date, serviceId };
   }
 
   // GENERAL AVAILABILITY MODE (fallback)
+  // Fetch member details for availability-based members
+  const availMemberIds = [
+    ...new Set(availabilities.map((a: any) => a.memberId as string)),
+  ];
+  const availMemberDetails = await prisma.providerMember.findMany({
+    where: { id: { in: availMemberIds } },
+    select: {
+      id: true,
+      displayName: true,
+      user: { select: { firstName: true, lastName: true, avatarUrl: true } },
+    },
+  });
+  const availMemberMap = new Map(availMemberDetails.map((m) => [m.id, m]));
+
   // Merge availability windows to find the widest window
   let earliestStart = "23:59";
   let latestEnd = "00:00";
@@ -175,10 +226,14 @@ export async function getAvailableSlots(
     );
   }
 
-  // For each slot, check if at least one member is free
+  // For each slot, check which members are free
   const slots = allSlots.map((startTime) => {
     const endTime = addMinutesToTime(startTime, serviceDuration);
-    let isAvailable = false;
+    const availableMembers: {
+      id: string;
+      displayName: string;
+      avatarUrl: string | null;
+    }[] = [];
 
     if (memberId) {
       const conflict = existingBookings.some((b) => {
@@ -187,7 +242,19 @@ export async function getAvailableSlots(
           addMinutesToTime(b.scheduledTime, b.durationMin);
         return b.scheduledTime < endTime && bEnd > startTime;
       });
-      isAvailable = !conflict;
+      if (!conflict) {
+        const m = availMemberMap.get(memberId);
+        if (m) {
+          availableMembers.push({
+            id: m.id,
+            displayName:
+              m.displayName ||
+              `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim() ||
+              "Munkatárs",
+            avatarUrl: m.user?.avatarUrl || null,
+          });
+        }
+      }
     } else {
       for (const mId of memberIds) {
         const memberAvail = availabilities.find((a: any) => a.memberId === mId);
@@ -203,13 +270,27 @@ export async function getAvailableSlots(
           return b.scheduledTime < endTime && bEnd > startTime;
         });
         if (!conflict) {
-          isAvailable = true;
-          break;
+          const m = availMemberMap.get(mId);
+          if (m) {
+            availableMembers.push({
+              id: m.id,
+              displayName:
+                m.displayName ||
+                `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim() ||
+                "Munkatárs",
+              avatarUrl: m.user?.avatarUrl || null,
+            });
+          }
         }
       }
     }
 
-    return { startTime, endTime, isAvailable };
+    return {
+      startTime,
+      endTime,
+      isAvailable: availableMembers.length > 0,
+      availableMembers,
+    };
   });
 
   return { slots, date, serviceId };
@@ -249,11 +330,13 @@ export async function createBooking(
     service.durationMin,
   );
 
-  // Check for service-specific slots first
+  // Check for service-specific slots first (per-member)
   const serviceSlots = await prisma.serviceSlot.findMany({
     where: {
       serviceId: data.serviceId,
       dayOfWeek,
+      ...(data.assignedMemberId ? { memberId: data.assignedMemberId } : {}),
+      member: { status: "ACTIVE" },
     },
   });
 
@@ -352,25 +435,26 @@ export async function createBooking(
   let autoAssignMemberId: string | null = null;
   if (!data.assignedMemberId) {
     if (hasServiceSlots) {
-      // Service slots mode: find any assigned member who is free at this time
-      const assignedMembers = await prisma.providerMember.findMany({
+      // Service slots mode: find members who have this specific time slot defined and are free
+      const membersWithSlot = await prisma.serviceSlot.findMany({
         where: {
-          providerId: data.providerId,
-          status: "ACTIVE",
-          memberServices: { some: { serviceId: data.serviceId } },
+          serviceId: data.serviceId,
+          dayOfWeek,
+          startTime: data.scheduledTime,
+          member: { status: "ACTIVE" },
         },
-        select: { id: true },
+        select: { memberId: true },
       });
-      for (const am of assignedMembers) {
+      for (const { memberId } of membersWithSlot) {
         const memberConflict = overlapping.some((b) => {
-          if (b.assignedMemberId !== am.id) return false;
+          if (b.assignedMemberId !== memberId) return false;
           const bEnd =
             b.scheduledEndTime ||
             addMinutesToTime(b.scheduledTime, b.durationMin);
           return b.scheduledTime < bookingEndTime && bEnd > data.scheduledTime;
         });
         if (!memberConflict) {
-          autoAssignMemberId = am.id;
+          autoAssignMemberId = memberId;
           break;
         }
       }

@@ -55,6 +55,14 @@ export default function App() {
           />
           <Route element={<RequireRole role="CUSTOMER" />}>
             <Route path="/ugyfel" element={<CustomerApp />} />
+            <Route
+              path="/ugyfel/szolgaltato/:providerId"
+              element={<CustomerApp />}
+            />
+            <Route
+              path="/ugyfel/foglalas/:bookingId"
+              element={<CustomerApp />}
+            />
             <Route path="/ugyfel/:tab" element={<CustomerApp />} />
           </Route>
 

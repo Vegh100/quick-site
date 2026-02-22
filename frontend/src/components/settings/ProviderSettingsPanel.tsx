@@ -690,9 +690,12 @@ export function ProviderSettingsPanel() {
                         </Button>
                       </div>
                     </div>
-                    {slotPickerServiceId === svc.id && (
+                    {slotPickerServiceId === svc.id && currentMember && (
                       <div className="px-4 pb-4">
-                        <ServiceSlotPicker service={svc} />
+                        <ServiceSlotPicker
+                          service={svc}
+                          memberId={currentMember.id}
+                        />
                       </div>
                     )}
                   </div>

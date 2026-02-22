@@ -42,6 +42,7 @@ export const setAvailabilitySchema = z.object({
 
 export const setServiceSlotsSchema = z.object({
   serviceId: z.string().uuid(),
+  memberId: z.string().uuid(),
   slots: z.array(
     z.object({
       dayOfWeek: z.number().int().min(0).max(6),

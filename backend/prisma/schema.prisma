@@ -154,6 +154,7 @@ model ProviderMember {
   assignedBookings Booking[]       @relation("AssignedMember")
   memberServices   MemberService[]
   availability     Availability[]
+  serviceSlots     ServiceSlot[]
 
   @@index([providerId])
   @@index([userId])
@@ -331,14 +332,17 @@ model Availability {
 model ServiceSlot {
   id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   serviceId   String         @map("service_id") @db.Uuid
+  memberId    String         @map("member_id") @db.Uuid
   dayOfWeek   Int            @map("day_of_week")
   startTime   String         @map("start_time") @db.VarChar(5)
   endTime     String         @map("end_time") @db.VarChar(5)
 
   service     Service        @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  member      ProviderMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 
-  @@unique([serviceId, dayOfWeek, startTime])
+  @@unique([serviceId, memberId, dayOfWeek, startTime])
   @@index([serviceId, dayOfWeek])
+  @@index([memberId])
   @@map("service_slots")
 }
 

@@ -190,6 +190,7 @@ export async function getServiceSlots(
     const slots = await providerService.getServiceSlots(
       req.user!.userId,
       req.params.serviceId,
+      req.query.memberId as string | undefined,
     );
     res.json({ success: true, data: slots });
   } catch (error) {

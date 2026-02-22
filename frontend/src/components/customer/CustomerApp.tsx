@@ -40,6 +40,7 @@ import {
 import { CustomerSettingsPanel } from "../settings/CustomerSettingsPanel";
 import { BookingModal } from "../booking/BookingModal";
 import { ProviderDetailPage } from "./ProviderDetailPage";
+import { BookingDetailPage } from "./BookingDetailPage";
 import { Toaster } from "../ui/sonner";
 import { toast } from "sonner";
 import type {
@@ -80,10 +81,19 @@ const TAB_TO_URL: Record<string, string> = {
 };
 
 export function CustomerApp() {
-  const { tab: urlTab } = useParams<{ tab?: string }>();
+  const {
+    tab: urlTab,
+    providerId: urlProviderId,
+    bookingId: urlBookingId,
+  } = useParams<{ tab?: string; providerId?: string; bookingId?: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, logout } = useAuth();
+
+  // Detail views are now URL-driven
+  const detailProviderId = urlProviderId || null;
+  const detailServiceId = searchParams.get("service") || null;
+  const detailBookingId = urlBookingId || null;
 
   const activeTab = urlTab ? TAB_FROM_URL[urlTab] || "discover" : "discover";
   const setActiveTab = (tab: string) => {
@@ -100,8 +110,6 @@ export function CustomerApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [bookingProvider, setBookingProvider] = useState<Provider | null>(null);
-  const [detailProviderId, setDetailProviderId] = useState<string | null>(null);
-  const [detailServiceId, setDetailServiceId] = useState<string | null>(null);
   const [bookingTab, setBookingTab] = useState("upcoming");
   const [page, setPage] = useState(1);
 
@@ -292,14 +300,19 @@ export function CustomerApp() {
       </div>
 
       <main className="flex-1 container mx-auto px-4 py-8">
-        {/* Provider Detail Page */}
-        {detailProviderId ? (
+        {/* Booking Detail Page */}
+        {detailBookingId ? (
+          <BookingDetailPage
+            bookingId={detailBookingId}
+            onBack={() => navigate(-1)}
+          />
+        ) : detailProviderId ? (
           <ProviderDetailPage
             providerId={detailProviderId}
             initialServiceId={detailServiceId}
-            onBack={() => {
-              setDetailProviderId(null);
-              setDetailServiceId(null);
+            onBack={() => navigate(-1)}
+            onBookingCreated={(bookingId) => {
+              navigate(`/ugyfel/foglalas/${bookingId}`, { replace: true });
             }}
           />
         ) : (
@@ -511,8 +524,9 @@ export function CustomerApp() {
                           key={`${provider.id}-${service.id}`}
                           className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
                           onClick={() => {
-                            setDetailProviderId(provider.id);
-                            setDetailServiceId(service.id);
+                            navigate(
+                              `/ugyfel/szolgaltato/${provider.id}?service=${service.id}`,
+                            );
                           }}
                         >
                           <div className="p-5 space-y-3">
@@ -673,7 +687,13 @@ export function CustomerApp() {
                     ) : (
                       <div className="space-y-4">
                         {bookings.map((booking) => (
-                          <Card key={booking.id} className="p-6">
+                          <Card
+                            key={booking.id}
+                            className="p-6 cursor-pointer hover:border-primary/50 transition-colors"
+                            onClick={() =>
+                              navigate(`/ugyfel/foglalas/${booking.id}`)
+                            }
+                          >
                             <div className="flex items-start justify-between">
                               <div className="flex gap-4">
                                 <div className="h-16 w-16 bg-muted rounded-lg flex items-center justify-center">
@@ -729,9 +749,10 @@ export function CustomerApp() {
                                   <Button
                                     size="sm"
                                     variant="destructive"
-                                    onClick={() =>
-                                      handleCancelBooking(booking.id)
-                                    }
+                                    onClick={(e: React.MouseEvent) => {
+                                      e.stopPropagation();
+                                      handleCancelBooking(booking.id);
+                                    }}
                                     disabled={cancelBooking.isPending}
                                   >
                                     <XCircle className="h-3 w-3 mr-1" />
@@ -745,7 +766,8 @@ export function CustomerApp() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => {
+                                      onClick={(e: React.MouseEvent) => {
+                                        e.stopPropagation();
                                         setReviewBooking(booking);
                                         setReviewRating(5);
                                         setReviewComment("");
@@ -824,7 +846,9 @@ export function CustomerApp() {
                           <Button
                             size="sm"
                             className="mt-3"
-                            onClick={() => setDetailProviderId(p.id)}
+                            onClick={() =>
+                              navigate(`/ugyfel/szolgaltato/${p.id}`)
+                            }
                           >
                             Részletek
                           </Button>

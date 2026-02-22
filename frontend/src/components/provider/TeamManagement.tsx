@@ -708,7 +708,10 @@ function MemberDetailPanel({
                     {/* Slot picker */}
                     {ms.service && showSlotPicker === ms.serviceId && (
                       <div className="px-4 pb-4 border-t">
-                        <ServiceSlotPicker service={ms.service} />
+                        <ServiceSlotPicker
+                          service={ms.service}
+                          memberId={detail.id}
+                        />
                       </div>
                     )}
                   </div>

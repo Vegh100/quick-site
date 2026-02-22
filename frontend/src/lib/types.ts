@@ -71,10 +71,17 @@ export interface ServiceType {
   };
 }
 
+export interface SlotMember {
+  id: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
 export interface TimeSlot {
   startTime: string;
   endTime: string;
   isAvailable: boolean;
+  availableMembers?: SlotMember[];
 }
 
 export interface ProviderCategory {
@@ -97,6 +104,7 @@ export interface Service {
   isActive: boolean;
   sortOrder: number;
   serviceType?: ServiceType;
+  serviceSlots?: { dayOfWeek: number; memberId: string }[];
 }
 
 export interface Availability {
@@ -112,6 +120,7 @@ export interface Availability {
 export interface ServiceSlot {
   id: string;
   serviceId: string;
+  memberId: string;
   dayOfWeek: number;
   startTime: string;
   endTime: string;

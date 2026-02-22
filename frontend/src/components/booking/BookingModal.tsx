@@ -24,7 +24,7 @@ import {
 } from "../../hooks/useApi";
 import { toast } from "sonner";
 import { Loader2, Clock, CheckCircle2 } from "lucide-react";
-import type { Provider } from "../../lib/types";
+import type { Provider, TimeSlot } from "../../lib/types";
 
 interface BookingModalProps {
   provider: Provider;
@@ -53,13 +53,9 @@ export function BookingModal({
   const services = resolvedProvider.services || [];
   const selectedService = services.find((s) => s.id === selectedServiceId);
 
-  // Derive availability from members to disable calendar days
+  // Derive availability from all members to disable calendar days
   const availability = useMemo(() => {
     const members = resolvedProvider.members || [];
-    if (selectedMemberId) {
-      const member = members.find((m) => m.id === selectedMemberId);
-      return member?.availability || [];
-    }
     const merged = new Map<
       number,
       {
@@ -83,9 +79,15 @@ export function BookingModal({
       }
     }
     return Array.from(merged.values());
-  }, [resolvedProvider.members, selectedMemberId]);
+  }, [resolvedProvider.members]);
 
-  // Fetch available slots from API when we have all required data
+  // Collect days with service slots for the selected service
+  const serviceSlotDays = useMemo(() => {
+    if (!selectedService?.serviceSlots) return new Set<number>();
+    return new Set(selectedService.serviceSlots.map((s) => s.dayOfWeek));
+  }, [selectedService]);
+
+  // Fetch available slots from API (all members merged)
   const dateStr = date ? date.toISOString().split("T")[0] : "";
   const slotsParams =
     selectedServiceId && dateStr
@@ -93,18 +95,19 @@ export function BookingModal({
           providerId: provider.id,
           serviceId: selectedServiceId,
           date: dateStr,
-          memberId: selectedMemberId || undefined,
         }
       : null;
   const { data: slotsData, isLoading: loadingSlots } =
     useAvailableSlots(slotsParams);
-  const timeSlots = slotsData?.data?.slots || [];
+  const timeSlots: TimeSlot[] = slotsData?.data?.slots || [];
 
   // Disable days where provider is not available or in the past
   const disabledDays = (checkDate: Date) => {
     if (checkDate < new Date(new Date().setHours(0, 0, 0, 0))) return true;
-    if (availability.length === 0) return false;
     const dow = checkDate.getDay();
+    // Enable if there are service slots on this day
+    if (serviceSlotDays.has(dow)) return false;
+    if (availability.length === 0) return false;
     return !availability.some((a) => a.dayOfWeek === dow && a.isEnabled);
   };
 
@@ -175,36 +178,7 @@ export function BookingModal({
           </div>
 
           {/* Member selection when provider has team members */}
-          {resolvedProvider.members && resolvedProvider.members.length > 1 && (
-            <div>
-              <Label>Szakember kiválasztása</Label>
-              <Select
-                value={selectedMemberId}
-                onValueChange={(v) => {
-                  setSelectedMemberId(v);
-                  setSelectedTime("");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Válassz szakembert (opcionális)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">Bárki elérhető</SelectItem>
-                  {resolvedProvider.members.map((member) => {
-                    const name =
-                      member.displayName ||
-                      `${member.user?.firstName || ""} ${member.user?.lastName || ""}`.trim() ||
-                      "Munkatárs";
-                    return (
-                      <SelectItem key={member.id} value={member.id}>
-                        {name}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+          {/* Removed: member pre-selection moved to after time slot pick */}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Calendar */}
@@ -217,6 +191,7 @@ export function BookingModal({
                   onSelect={(d) => {
                     setDate(d);
                     setSelectedTime("");
+                    setSelectedMemberId("");
                   }}
                   className="rounded-md"
                   disabled={disabledDays}
@@ -241,7 +216,7 @@ export function BookingModal({
                     <Loader2 className="h-4 w-4 animate-spin" />
                     Időpontok betöltése...
                   </div>
-                ) : timeSlots.length === 0 ? (
+                ) : timeSlots.filter((s) => s.isAvailable).length === 0 ? (
                   <p className="text-sm text-muted-foreground mt-2">
                     Nincs elérhető időpont ezen a napon
                   </p>
@@ -249,15 +224,17 @@ export function BookingModal({
                   <div className="grid grid-cols-3 gap-2 mt-2 max-h-[260px] overflow-y-auto pr-1">
                     {timeSlots.map((slot) => {
                       const isSelected = selectedTime === slot.startTime;
+                      const memberCount = slot.availableMembers?.length || 0;
                       return (
                         <button
                           key={slot.startTime}
                           disabled={!slot.isAvailable}
-                          onClick={() =>
-                            setSelectedTime(isSelected ? "" : slot.startTime)
-                          }
+                          onClick={() => {
+                            setSelectedTime(isSelected ? "" : slot.startTime);
+                            setSelectedMemberId("");
+                          }}
                           className={`
-                            relative flex items-center justify-center gap-1 px-2 py-2 rounded-lg border text-sm font-medium transition-all
+                            flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg border text-sm font-medium transition-all
                             ${
                               !slot.isAvailable
                                 ? "bg-muted/50 text-muted-foreground/40 border-muted cursor-not-allowed line-through"
@@ -272,12 +249,66 @@ export function BookingModal({
                           {isSelected && (
                             <CheckCircle2 className="h-3 w-3 ml-0.5" />
                           )}
+                          {memberCount > 1 && !isSelected && (
+                            <span className="bg-primary text-primary-foreground text-[10px] rounded-full h-4 w-4 flex items-center justify-center shrink-0">
+                              {memberCount}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
                 )}
               </div>
+
+              {/* Member picker for selected time */}
+              {selectedTime &&
+                (() => {
+                  const selectedSlot = timeSlots.find(
+                    (s) => s.startTime === selectedTime,
+                  );
+                  const slotMembers = selectedSlot?.availableMembers || [];
+                  if (slotMembers.length <= 1) return null;
+                  return (
+                    <div>
+                      <Label>Válassz szakembert</Label>
+                      <div className="grid grid-cols-1 gap-2 mt-1.5">
+                        {slotMembers.map((m) => (
+                          <button
+                            key={m.id}
+                            onClick={() => setSelectedMemberId(m.id)}
+                            className={`flex items-center gap-3 p-2.5 rounded-lg border text-left transition-all text-sm ${
+                              selectedMemberId === m.id
+                                ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                                : "border-border hover:border-primary/50 hover:bg-muted/50"
+                            }`}
+                          >
+                            <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0">
+                              {m.avatarUrl ? (
+                                <img
+                                  src={m.avatarUrl}
+                                  alt=""
+                                  className="h-7 w-7 rounded-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  {m.displayName.charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-medium">{m.displayName}</span>
+                            {selectedMemberId === m.id && (
+                              <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Ha nem választasz, automatikusan lesz hozzárendelve.
+                      </p>
+                    </div>
+                  );
+                })()}
 
               {/* Service summary */}
               {selectedService && (

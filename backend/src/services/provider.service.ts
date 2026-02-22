@@ -188,7 +188,12 @@ export async function getProviderById(providerId: string) {
       services: {
         where: { isActive: true },
         orderBy: { sortOrder: "asc" },
-        include: { serviceType: { include: { category: true } } },
+        include: {
+          serviceType: { include: { category: true } },
+          serviceSlots: {
+            select: { dayOfWeek: true, memberId: true },
+          },
+        },
       },
       members: {
         where: { status: "ACTIVE" },
@@ -510,15 +515,22 @@ export async function setServiceSlots(
   });
   if (!service) throw new NotFoundError("Service");
 
-  // Delete all existing slots for this service, then recreate
+  // Verify member belongs to this provider
+  const member = await prisma.providerMember.findFirst({
+    where: { id: data.memberId, providerId: provider.id },
+  });
+  if (!member) throw new NotFoundError("Member");
+
+  // Delete all existing slots for this service+member, then recreate
   await prisma.serviceSlot.deleteMany({
-    where: { serviceId: data.serviceId },
+    where: { serviceId: data.serviceId, memberId: data.memberId },
   });
 
   if (data.slots.length > 0) {
     await prisma.serviceSlot.createMany({
       data: data.slots.map((slot) => ({
         serviceId: data.serviceId,
+        memberId: data.memberId,
         dayOfWeek: slot.dayOfWeek,
         startTime: slot.startTime,
         endTime: slot.endTime,
@@ -527,12 +539,16 @@ export async function setServiceSlots(
   }
 
   return prisma.serviceSlot.findMany({
-    where: { serviceId: data.serviceId },
+    where: { serviceId: data.serviceId, memberId: data.memberId },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
   });
 }
 
-export async function getServiceSlots(userId: string, serviceId: string) {
+export async function getServiceSlots(
+  userId: string,
+  serviceId: string,
+  memberId?: string,
+) {
   const { provider } = await getProviderForUser(userId);
 
   // Verify service belongs to this provider
@@ -542,7 +558,7 @@ export async function getServiceSlots(userId: string, serviceId: string) {
   if (!service) throw new NotFoundError("Service");
 
   return prisma.serviceSlot.findMany({
-    where: { serviceId },
+    where: { serviceId, ...(memberId ? { memberId } : {}) },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
   });
 }

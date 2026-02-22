@@ -10,6 +10,7 @@ import type { Service } from "../../lib/types";
 
 interface ServiceSlotPickerProps {
   service: Service;
+  memberId: string;
 }
 
 const DAYS_HU = [
@@ -70,8 +71,11 @@ function generateSlots(
   return slots;
 }
 
-export function ServiceSlotPicker({ service }: ServiceSlotPickerProps) {
-  const { data: slotsData, isLoading } = useServiceSlots(service.id);
+export function ServiceSlotPicker({
+  service,
+  memberId,
+}: ServiceSlotPickerProps) {
+  const { data: slotsData, isLoading } = useServiceSlots(service.id, memberId);
   const setSlotsMut = useSetServiceSlots();
 
   const durationMin = service.durationMin;
@@ -236,6 +240,7 @@ export function ServiceSlotPicker({ service }: ServiceSlotPickerProps) {
     try {
       await setSlotsMut.mutateAsync({
         serviceId: service.id,
+        memberId,
         slots: allSlots,
       });
       toast.success("Időpontok mentve!");

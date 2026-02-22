@@ -221,21 +221,25 @@ export const providerApi = {
       >("/providers/me/availability", { memberId, availability })
       .then((r) => r.data),
 
-  getServiceSlots: (serviceId: string) =>
+  getServiceSlots: (serviceId: string, memberId?: string) =>
     api
-      .get<
-        ApiResponse<ServiceSlot[]>
-      >(`/providers/me/service-slots/${serviceId}`)
+      .get<ApiResponse<ServiceSlot[]>>(
+        `/providers/me/service-slots/${serviceId}`,
+        {
+          params: memberId ? { memberId } : undefined,
+        },
+      )
       .then((r) => r.data),
 
   setServiceSlots: (
     serviceId: string,
+    memberId: string,
     slots: { dayOfWeek: number; startTime: string; endTime: string }[],
   ) =>
     api
       .put<
         ApiResponse<ServiceSlot[]>
-      >("/providers/me/service-slots", { serviceId, slots })
+      >("/providers/me/service-slots", { serviceId, memberId, slots })
       .then((r) => r.data),
 
   updatePricingSettings: (data: {
