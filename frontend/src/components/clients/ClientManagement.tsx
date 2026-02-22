@@ -16,9 +16,18 @@ import {
   Loader2,
 } from "lucide-react";
 
-export function ClientManagement() {
+interface ClientManagementProps {
+  memberId?: string;
+}
+
+export function ClientManagement({ memberId }: ClientManagementProps = {}) {
   const [searchQuery, setSearchQuery] = useState("");
-  const { data: clientsData, isLoading } = useProviderClients(1, 50);
+  const { data: clientsData, isLoading } = useProviderClients(
+    1,
+    50,
+    true,
+    memberId,
+  );
 
   const clients = clientsData?.data?.clients || [];
   const filteredClients = clients.filter((client) => {

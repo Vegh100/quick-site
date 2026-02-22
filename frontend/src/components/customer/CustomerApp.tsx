@@ -12,6 +12,7 @@ import {
 } from "../../hooks/useApi";
 import { HeaderWithSettings } from "../layout/HeaderWithSettings";
 import { Footer } from "../layout/Footer";
+import { ErrorBoundary } from "../common/ErrorBoundary";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Card } from "../ui/card";
@@ -307,14 +308,16 @@ export function CustomerApp() {
             onBack={() => navigate(-1)}
           />
         ) : detailProviderId ? (
-          <ProviderDetailPage
-            providerId={detailProviderId}
-            initialServiceId={detailServiceId}
-            onBack={() => navigate(-1)}
-            onBookingCreated={(bookingId) => {
-              navigate(`/ugyfel/foglalas/${bookingId}`, { replace: true });
-            }}
-          />
+          <ErrorBoundary>
+            <ProviderDetailPage
+              providerId={detailProviderId}
+              initialServiceId={detailServiceId}
+              onBack={() => navigate(-1)}
+              onBookingCreated={(bookingId) => {
+                navigate(`/ugyfel/foglalas/${bookingId}`, { replace: true });
+              }}
+            />
+          </ErrorBoundary>
         ) : (
           <>
             {/* Discovery Tab */}

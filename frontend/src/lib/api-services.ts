@@ -252,16 +252,18 @@ export const providerApi = {
       .patch<ApiResponse<Provider>>("/providers/me/pricing", data)
       .then((r) => r.data),
 
-  getStats: () =>
+  getStats: (memberId?: string) =>
     api
-      .get<ApiResponse<ProviderStats>>("/providers/me/stats")
+      .get<ApiResponse<ProviderStats>>("/providers/me/stats", {
+        params: memberId ? { memberId } : undefined,
+      })
       .then((r) => r.data),
 
-  getClients: (page?: number, limit?: number) =>
+  getClients: (page?: number, limit?: number, memberId?: string) =>
     api
       .get<
         ApiResponse<{ clients: ProviderClient[]; meta: PaginationMeta }>
-      >("/providers/me/clients", { params: { page, limit } })
+      >("/providers/me/clients", { params: { page, limit, memberId } })
       .then((r) => r.data),
 };
 
@@ -303,6 +305,7 @@ export const bookingApi = {
 
   getProviderBookings: (params?: {
     status?: string;
+    memberId?: string;
     dateFrom?: string;
     dateTo?: string;
     page?: number;

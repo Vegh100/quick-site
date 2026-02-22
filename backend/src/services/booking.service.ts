@@ -731,6 +731,11 @@ export async function getProviderBookings(
     where.assignedMemberId = member.id;
   }
 
+  // OWNERs can optionally filter by a specific member
+  if (memberRole === "OWNER" && filters.memberId) {
+    where.assignedMemberId = filters.memberId;
+  }
+
   if (filters.status) {
     const statuses = filters.status.split(",") as BookingStatus[];
     where.status = statuses.length > 1 ? { in: statuses } : statuses[0];
@@ -819,7 +824,18 @@ export async function getBookingById(userId: string, bookingId: string) {
           firstName: true,
           lastName: true,
           email: true,
+          phone: true,
           avatarUrl: true,
+        },
+      },
+      assignedMember: {
+        select: {
+          id: true,
+          displayName: true,
+          role: true,
+          user: {
+            select: { firstName: true, lastName: true, avatarUrl: true },
+          },
         },
       },
       address: true,

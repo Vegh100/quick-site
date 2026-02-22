@@ -14,6 +14,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import { useProviderBookings } from "../../hooks/useApi";
 import type { Booking, BookingStatus } from "../../lib/types";
 
@@ -51,20 +52,40 @@ const HOUR_END = 21;
 const HOUR_HEIGHT = 64;
 const VISIBLE_DAYS = 3;
 
-const STATUS_BG: Record<BookingStatus, string> = {
-  PENDING: "bg-amber-400/90 border-amber-500 text-amber-950",
-  CONFIRMED: "bg-blue-500/90 border-blue-600 text-white",
-  IN_PROGRESS: "bg-purple-500/90 border-purple-600 text-white",
-  COMPLETED: "bg-emerald-500/80 border-emerald-600 text-white",
-  CANCELLED: "bg-red-400/60 border-red-500 text-red-950 line-through",
+const STATUS_STYLE: Record<BookingStatus, React.CSSProperties> = {
+  PENDING: {
+    backgroundColor: "rgba(251, 191, 36, 0.9)",
+    borderColor: "#f59e0b",
+    color: "#451a03",
+  },
+  CONFIRMED: {
+    backgroundColor: "rgba(59, 130, 246, 0.9)",
+    borderColor: "#2563eb",
+    color: "#fff",
+  },
+  IN_PROGRESS: {
+    backgroundColor: "rgba(168, 85, 247, 0.9)",
+    borderColor: "#9333ea",
+    color: "#fff",
+  },
+  COMPLETED: {
+    backgroundColor: "rgba(16, 185, 129, 0.8)",
+    borderColor: "#059669",
+    color: "#fff",
+  },
+  CANCELLED: {
+    backgroundColor: "rgba(248, 113, 113, 0.6)",
+    borderColor: "#ef4444",
+    color: "#450a0a",
+  },
 };
 
-const STATUS_DOT: Record<BookingStatus, string> = {
-  PENDING: "bg-yellow-500",
-  CONFIRMED: "bg-blue-500",
-  IN_PROGRESS: "bg-purple-500",
-  COMPLETED: "bg-green-500",
-  CANCELLED: "bg-red-500",
+const STATUS_DOT_COLOR: Record<BookingStatus, string> = {
+  PENDING: "#eab308",
+  CONFIRMED: "#3b82f6",
+  IN_PROGRESS: "#a855f7",
+  COMPLETED: "#22c55e",
+  CANCELLED: "#ef4444",
 };
 
 const STATUS_HU: Record<BookingStatus, string> = {
@@ -115,7 +136,11 @@ function getDayOfWeekHu(d: Date): string {
 
 type ViewMode = "month" | "day";
 
-export function CalendarView() {
+interface CalendarViewProps {
+  memberId?: string;
+}
+
+export function CalendarView({ memberId }: CalendarViewProps = {}) {
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [focusDate, setFocusDate] = useState(new Date());
@@ -138,7 +163,7 @@ export function CalendarView() {
   }, [viewMode, year, month, focusDate]);
 
   const { data: bookingsData, isLoading } = useProviderBookings(
-    { ...fetchRange, limit: 500 },
+    { ...fetchRange, limit: 500, ...(memberId ? { memberId } : {}) },
     true,
   );
   const bookings: Booking[] = bookingsData?.data?.bookings || [];
@@ -279,42 +304,100 @@ export function CalendarView() {
                   const dayBookings = bookingsByDate.get(key) || [];
                   const isToday = isSameDay(date, today);
                   const hasBookings = dayBookings.length > 0;
+                  const pendingCount2 = dayBookings.filter(
+                    (b) => b.status === "PENDING",
+                  ).length;
+                  const confirmedCount2 = dayBookings.filter(
+                    (b) =>
+                      b.status === "CONFIRMED" || b.status === "IN_PROGRESS",
+                  ).length;
+                  const hasPending = pendingCount2 > 0;
 
                   return (
                     <button
                       key={day}
                       onClick={() => openDay(date)}
                       className={[
-                        "aspect-square border rounded-lg p-1.5 hover:bg-muted/50 transition-all text-left flex flex-col cursor-pointer",
+                        "aspect-square border rounded-lg p-1 hover:bg-muted/50 transition-all text-left flex flex-col cursor-pointer relative overflow-hidden",
                         isToday
                           ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                          : "border-border",
-                        !hasBookings ? "opacity-60" : "",
+                          : hasBookings
+                            ? "border-border"
+                            : "border-border opacity-50",
                       ].join(" ")}
+                      style={
+                        hasPending
+                          ? { borderLeftWidth: 3, borderLeftColor: "#eab308" }
+                          : hasBookings && !hasPending
+                            ? {
+                                borderLeftWidth: 3,
+                                borderLeftColor: "#3b82f6",
+                              }
+                            : undefined
+                      }
                     >
-                      <span
-                        className={[
-                          "text-sm font-medium",
-                          isToday ? "text-primary font-bold" : "",
-                        ].join(" ")}
-                      >
-                        {day}
-                      </span>
+                      {/* Day number + booking count badge */}
+                      <div className="flex items-start justify-between w-full">
+                        <span
+                          className={[
+                            "text-sm font-medium leading-none",
+                            isToday ? "text-primary font-bold" : "",
+                          ].join(" ")}
+                        >
+                          {day}
+                        </span>
+                        {hasBookings && (
+                          <span
+                            className="text-[10px] font-bold leading-none rounded-full min-w-[16px] h-[16px] flex items-center justify-center"
+                            style={{
+                              backgroundColor: hasPending
+                                ? "#fef3c7"
+                                : "#dbeafe",
+                              color: hasPending ? "#92400e" : "#1e40af",
+                            }}
+                          >
+                            {dayBookings.length}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Mini booking info */}
                       {hasBookings && (
-                        <div className="flex flex-wrap gap-0.5 mt-auto">
-                          {dayBookings.slice(0, 4).map((b) => (
-                            <div
-                              key={b.id}
-                              className={[
-                                "w-1.5 h-1.5 rounded-full",
-                                STATUS_DOT[b.status],
-                              ].join(" ")}
-                              title={`${b.scheduledTime} - ${b.service?.name || "Foglalás"}`}
-                            />
-                          ))}
-                          {dayBookings.length > 4 && (
-                            <span className="text-[10px] text-muted-foreground leading-none">
-                              +{dayBookings.length - 4}
+                        <div className="flex flex-col gap-0.5 mt-auto w-full min-w-0 overflow-hidden">
+                          {/* Status summary dots + text */}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {dayBookings.slice(0, 3).map((b) => (
+                              <div
+                                key={b.id}
+                                className="w-2 h-2 rounded-full flex-shrink-0"
+                                style={{
+                                  backgroundColor: STATUS_DOT_COLOR[b.status],
+                                }}
+                                title={`${b.scheduledTime} - ${b.service?.name || "Foglalás"} (${STATUS_HU[b.status]})`}
+                              />
+                            ))}
+                            {dayBookings.length > 3 && (
+                              <span className="text-[9px] text-muted-foreground leading-none flex-shrink-0">
+                                +{dayBookings.length - 3}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Pending label if any */}
+                          {hasPending && (
+                            <span
+                              className="text-[9px] font-medium leading-tight truncate hidden md:block"
+                              style={{ color: "#b45309" }}
+                            >
+                              {pendingCount2} függőben
+                            </span>
+                          )}
+                          {!hasPending && confirmedCount2 > 0 && (
+                            <span
+                              className="text-[9px] font-medium leading-tight truncate hidden md:block"
+                              style={{ color: "#2563eb" }}
+                            >
+                              {confirmedCount2} megerősítve
                             </span>
                           )}
                         </div>
@@ -339,10 +422,8 @@ export function CalendarView() {
             ).map((status) => (
               <div key={status} className="flex items-center gap-1.5">
                 <div
-                  className={[
-                    "w-2.5 h-2.5 rounded-full",
-                    STATUS_DOT[status],
-                  ].join(" ")}
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: STATUS_DOT_COLOR[status] }}
                 />
                 <span className="text-xs text-muted-foreground">
                   {STATUS_HU[status]}
@@ -522,9 +603,8 @@ export function CalendarView() {
         ).map((status) => (
           <div key={status} className="flex items-center gap-1.5">
             <div
-              className={["w-2.5 h-2.5 rounded-full", STATUS_DOT[status]].join(
-                " ",
-              )}
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: STATUS_DOT_COLOR[status] }}
             />
             <span className="text-xs text-muted-foreground">
               {STATUS_HU[status]}
@@ -652,12 +732,15 @@ function BookingBlock({
         .trim()
     : null;
 
+  const statusStyle = STATUS_STYLE[booking.status];
+  const isCancelled = booking.status === "CANCELLED";
+
   return (
     <button
       onClick={onSelect}
       className={[
         "absolute left-1 right-1 rounded-md border px-2 py-1 text-left overflow-hidden transition-all z-10 cursor-pointer",
-        STATUS_BG[booking.status],
+        isCancelled ? "line-through" : "",
         isSelected
           ? "ring-2 ring-primary shadow-lg z-30"
           : "hover:shadow-md hover:z-20",
@@ -665,6 +748,7 @@ function BookingBlock({
       style={{
         top: Math.max(top, 0),
         height: Math.max(height, 22),
+        ...statusStyle,
       }}
     >
       <div className="flex items-center gap-1 text-[11px] font-semibold leading-tight truncate">
@@ -778,10 +862,8 @@ function BookingDetailPanel({
         {/* Status + member */}
         <div className="flex items-start gap-2">
           <div
-            className={[
-              "w-2.5 h-2.5 rounded-full mt-1.5 shrink-0",
-              STATUS_DOT[booking.status],
-            ].join(" ")}
+            className="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0"
+            style={{ backgroundColor: STATUS_DOT_COLOR[booking.status] }}
           />
           <div>
             <Badge variant="outline" className="text-xs">
@@ -816,6 +898,29 @@ function BookingDetailPanel({
           </p>
         </div>
       )}
+
+      {/* Navigate to booking */}
+      <div className="mt-4 pt-4 border-t flex justify-end">
+        <BookingDetailButton bookingId={booking.id} />
+      </div>
     </Card>
+  );
+}
+
+// ============================================================================
+// BOOKING DETAIL BUTTON (needs useNavigate inside router context)
+// ============================================================================
+
+function BookingDetailButton({ bookingId }: { bookingId: string }) {
+  const navigate = useNavigate();
+  return (
+    <Button
+      size="sm"
+      onClick={() => navigate(`/szolgaltato/foglalas/${bookingId}`)}
+      className="gap-1.5"
+    >
+      <ArrowLeft className="h-4 w-4 rotate-180" />
+      Részletek megtekintése
+    </Button>
   );
 }

@@ -17,6 +17,7 @@ export const updateBookingStatusSchema = z.object({
 
 export const bookingFilterSchema = z.object({
   status: z.string().optional(),
+  memberId: z.string().optional(),
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   page: z.coerce.number().int().positive().default(1),

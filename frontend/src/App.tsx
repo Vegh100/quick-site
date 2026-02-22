@@ -12,6 +12,7 @@ import {
   GuestRoute,
   RequireRole,
 } from "./components/auth/ProtectedRoute";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { Toaster } from "./components/ui/sonner";
 import { Loader2 } from "lucide-react";
 
@@ -27,7 +28,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <Routes>
         {/* Guest-only routes — authenticated users are redirected to dashboard */}
         <Route element={<GuestRoute />}>
@@ -73,6 +74,10 @@ export default function App() {
           />
           <Route element={<RequireRole role="PROVIDER" />}>
             <Route path="/szolgaltato" element={<ProviderApp />} />
+            <Route
+              path="/szolgaltato/foglalas/:bookingId"
+              element={<ProviderApp />}
+            />
             <Route path="/szolgaltato/:tab" element={<ProviderApp />} />
           </Route>
         </Route>
@@ -81,6 +86,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Toaster />
-    </>
+    </ErrorBoundary>
   );
 }

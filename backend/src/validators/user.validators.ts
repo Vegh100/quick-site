@@ -12,6 +12,9 @@ export const addAddressSchema = z.object({
   city: z.string().min(1).max(100),
   zipCode: z.string().min(1).max(20),
   country: z.string().length(2).default("RO"),
+  latitude: z.number().min(-90).max(90).optional().nullable(),
+  longitude: z.number().min(-180).max(180).optional().nullable(),
+  formattedAddress: z.string().max(500).optional().nullable(),
   isDefault: z.boolean().default(false),
 });
 

@@ -16,15 +16,33 @@ import {
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import {
   useCreateBooking,
   useProvider,
   useAvailableSlots,
+  useAddresses,
+  useAddAddress,
 } from "../../hooks/useApi";
 import { toast } from "sonner";
-import { Loader2, Clock, CheckCircle2 } from "lucide-react";
+import {
+  Loader2,
+  Clock,
+  CheckCircle2,
+  MapPin,
+  Plus,
+  ChevronUp,
+} from "lucide-react";
+import { Input } from "../ui/input";
+import { ErrorBoundary } from "../common/ErrorBoundary";
 import type { Provider, TimeSlot } from "../../lib/types";
+import type { AddressDetails } from "../common/AddressPickerMap";
+
+const AddressPickerMap = lazy(() =>
+  import("../common/AddressPickerMap").then((m) => ({
+    default: m.AddressPickerMap,
+  })),
+);
 
 interface BookingModalProps {
   provider: Provider;
@@ -44,7 +62,19 @@ export function BookingModal({
   const [selectedTime, setSelectedTime] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [notes, setNotes] = useState("");
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [showNewAddress, setShowNewAddress] = useState(false);
+  const [newAddrLabel, setNewAddrLabel] = useState("Otthon");
+  const [newAddrStreet, setNewAddrStreet] = useState("");
+  const [newAddrCity, setNewAddrCity] = useState("");
+  const [newAddrZipCode, setNewAddrZipCode] = useState("");
+  const [newAddrCountry, setNewAddrCountry] = useState("RO");
+  const [newAddrLat, setNewAddrLat] = useState<number | null>(null);
+  const [newAddrLng, setNewAddrLng] = useState<number | null>(null);
+  const [newAddrFormatted, setNewAddrFormatted] = useState<string | null>(null);
   const createBooking = useCreateBooking();
+  const { data: addressesData } = useAddresses();
+  const addAddressMut = useAddAddress();
 
   // Fetch full provider details (search results may lack availability)
   const { data: fullProviderData } = useProvider(provider.id);
@@ -52,6 +82,59 @@ export function BookingModal({
 
   const services = resolvedProvider.services || [];
   const selectedService = services.find((s) => s.id === selectedServiceId);
+  const savedAddresses = addressesData?.data || [];
+
+  // Auto-select default address on first load only
+  useEffect(() => {
+    if (savedAddresses.length > 0 && !selectedAddressId) {
+      const defaultAddr = savedAddresses.find((a: any) => a.isDefault);
+      if (defaultAddr) setSelectedAddressId(defaultAddr.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedAddresses]);
+
+  const handleNewAddressFromMap = (details: AddressDetails) => {
+    setNewAddrStreet(details.street);
+    setNewAddrCity(details.city);
+    setNewAddrZipCode(details.zipCode);
+    setNewAddrCountry(details.country);
+    setNewAddrLat(details.latitude);
+    setNewAddrLng(details.longitude);
+    setNewAddrFormatted(details.formattedAddress);
+  };
+
+  const handleSaveNewAddress = async () => {
+    if (!newAddrStreet || !newAddrCity || !newAddrZipCode) {
+      toast.error("Utca, város és irányítószám kötelező!");
+      return;
+    }
+    try {
+      const result = await addAddressMut.mutateAsync({
+        label: newAddrLabel,
+        street: newAddrStreet,
+        city: newAddrCity,
+        zipCode: newAddrZipCode,
+        country: newAddrCountry,
+        latitude: newAddrLat,
+        longitude: newAddrLng,
+        formattedAddress: newAddrFormatted,
+        isDefault: false,
+      });
+      setSelectedAddressId(result.data.id);
+      setShowNewAddress(false);
+      setNewAddrLabel("Otthon");
+      setNewAddrStreet("");
+      setNewAddrCity("");
+      setNewAddrZipCode("");
+      setNewAddrCountry("RO");
+      setNewAddrLat(null);
+      setNewAddrLng(null);
+      setNewAddrFormatted(null);
+      toast.success("Cím mentve!");
+    } catch {
+      toast.error("Hiba a cím mentésekor");
+    }
+  };
 
   // Derive availability from all members to disable calendar days
   const availability = useMemo(() => {
@@ -126,6 +209,7 @@ export function BookingModal({
         scheduledDate,
         scheduledTime: selectedTime,
         notes: notes || undefined,
+        addressId: selectedAddressId || undefined,
         assignedMemberId: selectedMemberId || undefined,
       },
       {
@@ -143,7 +227,7 @@ export function BookingModal({
   };
 
   return (
-    <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={true} onOpenChange={(open: boolean) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Foglalás - {provider.businessName}</DialogTitle>
@@ -158,7 +242,7 @@ export function BookingModal({
             <Label>Szolgáltatás</Label>
             <Select
               value={selectedServiceId}
-              onValueChange={(v) => {
+              onValueChange={(v: string) => {
                 setSelectedServiceId(v);
                 setSelectedTime("");
               }}
@@ -188,7 +272,7 @@ export function BookingModal({
                 <Calendar
                   mode="single"
                   selected={date}
-                  onSelect={(d) => {
+                  onSelect={(d: Date | undefined) => {
                     setDate(d);
                     setSelectedTime("");
                     setSelectedMemberId("");
@@ -324,6 +408,21 @@ export function BookingModal({
                         ?.endTime || ""}
                     </p>
                   )}
+                  {selectedAddressId &&
+                    (() => {
+                      const addr = savedAddresses.find(
+                        (a: any) => a.id === selectedAddressId,
+                      );
+                      if (!addr) return null;
+                      return (
+                        <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          {addr.label}:{" "}
+                          {addr.formattedAddress ||
+                            `${addr.street}, ${addr.city}`}
+                        </p>
+                      );
+                    })()}
                   <p className="text-lg font-bold text-primary">
                     {Number(selectedService.priceAmount)}{" "}
                     {selectedService.priceCurrency}
@@ -331,6 +430,150 @@ export function BookingModal({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Address selection */}
+          <div>
+            <Label className="flex items-center gap-1.5 mb-2">
+              <MapPin className="h-4 w-4" />
+              Helyszín (opcionális)
+            </Label>
+            {savedAddresses.length > 0 && (
+              <Select
+                value={selectedAddressId}
+                onValueChange={(v: string) => {
+                  if (v === "__new__") {
+                    setSelectedAddressId("");
+                    setShowNewAddress(true);
+                  } else {
+                    setSelectedAddressId(v);
+                    setShowNewAddress(false);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Válassz mentett címet" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedAddresses.map((addr: any) => (
+                    <SelectItem key={addr.id} value={addr.id}>
+                      <span className="flex items-center gap-2">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="font-medium">{addr.label}</span>
+                        <span className="text-muted-foreground text-xs truncate">
+                          –{" "}
+                          {addr.formattedAddress ||
+                            `${addr.street}, ${addr.city}`}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__new__">
+                    <span className="flex items-center gap-2 text-primary">
+                      <Plus className="h-3 w-3" />
+                      Új cím hozzáadása
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+
+            {(savedAddresses.length === 0 || showNewAddress) && (
+              <div className="mt-3 border rounded-lg p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-medium">
+                    {savedAddresses.length === 0
+                      ? "Cím megadása"
+                      : "Új cím hozzáadása"}
+                  </h4>
+                  {showNewAddress && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowNewAddress(false)}
+                    >
+                      <ChevronUp className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                <ErrorBoundary
+                  fallback={
+                    <div className="text-center py-4 border rounded-lg bg-muted/50">
+                      <MapPin className="h-6 w-6 text-muted-foreground/50 mx-auto mb-1" />
+                      <p className="text-xs text-muted-foreground">
+                        A térkép nem tölthető be. Add meg a címet kézzel.
+                      </p>
+                    </div>
+                  }
+                >
+                  <Suspense
+                    fallback={
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    }
+                  >
+                    <AddressPickerMap
+                      onAddressSelect={handleNewAddressFromMap}
+                      height="200px"
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label className="text-xs">Címke</Label>
+                    <Input
+                      value={newAddrLabel}
+                      onChange={(e) => setNewAddrLabel(e.target.value)}
+                      placeholder="pl. Otthon"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Utca</Label>
+                    <Input
+                      value={newAddrStreet}
+                      onChange={(e) => setNewAddrStreet(e.target.value)}
+                      placeholder="Utca, házszám"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Város</Label>
+                    <Input
+                      value={newAddrCity}
+                      onChange={(e) => setNewAddrCity(e.target.value)}
+                      placeholder="Város"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Irányítószám</Label>
+                    <Input
+                      value={newAddrZipCode}
+                      onChange={(e) => setNewAddrZipCode(e.target.value)}
+                      placeholder="400001"
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNewAddress}
+                    disabled={addAddressMut.isPending}
+                  >
+                    {addAddressMut.isPending && (
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                    )}
+                    Cím mentése
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>

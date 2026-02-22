@@ -567,41 +567,145 @@ export async function getServiceSlots(
 // STATS
 // ============================================================================
 
-export async function getProviderStats(userId: string) {
-  const { provider } = await getProviderForUser(userId);
+export async function getProviderStats(userId: string, memberId?: string) {
+  const { provider, memberRole, member } = await getProviderForUser(userId);
+
+  // Base filter: all provider bookings, or just a specific member's
+  const bookingWhere: any = { providerId: provider.id };
+
+  // EMPLOYEEs always see only their own stats
+  if (memberRole === "EMPLOYEE" && member) {
+    bookingWhere.assignedMemberId = member.id;
+  } else if (memberId) {
+    bookingWhere.assignedMemberId = memberId;
+  }
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    0,
+    23,
+    59,
+    59,
+  );
+  const startOfWeek = new Date(now);
+  startOfWeek.setDate(
+    now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1),
+  );
+  startOfWeek.setHours(0, 0, 0, 0);
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
   const [
     totalBookings,
     completedBookings,
     pendingBookings,
+    confirmedBookings,
+    cancelledBookings,
+    inProgressBookings,
     revenueResult,
     uniqueClients,
+    thisMonthBookings,
+    lastMonthBookings,
+    thisMonthRevenue,
+    lastMonthRevenue,
+    thisWeekBookings,
+    recentBookingsRaw,
+    bookingsByService,
+    memberPerformance,
+    dailyBookingsRaw,
   ] = await Promise.all([
-    prisma.booking.count({ where: { providerId: provider.id } }),
-    prisma.booking.count({
-      where: { providerId: provider.id, status: "COMPLETED" },
-    }),
-    prisma.booking.count({
-      where: { providerId: provider.id, status: "PENDING" },
-    }),
+    prisma.booking.count({ where: bookingWhere }),
+    prisma.booking.count({ where: { ...bookingWhere, status: "COMPLETED" } }),
+    prisma.booking.count({ where: { ...bookingWhere, status: "PENDING" } }),
+    prisma.booking.count({ where: { ...bookingWhere, status: "CONFIRMED" } }),
+    prisma.booking.count({ where: { ...bookingWhere, status: "CANCELLED" } }),
+    prisma.booking.count({ where: { ...bookingWhere, status: "IN_PROGRESS" } }),
     prisma.booking.aggregate({
-      where: { providerId: provider.id, status: "COMPLETED" },
+      where: { ...bookingWhere, status: "COMPLETED" },
       _sum: { totalAmount: true },
     }),
     prisma.booking.findMany({
-      where: { providerId: provider.id },
+      where: bookingWhere,
       select: { customerId: true },
       distinct: ["customerId"],
+    }),
+    // This month bookings count
+    prisma.booking.count({
+      where: { ...bookingWhere, createdAt: { gte: startOfMonth } },
+    }),
+    // Last month bookings count
+    prisma.booking.count({
+      where: {
+        ...bookingWhere,
+        createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
+      },
+    }),
+    // This month revenue
+    prisma.booking.aggregate({
+      where: {
+        ...bookingWhere,
+        status: "COMPLETED",
+        completedAt: { gte: startOfMonth },
+      },
+      _sum: { totalAmount: true },
+    }),
+    // Last month revenue
+    prisma.booking.aggregate({
+      where: {
+        ...bookingWhere,
+        status: "COMPLETED",
+        completedAt: { gte: startOfLastMonth, lte: endOfLastMonth },
+      },
+      _sum: { totalAmount: true },
+    }),
+    // This week bookings
+    prisma.booking.count({
+      where: { ...bookingWhere, createdAt: { gte: startOfWeek } },
+    }),
+    // Recent 30 days completed bookings for avg value
+    prisma.booking.findMany({
+      where: {
+        ...bookingWhere,
+        status: "COMPLETED",
+        completedAt: { gte: thirtyDaysAgo },
+      },
+      select: { totalAmount: true, durationMin: true },
+    }),
+    // Bookings grouped by service
+    prisma.booking.groupBy({
+      by: ["serviceId"],
+      where: bookingWhere,
+      _count: { id: true },
+      _sum: { totalAmount: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 10,
+    }),
+    // Member performance (only when company-wide / no memberId)
+    !memberId
+      ? prisma.booking.groupBy({
+          by: ["assignedMemberId"],
+          where: { providerId: provider.id, assignedMemberId: { not: null } },
+          _count: { id: true },
+          _sum: { totalAmount: true },
+        })
+      : Promise.resolve([]),
+    // Daily bookings for last 30 days
+    prisma.booking.findMany({
+      where: { ...bookingWhere, createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true, totalAmount: true, status: true },
     }),
   ]);
 
   // Revenue by month (last 6 months)
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
   const monthlyBookings = await prisma.booking.findMany({
     where: {
-      providerId: provider.id,
+      ...bookingWhere,
       status: "COMPLETED",
       completedAt: { gte: sixMonthsAgo },
     },
@@ -612,7 +716,7 @@ export async function getProviderStats(userId: string) {
   for (let i = 5; i >= 0; i--) {
     const d = new Date();
     d.setMonth(d.getMonth() - i);
-    const monthStr = d.toISOString().substring(0, 7); // YYYY-MM
+    const monthStr = d.toISOString().substring(0, 7);
     const monthRevenue = monthlyBookings
       .filter(
         (b) =>
@@ -622,15 +726,150 @@ export async function getProviderStats(userId: string) {
     revenueByMonth.push({ month: monthStr, revenue: monthRevenue });
   }
 
+  // Daily revenue/bookings for last 30 days
+  const dailyData: { date: string; revenue: number; bookings: number }[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().substring(0, 10);
+    const dayBookings = dailyBookingsRaw.filter(
+      (b) => b.createdAt.toISOString().substring(0, 10) === dateStr,
+    );
+    const dayRevenue = dayBookings
+      .filter((b) => b.status === "COMPLETED")
+      .reduce((sum, b) => sum + Number(b.totalAmount), 0);
+    dailyData.push({
+      date: dateStr,
+      revenue: dayRevenue,
+      bookings: dayBookings.length,
+    });
+  }
+
+  // Service name resolution for bookingsByService
+  const serviceIds = bookingsByService.map((s) => s.serviceId);
+  const services = await prisma.service.findMany({
+    where: { id: { in: serviceIds } },
+    select: { id: true, name: true },
+  });
+  const serviceMap = Object.fromEntries(services.map((s) => [s.id, s.name]));
+
+  const serviceBreakdown = bookingsByService.map((s) => ({
+    serviceId: s.serviceId,
+    serviceName: serviceMap[s.serviceId] || "Ismeretlen",
+    bookingCount: s._count.id,
+    revenue: Number(s._sum.totalAmount || 0),
+  }));
+
+  // Member performance with names (only for company-wide stats)
+  let memberStats: any[] = [];
+  if (
+    !memberId &&
+    Array.isArray(memberPerformance) &&
+    memberPerformance.length > 0
+  ) {
+    const memberIds = memberPerformance
+      .map((m: any) => m.assignedMemberId)
+      .filter(Boolean);
+    const members = await prisma.providerMember.findMany({
+      where: { id: { in: memberIds } },
+      select: {
+        id: true,
+        displayName: true,
+        user: { select: { firstName: true, lastName: true } },
+      },
+    });
+    const memberMap = Object.fromEntries(
+      members.map((m) => [
+        m.id,
+        m.displayName ||
+          `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim(),
+      ]),
+    );
+    memberStats = memberPerformance.map((m: any) => ({
+      memberId: m.assignedMemberId,
+      memberName: memberMap[m.assignedMemberId] || "Ismeretlen",
+      bookingCount: m._count.id,
+      revenue: Number(m._sum.totalAmount || 0),
+    }));
+  }
+
+  // Calculated KPIs
+  const totalRevenueNum = Number(revenueResult._sum.totalAmount || 0);
+  const thisMonthRevenueNum = Number(thisMonthRevenue._sum.totalAmount || 0);
+  const lastMonthRevenueNum = Number(lastMonthRevenue._sum.totalAmount || 0);
+  const revenueChange =
+    lastMonthRevenueNum > 0
+      ? ((thisMonthRevenueNum - lastMonthRevenueNum) / lastMonthRevenueNum) *
+        100
+      : thisMonthRevenueNum > 0
+        ? 100
+        : 0;
+  const bookingChange =
+    lastMonthBookings > 0
+      ? ((thisMonthBookings - lastMonthBookings) / lastMonthBookings) * 100
+      : thisMonthBookings > 0
+        ? 100
+        : 0;
+  const completionRate =
+    totalBookings > 0
+      ? (completedBookings / (completedBookings + cancelledBookings || 1)) * 100
+      : 0;
+  const avgBookingValue =
+    recentBookingsRaw.length > 0
+      ? recentBookingsRaw.reduce((sum, b) => sum + Number(b.totalAmount), 0) /
+        recentBookingsRaw.length
+      : 0;
+  const avgDuration =
+    recentBookingsRaw.length > 0
+      ? recentBookingsRaw.reduce((sum, b) => sum + b.durationMin, 0) /
+        recentBookingsRaw.length
+      : 0;
+
   return {
+    // Core stats
     totalBookings,
     completedBookings,
     pendingBookings,
-    totalRevenue: Number(revenueResult._sum.totalAmount || 0),
+    confirmedBookings,
+    cancelledBookings,
+    inProgressBookings,
+    totalRevenue: totalRevenueNum,
     averageRating: Number(provider.rating),
     totalReviews: provider.reviewCount,
     totalClients: uniqueClients.length,
+
+    // Period comparisons
+    thisMonthBookings,
+    lastMonthBookings,
+    bookingChange: Math.round(bookingChange * 10) / 10,
+    thisMonthRevenue: thisMonthRevenueNum,
+    lastMonthRevenue: lastMonthRevenueNum,
+    revenueChange: Math.round(revenueChange * 10) / 10,
+    thisWeekBookings,
+
+    // KPIs
+    completionRate: Math.round(completionRate * 10) / 10,
+    avgBookingValue: Math.round(avgBookingValue),
+    avgDuration: Math.round(avgDuration),
+
+    // Chart data
     revenueByMonth,
+    dailyData,
+    serviceBreakdown,
+    memberStats,
+
+    // Status breakdown for donut chart
+    statusBreakdown: [
+      { status: "COMPLETED", count: completedBookings, label: "Befejezve" },
+      { status: "CONFIRMED", count: confirmedBookings, label: "Megerősítve" },
+      { status: "PENDING", count: pendingBookings, label: "Függőben" },
+      {
+        status: "IN_PROGRESS",
+        count: inProgressBookings,
+        label: "Folyamatban",
+      },
+      { status: "CANCELLED", count: cancelledBookings, label: "Lemondva" },
+    ].filter((s) => s.count > 0),
   };
 }
 
@@ -638,13 +877,27 @@ export async function getProviderStats(userId: string) {
 // CLIENTS LIST
 // ============================================================================
 
-export async function getProviderClients(userId: string, page = 1, limit = 20) {
-  const { provider } = await getProviderForUser(userId);
+export async function getProviderClients(
+  userId: string,
+  page = 1,
+  limit = 20,
+  memberId?: string,
+) {
+  const { provider, memberRole, member } = await getProviderForUser(userId);
 
   const skip = (page - 1) * limit;
 
+  const bookingWhere: any = { providerId: provider.id };
+
+  // EMPLOYEEs always see only their own clients
+  if (memberRole === "EMPLOYEE" && member) {
+    bookingWhere.assignedMemberId = member.id;
+  } else if (memberId) {
+    bookingWhere.assignedMemberId = memberId;
+  }
+
   const bookings = await prisma.booking.findMany({
-    where: { providerId: provider.id },
+    where: bookingWhere,
     select: { customerId: true },
     distinct: ["customerId"],
   });
@@ -662,7 +915,7 @@ export async function getProviderClients(userId: string, page = 1, limit = 20) {
         phone: true,
         avatarUrl: true,
         bookingsAsCustomer: {
-          where: { providerId: provider.id },
+          where: bookingWhere,
           orderBy: { createdAt: "desc" },
           take: 1,
           select: { status: true, scheduledDate: true, totalAmount: true },

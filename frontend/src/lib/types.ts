@@ -316,6 +316,9 @@ export interface Address {
   city: string;
   zipCode: string;
   country: string;
+  latitude: number | null;
+  longitude: number | null;
+  formattedAddress: string | null;
   isDefault: boolean;
 }
 
@@ -351,11 +354,48 @@ export interface ProviderStats {
   totalBookings: number;
   completedBookings: number;
   pendingBookings: number;
+  confirmedBookings: number;
+  cancelledBookings: number;
+  inProgressBookings: number;
   totalRevenue: number;
   averageRating: number;
   totalReviews: number;
   totalClients: number;
+
+  // Period comparisons
+  thisMonthBookings: number;
+  lastMonthBookings: number;
+  bookingChange: number;
+  thisMonthRevenue: number;
+  lastMonthRevenue: number;
+  revenueChange: number;
+  thisWeekBookings: number;
+
+  // KPIs
+  completionRate: number;
+  avgBookingValue: number;
+  avgDuration: number;
+
+  // Chart data
   revenueByMonth: { month: string; revenue: number }[];
+  dailyData: { date: string; revenue: number; bookings: number }[];
+  serviceBreakdown: {
+    serviceId: string;
+    serviceName: string;
+    bookingCount: number;
+    revenue: number;
+  }[];
+  memberStats: {
+    memberId: string;
+    memberName: string;
+    bookingCount: number;
+    revenue: number;
+  }[];
+  statusBreakdown: {
+    status: string;
+    count: number;
+    label: string;
+  }[];
 }
 
 export interface ProviderClient {

@@ -21,12 +21,16 @@ import { useAuth } from "../../contexts/AuthContext";
 
 interface HeaderWithSettingsProps {
   userType: "customer" | "provider";
+  isOwner?: boolean;
   onSettingsClick?: () => void;
+  onProfileClick?: () => void;
 }
 
 export function HeaderWithSettings({
   userType,
+  isOwner = true,
   onSettingsClick,
+  onProfileClick,
 }: HeaderWithSettingsProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -44,6 +48,8 @@ export function HeaderWithSettings({
       action === "verification"
     ) {
       onSettingsClick?.();
+    } else if (action === "profile") {
+      onProfileClick?.();
     }
   };
 
@@ -58,12 +64,23 @@ export function HeaderWithSettings({
     { icon: HelpCircle, label: "Segítség", action: "help" },
   ];
 
-  const providerMenuItems = [
-    { icon: Settings, label: "Üzleti beállítások", action: "settings" },
-    { icon: CreditCard, label: "Számlázás & Csomagok", action: "billing" },
-    { icon: Shield, label: "Hitelesítés", action: "verification" },
-    { icon: HelpCircle, label: "Segítség", action: "help" },
-  ];
+  const providerMenuItems = isOwner
+    ? [
+        { icon: User, label: "Profil beállítások", action: "profile" },
+        { icon: Settings, label: "Üzleti beállítások", action: "settings" },
+        { icon: CreditCard, label: "Számlázás & Csomagok", action: "billing" },
+        { icon: Shield, label: "Hitelesítés", action: "verification" },
+        { icon: HelpCircle, label: "Segítség", action: "help" },
+      ]
+    : [
+        { icon: User, label: "Profil beállítások", action: "profile" },
+        {
+          icon: Settings,
+          label: "Szolgáltatás beállítások",
+          action: "settings",
+        },
+        { icon: HelpCircle, label: "Segítség", action: "help" },
+      ];
 
   const menuItems =
     userType === "customer" ? customerMenuItems : providerMenuItems;

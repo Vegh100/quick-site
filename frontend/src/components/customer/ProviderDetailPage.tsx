@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import {
   useProvider,
   useProviderReviews,
@@ -6,11 +6,15 @@ import {
   useToggleFavorite,
   useAvailableSlots,
   useCreateBooking,
+  useAddresses,
+  useAddAddress,
 } from "../../hooks/useApi";
+import { ErrorBoundary } from "../common/ErrorBoundary";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Label } from "../ui/label";
+import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { Calendar as CalendarWidget } from "../ui/calendar";
 import {
@@ -23,9 +27,18 @@ import {
   Loader2,
   Calendar,
   User,
+  Plus,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Provider, TimeSlot } from "../../lib/types";
+import type { AddressDetails } from "../common/AddressPickerMap";
+
+const AddressPickerMap = lazy(() =>
+  import("../common/AddressPickerMap").then((m) => ({
+    default: m.AddressPickerMap,
+  })),
+);
 
 interface ProviderDetailPageProps {
   providerId: string;
@@ -61,6 +74,71 @@ export function ProviderDetailPage({
   const [selectedTime, setSelectedTime] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [bookingNotes, setBookingNotes] = useState("");
+
+  // Address state
+  const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [showNewAddress, setShowNewAddress] = useState(false);
+  const [newAddrLabel, setNewAddrLabel] = useState("Otthon");
+  const [newAddrStreet, setNewAddrStreet] = useState("");
+  const [newAddrCity, setNewAddrCity] = useState("");
+  const [newAddrZipCode, setNewAddrZipCode] = useState("");
+  const [newAddrLat, setNewAddrLat] = useState<number | null>(null);
+  const [newAddrLng, setNewAddrLng] = useState<number | null>(null);
+  const [newAddrFormatted, setNewAddrFormatted] = useState<string | null>(null);
+
+  const { data: addressesData } = useAddresses();
+  const addAddressMut = useAddAddress();
+  const savedAddresses = addressesData?.data || [];
+
+  // Auto-select default address on first load
+  useEffect(() => {
+    if (savedAddresses.length > 0 && !selectedAddressId) {
+      const defaultAddr = savedAddresses.find((a: any) => a.isDefault);
+      if (defaultAddr) setSelectedAddressId(defaultAddr.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedAddresses]);
+
+  const handleNewAddressFromMap = (details: AddressDetails) => {
+    setNewAddrStreet(details.street);
+    setNewAddrCity(details.city);
+    setNewAddrZipCode(details.zipCode);
+    setNewAddrLat(details.latitude);
+    setNewAddrLng(details.longitude);
+    setNewAddrFormatted(details.formattedAddress);
+  };
+
+  const handleSaveNewAddress = async () => {
+    if (!newAddrStreet || !newAddrCity || !newAddrZipCode) {
+      toast.error("Utca, város és irányítószám kötelező!");
+      return;
+    }
+    try {
+      const result = await addAddressMut.mutateAsync({
+        label: newAddrLabel,
+        street: newAddrStreet,
+        city: newAddrCity,
+        zipCode: newAddrZipCode,
+        country: "RO",
+        latitude: newAddrLat,
+        longitude: newAddrLng,
+        formattedAddress: newAddrFormatted,
+        isDefault: false,
+      });
+      setSelectedAddressId(result.data.id);
+      setShowNewAddress(false);
+      setNewAddrLabel("Otthon");
+      setNewAddrStreet("");
+      setNewAddrCity("");
+      setNewAddrZipCode("");
+      setNewAddrLat(null);
+      setNewAddrLng(null);
+      setNewAddrFormatted(null);
+      toast.success("Cím mentve!");
+    } catch {
+      toast.error("Hiba a cím mentésekor");
+    }
+  };
 
   const provider = providerData?.data;
   const reviews = reviewsData?.data?.reviews || [];
@@ -156,6 +234,7 @@ export function ProviderDetailPage({
         scheduledDate: bookingDate.toISOString().split("T")[0],
         scheduledTime: selectedTime,
         notes: bookingNotes || undefined,
+        addressId: selectedAddressId || undefined,
         assignedMemberId: selectedMemberId || undefined,
       },
       {
@@ -475,7 +554,157 @@ export function ProviderDetailPage({
                   );
                 })()}
 
-              {/* Notes */}
+              {/* Address selection – always visible */}
+              <div className="mb-4">
+                <Label className="text-sm mb-1.5 flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5" />
+                  Foglalás helyszíne
+                </Label>
+                {savedAddresses.length > 0 && !showNewAddress && (
+                  <div className="space-y-1.5">
+                    {savedAddresses.map((addr: any) => (
+                      <button
+                        key={addr.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedAddressId(
+                            selectedAddressId === addr.id ? "" : addr.id,
+                          )
+                        }
+                        className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-all flex items-center gap-2 ${
+                          selectedAddressId === addr.id
+                            ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                            : "border-border hover:border-primary/40"
+                        }`}
+                      >
+                        <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span className="font-medium">{addr.label}</span>
+                        <span className="text-muted-foreground truncate text-xs">
+                          –{" "}
+                          {addr.formattedAddress ||
+                            `${addr.street}, ${addr.city}`}
+                        </span>
+                        {selectedAddressId === addr.id && (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setShowNewAddress(true)}
+                      className="w-full text-left px-3 py-2 rounded-lg border border-dashed border-primary/40 text-sm text-primary hover:bg-primary/5 transition-colors flex items-center gap-2"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Új cím hozzáadása
+                    </button>
+                  </div>
+                )}
+
+                {savedAddresses.length === 0 && !showNewAddress && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewAddress(true)}
+                    className="w-full text-left px-3 py-2 rounded-lg border border-dashed border-primary/40 text-sm text-primary hover:bg-primary/5 transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Cím hozzáadása
+                  </button>
+                )}
+
+                {showNewAddress && (
+                  <div className="mt-2 border rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        {savedAddresses.length === 0
+                          ? "Cím megadása"
+                          : "Új cím"}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowNewAddress(false)}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <ErrorBoundary
+                      fallback={
+                        <div className="text-center py-4 border rounded-lg bg-muted/50">
+                          <MapPin className="h-6 w-6 text-muted-foreground/50 mx-auto mb-1" />
+                          <p className="text-xs text-muted-foreground">
+                            A térkép nem tölthető be. Add meg a címet kézzel.
+                          </p>
+                        </div>
+                      }
+                    >
+                      <Suspense
+                        fallback={
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                          </div>
+                        }
+                      >
+                        <AddressPickerMap
+                          onAddressSelect={handleNewAddressFromMap}
+                          height="180px"
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs">Címke</Label>
+                        <Input
+                          value={newAddrLabel}
+                          onChange={(e) => setNewAddrLabel(e.target.value)}
+                          placeholder="pl. Otthon"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Utca</Label>
+                        <Input
+                          value={newAddrStreet}
+                          onChange={(e) => setNewAddrStreet(e.target.value)}
+                          placeholder="Utca, házszám"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Város</Label>
+                        <Input
+                          value={newAddrCity}
+                          onChange={(e) => setNewAddrCity(e.target.value)}
+                          placeholder="Város"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs">Irányítószám</Label>
+                        <Input
+                          value={newAddrZipCode}
+                          onChange={(e) => setNewAddrZipCode(e.target.value)}
+                          placeholder="400001"
+                          className="h-8 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        onClick={handleSaveNewAddress}
+                        disabled={addAddressMut.isPending}
+                      >
+                        {addAddressMut.isPending && (
+                          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        )}
+                        Cím mentése
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Notes – shown after time selection */}
               {selectedTime && (
                 <div className="mb-4">
                   <Label className="text-sm mb-1.5 block">

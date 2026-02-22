@@ -228,7 +228,11 @@ export async function getStats(
   next: NextFunction,
 ) {
   try {
-    const stats = await providerService.getProviderStats(req.user!.userId);
+    const memberId = req.query.memberId as string | undefined;
+    const stats = await providerService.getProviderStats(
+      req.user!.userId,
+      memberId,
+    );
     res.json({ success: true, data: stats });
   } catch (error) {
     next(error);
@@ -243,10 +247,12 @@ export async function getClients(
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
+    const memberId = req.query.memberId as string | undefined;
     const result = await providerService.getProviderClients(
       req.user!.userId,
       page,
       limit,
+      memberId,
     );
     res.json({
       success: true,

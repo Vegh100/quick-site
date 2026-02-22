@@ -446,16 +446,19 @@ model Favorite {
 // ============================================================================
 
 model Address {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  label      String   @db.VarChar(50)
-  street     String   @db.VarChar(255)
-  city       String   @db.VarChar(100)
-  zipCode    String   @map("zip_code") @db.VarChar(20)
-  country    String   @default("RO") @db.VarChar(2)
-  isDefault  Boolean  @default(false) @map("is_default")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  label            String   @db.VarChar(50)
+  street           String   @db.VarChar(255)
+  city             String   @db.VarChar(100)
+  zipCode          String   @map("zip_code") @db.VarChar(20)
+  country          String   @default("RO") @db.VarChar(2)
+  latitude         Float?   @map("latitude")
+  longitude        Float?   @map("longitude")
+  formattedAddress String?  @map("formatted_address") @db.VarChar(500)
+  isDefault        Boolean  @default(false) @map("is_default")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   bookings   Booking[]

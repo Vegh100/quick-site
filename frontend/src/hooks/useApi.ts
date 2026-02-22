@@ -8,7 +8,7 @@ import {
   userApi,
   memberApi,
 } from "../lib/api-services";
-import type { CreateBookingInput } from "../lib/types";
+import type { CreateBookingInput, Address } from "../lib/types";
 
 // ============================================================================
 // CATEGORIES
@@ -71,18 +71,23 @@ export function useMyProvider() {
   });
 }
 
-export function useProviderStats(enabled = true) {
+export function useProviderStats(enabled = true, memberId?: string) {
   return useQuery({
-    queryKey: ["providers", "me", "stats"],
-    queryFn: () => providerApi.getStats(),
+    queryKey: ["providers", "me", "stats", memberId],
+    queryFn: () => providerApi.getStats(memberId),
     enabled,
   });
 }
 
-export function useProviderClients(page = 1, limit = 20, enabled = true) {
+export function useProviderClients(
+  page = 1,
+  limit = 20,
+  enabled = true,
+  memberId?: string,
+) {
   return useQuery({
-    queryKey: ["providers", "me", "clients", page, limit],
-    queryFn: () => providerApi.getClients(page, limit),
+    queryKey: ["providers", "me", "clients", page, limit, memberId],
+    queryFn: () => providerApi.getClients(page, limit, memberId),
     enabled,
   });
 }
@@ -214,6 +219,7 @@ export function useCustomerBookings(params?: {
 export function useProviderBookings(
   params?: {
     status?: string;
+    memberId?: string;
     dateFrom?: string;
     dateTo?: string;
     page?: number;
@@ -396,6 +402,32 @@ export function useAddAddress() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: userApi.addAddress,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user", "addresses"] });
+    },
+  });
+}
+
+export function useUpdateAddress() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<Omit<Address, "id" | "userId">>;
+    }) => userApi.updateAddress(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["user", "addresses"] });
+    },
+  });
+}
+
+export function useDeleteAddress() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: userApi.deleteAddress,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user", "addresses"] });
     },
