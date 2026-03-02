@@ -937,7 +937,9 @@ export function CustomerApp() {
             )}
 
             {activeTab === "messages" && (
-              <MessagingPage />
+              <MessagingPage
+                initialUserId={searchParams.get("userId") ?? undefined}
+              />
             )}
           </>
         )}

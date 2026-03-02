@@ -2,7 +2,6 @@ import {
   useBooking,
   useUpdateBookingStatus,
   useCreateReview,
-  useStartConversation,
 } from "../../hooks/useApi";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
@@ -66,7 +65,6 @@ export function BookingDetailPage({
   const { data: bookingData, isLoading } = useBooking(bookingId);
   const cancelBooking = useUpdateBookingStatus();
   const createReview = useCreateReview();
-  const startConversation = useStartConversation();
   const navigate = useNavigate();
 
   const [showReview, setShowReview] = useState(false);
@@ -353,25 +351,14 @@ export function BookingDetailPage({
             <Button
               variant="outline"
               className="w-full gap-2"
-              disabled={startConversation.isPending}
               onClick={() => {
-                // The provider.userId is the user to message
                 const providerUserId = (provider as any)?.userId;
                 if (providerUserId) {
-                  startConversation.mutate(providerUserId, {
-                    onSuccess: () => {
-                      // Navigate to messages tab
-                      navigate("/ugyfel/uzenetek");
-                    },
-                  });
+                  navigate(`/ugyfel/uzenetek?userId=${providerUserId}`);
                 }
               }}
             >
-              {startConversation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <MessageSquare className="h-4 w-4" />
-              )}
+              <MessageSquare className="h-4 w-4" />
               Üzenet küldése
             </Button>
           </div>
@@ -485,7 +472,9 @@ export function BookingDetailPage({
                     </span>
                     {(review as any).providerRespondedAt && (
                       <span className="text-[10px] text-muted-foreground ml-1">
-                        {new Date((review as any).providerRespondedAt).toLocaleDateString("hu-HU")}
+                        {new Date(
+                          (review as any).providerRespondedAt,
+                        ).toLocaleDateString("hu-HU")}
                       </span>
                     )}
                   </div>
