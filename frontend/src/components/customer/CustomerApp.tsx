@@ -937,13 +937,7 @@ export function CustomerApp() {
             )}
 
             {activeTab === "messages" && (
-              <div className="space-y-4">
-                <div>
-                  <h1>Üzenetek</h1>
-                  <p className="text-muted-foreground">Kommunikáció szolgáltatókkal</p>
-                </div>
-                <MessagingPage />
-              </div>
+              <MessagingPage />
             )}
           </>
         )}

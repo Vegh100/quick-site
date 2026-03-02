@@ -1006,15 +1006,7 @@ export function ProviderApp() {
 
         {/* Messages Tab */}
         {activeTab === "messages" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1>Üzenetek</h1>
-                <p className="text-muted-foreground">Kommunikáció ügyfelekkel</p>
-              </div>
-            </div>
-            <MessagingPage />
-          </div>
+          <MessagingPage />
         )}
 
         {/* Portfolio Tab */}

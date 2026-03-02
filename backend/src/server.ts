@@ -56,9 +56,11 @@ app.use(
 );
 
 // Rate limiting
+const isDev = process.env.NODE_ENV !== "production";
+
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: isDev ? 500 : 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -69,9 +71,10 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: isDev ? 100 : 30,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === "/me", // Don't count session checks
   message: {
     success: false,
     error: "Too many auth attempts, please try again later.",

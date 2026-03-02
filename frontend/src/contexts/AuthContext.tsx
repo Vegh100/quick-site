@@ -17,7 +17,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (data: LoginInput) => Promise<User>;
   register: (data: RegisterInput) => Promise<User>;
-  googleAuth: (credential: string, role?: UserRole) => Promise<User>;
+  googleAuth: (credential: string, role?: UserRole) => Promise<{ user: User; isNewUser: boolean }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   setUser: (user: User | null) => void;
@@ -66,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (credential: string, role?: UserRole) => {
       const res = await authApi.googleAuth(credential, role);
       setUser(res.data.user);
-      return res.data.user;
+      return { user: res.data.user, isNewUser: !!res.data.isNewUser };
     },
     [],
   );

@@ -184,15 +184,24 @@ export function LoginScreen({
                     }
                     setIsGoogleLoading(true);
                     try {
-                      const user = await googleAuth(
+                      const { user, isNewUser } = await googleAuth(
                         response.credential,
                         mode === "register" ? roleProp : undefined,
                       );
-                      toast.success(
-                        mode === "login"
-                          ? "Sikeres bejelentkezés!"
-                          : "Sikeres regisztráció!",
-                      );
+
+                      if (mode === "register" && !isNewUser) {
+                        // User already had an account — inform them and redirect to their actual dashboard
+                        toast.info(
+                          "Már van fiókod ezzel az email címmel! Beléptettünk.",
+                        );
+                      } else {
+                        toast.success(
+                          mode === "login"
+                            ? "Sikeres bejelentkezés!"
+                            : "Sikeres regisztráció!",
+                        );
+                      }
+
                       navigateAfterAuth(user);
                     } catch (err: any) {
                       const message =
@@ -209,7 +218,6 @@ export function LoginScreen({
                   text={mode === "login" ? "signin_with" : "signup_with"}
                   shape="rectangular"
                   width="350"
-                  locale="hu"
                 />
               </div>
               {isGoogleLoading && (
