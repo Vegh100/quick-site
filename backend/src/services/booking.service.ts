@@ -7,6 +7,31 @@ import {
   UpdateBookingStatusInput,
   BookingFilterInput,
 } from "../validators/booking.validators.js";
+import {
+  sendBookingCreatedEmail,
+  sendBookingConfirmedEmail,
+  sendBookingCancelledEmail,
+} from "./email.service.js";
+import { createNotification } from "./notification.service.js";
+import { logBookingActivity } from "./booking-activity.service.js";
+
+// ============================================================================
+// DATE FORMATTING HELPERS
+// ============================================================================
+
+const HUNGARIAN_MONTHS = [
+  "január", "február", "március", "április", "május", "június",
+  "július", "augusztus", "szeptember", "október", "november", "december",
+];
+
+function formatDateHu(date: Date): string {
+  return `${date.getFullYear()}. ${HUNGARIAN_MONTHS[date.getMonth()]} ${date.getDate()}.`;
+}
+
+function formatAmount(amount: number | string, currency = "RON"): string {
+  const num = typeof amount === "string" ? parseFloat(amount) : amount;
+  return `${num.toLocaleString("hu-HU")} ${currency}`;
+}
 
 // ============================================================================
 // HELPER: compute end time from start time + duration
@@ -553,6 +578,54 @@ export async function createBooking(
     },
   });
 
+  // Fire-and-forget: send booking emails
+  (async () => {
+    try {
+      const customer = await prisma.user.findUnique({
+        where: { id: customerId },
+        select: { email: true, firstName: true, lastName: true },
+      });
+      if (!customer) return;
+
+      const customerName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Ügyfél";
+      const providerUser = provider.user;
+
+      const emailParams = {
+        customerEmail: customer.email,
+        customerName,
+        providerEmail: providerUser?.email,
+        businessName: provider.businessName,
+        serviceName: service.name,
+        scheduledDate: formatDateHu(new Date(data.scheduledDate)),
+        scheduledTime: data.scheduledTime,
+        duration: service.durationMin,
+        totalAmount: formatAmount(totalAmount, service.priceCurrency),
+        bookingId: booking.id,
+      };
+
+      await sendBookingCreatedEmail(emailParams);
+
+      // In-app notification for the provider
+      createNotification({
+        userId: provider.userId,
+        type: "BOOKING_NEW",
+        title: "Új foglalás érkezett",
+        body: `${customerName} – ${service.name}, ${formatDateHu(new Date(data.scheduledDate))} ${data.scheduledTime}`,
+        link: `/szolgaltato/foglalasok`,
+      });
+    } catch (err) {
+      console.error("Error sending booking created emails:", (err as Error).message);
+    }
+  })();
+
+  // Log booking creation activity
+  logBookingActivity({
+    bookingId: booking.id,
+    action: "CREATED",
+    performedBy: customerId,
+    note: `Foglalás létrehozva: ${service.name}`,
+  });
+
   return booking;
 }
 
@@ -630,18 +703,18 @@ export async function updateBookingStatus(
     updateData.completedAt = new Date();
   }
 
-  return prisma.booking.update({
+  const updated = await prisma.booking.update({
     where: { id: bookingId },
     data: updateData,
     include: {
       service: true,
       provider: {
         include: {
-          user: { select: { id: true, firstName: true, lastName: true } },
+          user: { select: { id: true, email: true, firstName: true, lastName: true } },
         },
       },
       customer: {
-        select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+        select: { id: true, email: true, firstName: true, lastName: true, avatarUrl: true },
       },
       assignedMember: {
         select: {
@@ -656,6 +729,74 @@ export async function updateBookingStatus(
       address: true,
     },
   });
+
+  // Fire-and-forget: send status-change emails
+  (async () => {
+    try {
+      const customerName = [updated.customer.firstName, updated.customer.lastName].filter(Boolean).join(" ") || "Ügyfél";
+      const emailParams = {
+        customerEmail: updated.customer.email,
+        customerName,
+        providerEmail: updated.provider.user?.email,
+        businessName: updated.provider.businessName,
+        serviceName: updated.service.name,
+        scheduledDate: formatDateHu(new Date(updated.scheduledDate)),
+        scheduledTime: updated.scheduledTime,
+        duration: updated.durationMin,
+        totalAmount: formatAmount(updated.totalAmount.toString(), updated.currency),
+        bookingId: updated.id,
+      };
+
+      if (data.status === "CONFIRMED") {
+        await sendBookingConfirmedEmail(emailParams);
+        createNotification({
+          userId: updated.customer.id,
+          type: "BOOKING_CONFIRMED",
+          title: "Foglalás megerősítve",
+          body: `${updated.provider.businessName} – ${updated.service.name}, ${formatDateHu(new Date(updated.scheduledDate))} ${updated.scheduledTime}`,
+          link: `/ugyfel/foglalasaim`,
+        });
+      } else if (data.status === "CANCELLED") {
+        await sendBookingCancelledEmail({
+          ...emailParams,
+          cancelledByProvider: !isCustomer,
+          cancelReason: data.cancelReason,
+        });
+        // Notify the other party
+        const notifyUserId = isCustomer ? updated.provider.user!.id : updated.customer.id;
+        const cancelledByName = isCustomer ? customerName : updated.provider.businessName;
+        createNotification({
+          userId: notifyUserId,
+          type: "BOOKING_CANCELLED",
+          title: "Foglalás lemondva",
+          body: `${cancelledByName} lemondta: ${updated.service.name}, ${formatDateHu(new Date(updated.scheduledDate))} ${updated.scheduledTime}`,
+          link: isCustomer ? `/szolgaltato/foglalasok` : `/ugyfel/foglalasaim`,
+        });
+      } else if (data.status === "COMPLETED") {
+        createNotification({
+          userId: updated.customer.id,
+          type: "BOOKING_COMPLETED",
+          title: "Foglalás teljesítve",
+          body: `${updated.provider.businessName} – ${updated.service.name}. Értékeld az élményed!`,
+          link: `/ugyfel/foglalasaim`,
+        });
+      }
+    } catch (err) {
+      console.error("Error sending booking status email:", (err as Error).message);
+    }
+  })();
+
+  // Log status change activity
+  logBookingActivity({
+    bookingId: updated.id,
+    action: data.status,
+    performedBy: userId,
+    note: data.status === "CANCELLED" && data.cancelReason
+      ? `Lemondva: ${data.cancelReason}`
+      : undefined,
+  });
+
+  return updated;
 }
 
 // ============================================================================

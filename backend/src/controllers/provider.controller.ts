@@ -91,6 +91,19 @@ export async function searchProviders(
   }
 }
 
+export async function getBusinessHours(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const hours = await providerService.getBusinessHours(req.params.id);
+    res.json({ success: true, data: hours });
+  } catch (error) {
+    next(error);
+  }
+}
+
 // ============================================================================
 // SERVICES
 // ============================================================================

@@ -51,4 +51,7 @@ router.patch(
   bookingController.updateBookingStatus,
 );
 
+// Get booking activity timeline
+router.get("/:id/timeline", bookingController.getBookingTimeline);
+
 export default router;

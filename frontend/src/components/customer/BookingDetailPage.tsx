@@ -2,6 +2,7 @@ import {
   useBooking,
   useUpdateBookingStatus,
   useCreateReview,
+  useStartConversation,
 } from "../../hooks/useApi";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
@@ -9,6 +10,7 @@ import { Badge } from "../ui/badge";
 import { Textarea } from "../ui/textarea";
 import { Label } from "../ui/label";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Calendar,
@@ -64,6 +66,8 @@ export function BookingDetailPage({
   const { data: bookingData, isLoading } = useBooking(bookingId);
   const cancelBooking = useUpdateBookingStatus();
   const createReview = useCreateReview();
+  const startConversation = useStartConversation();
+  const navigate = useNavigate();
 
   const [showReview, setShowReview] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -344,12 +348,32 @@ export function BookingDetailPage({
             </div>
           </div>
 
-          {/* Chat placeholder for future */}
+          {/* Chat button — message the provider */}
           <div className="mt-4 pt-4 border-t">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MessageSquare className="h-4 w-4" />
-              <span>A chat funkció hamarosan elérhető lesz.</span>
-            </div>
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              disabled={startConversation.isPending}
+              onClick={() => {
+                // The provider.userId is the user to message
+                const providerUserId = (provider as any)?.userId;
+                if (providerUserId) {
+                  startConversation.mutate(providerUserId, {
+                    onSuccess: () => {
+                      // Navigate to messages tab
+                      navigate("/ugyfel/uzenetek");
+                    },
+                  });
+                }
+              }}
+            >
+              {startConversation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MessageSquare className="h-4 w-4" />
+              )}
+              Üzenet küldése
+            </Button>
           </div>
         </Card>
       )}
@@ -429,7 +453,7 @@ export function BookingDetailPage({
             Az értékelésed
           </h2>
           {booking.reviews.map((review) => (
-            <div key={review.id}>
+            <div key={review.id} className="space-y-3">
               <div className="flex items-center gap-1 mb-2">
                 {Array.from({ length: 5 }, (_, i) => (
                   <Star
@@ -449,6 +473,26 @@ export function BookingDetailPage({
                 <p className="text-sm text-muted-foreground">
                   {review.comment}
                 </p>
+              )}
+
+              {/* Provider's response */}
+              {(review as any).providerResponse && (
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                    <span className="text-xs font-semibold text-primary">
+                      Szolgáltató válasza
+                    </span>
+                    {(review as any).providerRespondedAt && (
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        {new Date((review as any).providerRespondedAt).toLocaleDateString("hu-HU")}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground pl-5 leading-relaxed">
+                    {(review as any).providerResponse}
+                  </p>
+                </div>
               )}
             </div>
           ))}

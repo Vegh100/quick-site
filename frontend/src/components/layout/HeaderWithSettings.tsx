@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useAuth } from "../../contexts/AuthContext";
+import { NotificationBell } from "../common/NotificationBell";
 
 interface HeaderWithSettingsProps {
   userType: "customer" | "provider";
@@ -101,6 +102,9 @@ export function HeaderWithSettings({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Notification Bell */}
+          <NotificationBell />
+
           {/* User Dropdown Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

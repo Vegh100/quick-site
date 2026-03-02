@@ -63,6 +63,8 @@ export const providerSearchSchema = z.object({
   categorySlug: z.string().optional(),
   search: z.string().optional(),
   city: z.string().optional(),
+  county: z.string().optional(),
+  serviceTypeId: z.string().uuid().optional(),
   minRating: z.coerce.number().min(0).max(5).optional(),
   maxPrice: z.coerce.number().positive().optional(),
   isVerified: z.coerce.boolean().optional(),

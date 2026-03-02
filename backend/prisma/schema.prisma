@@ -38,6 +38,11 @@ model User {
   referralsSent       Referral[]          @relation("ReferralSender")
   referralsReceived   Referral[]          @relation("ReferralReceiver")
   notificationPrefs   NotificationPreference?
+  notifications       InAppNotification[]
+  conversationsAsUser1 Conversation[]      @relation("ConversationUser1")
+  conversationsAsUser2 Conversation[]      @relation("ConversationUser2")
+  messagesSent         Message[]
+  bookingActivities    BookingActivity[]
 
   @@index([email])
   @@index([role])
@@ -125,6 +130,7 @@ model Provider {
   bookings        Booking[]
   subscription    Subscription?
   favorites       Favorite[]
+  portfolioImages PortfolioImage[]
 
   @@index([userId])
   @@index([rating])
@@ -287,6 +293,7 @@ model Service {
   bookings        Booking[]
   memberServices  MemberService[]
   serviceSlots    ServiceSlot[]
+  portfolioImages PortfolioImage[]
 
   @@index([providerId])
   @@index([serviceTypeId])
@@ -300,6 +307,27 @@ enum PriceType {
   PER_SERVICE
 
   @@map("price_type")
+}
+
+// ============================================================================
+// PORTFOLIO IMAGES
+// ============================================================================
+
+model PortfolioImage {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId  String   @map("provider_id") @db.Uuid
+  serviceId   String?  @map("service_id") @db.Uuid
+  imageUrl    String   @map("image_url") @db.VarChar(500)
+  caption     String?  @db.VarChar(255)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  provider    Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  service     Service?  @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([providerId])
+  @@index([serviceId])
+  @@map("portfolio_images")
 }
 
 // ============================================================================
@@ -378,6 +406,7 @@ model Booking {
   address          Address?        @relation(fields: [addressId], references: [id])
   reviews          Review[]
   payment          Payment?
+  activities       BookingActivity[]
 
   @@index([customerId])
   @@index([providerId])
@@ -398,18 +427,39 @@ enum BookingStatus {
 }
 
 // ============================================================================
+// BOOKING ACTIVITY LOG (for timeline)
+// ============================================================================
+
+model BookingActivity {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId   String   @map("booking_id") @db.Uuid
+  action      String   @db.VarChar(50) // e.g. "CREATED", "CONFIRMED", "CANCELLED"
+  performedBy String?  @map("performed_by") @db.Uuid
+  note        String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  performer   User?    @relation(fields: [performedBy], references: [id])
+
+  @@index([bookingId, createdAt])
+  @@map("booking_activities")
+}
+
+// ============================================================================
 // REVIEWS (bidirectional)
 // ============================================================================
 
 model Review {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  bookingId  String   @map("booking_id") @db.Uuid
-  authorId   String   @map("author_id") @db.Uuid
-  targetId   String   @map("target_id") @db.Uuid
-  rating     Int      @db.SmallInt
-  comment    String?  @db.Text
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookingId            String    @map("booking_id") @db.Uuid
+  authorId             String    @map("author_id") @db.Uuid
+  targetId             String    @map("target_id") @db.Uuid
+  rating               Int       @db.SmallInt
+  comment              String?   @db.Text
+  providerResponse     String?   @map("provider_response") @db.Text
+  providerRespondedAt  DateTime? @map("provider_responded_at") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   author     User     @relation("ReviewAuthor", fields: [authorId], references: [id])
@@ -562,6 +612,78 @@ model NotificationPreference {
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
+}
+
+// ============================================================================
+// IN-APP NOTIFICATIONS
+// ============================================================================
+
+model InAppNotification {
+  id        String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String             @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String             @db.VarChar(255)
+  body      String?            @db.Text
+  link      String?            @db.VarChar(500)
+  isRead    Boolean            @default(false) @map("is_read")
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("in_app_notifications")
+}
+
+enum NotificationType {
+  BOOKING_NEW
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_COMPLETED
+  REVIEW_RECEIVED
+  TEAM_INVITE
+  SYSTEM
+
+  @@map("notification_type")
+}
+
+// ============================================================================
+// IN-APP MESSAGING
+// ============================================================================
+
+model Conversation {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user1Id      String    @map("user1_id") @db.Uuid
+  user2Id      String    @map("user2_id") @db.Uuid
+  lastMessage  String?   @map("last_message") @db.VarChar(500)
+  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user1        User      @relation("ConversationUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2        User      @relation("ConversationUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  messages     Message[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String       @map("conversation_id") @db.Uuid
+  senderId       String       @map("sender_id") @db.Uuid
+  content        String       @db.Text
+  isRead         Boolean      @default(false) @map("is_read")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation(fields: [senderId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@map("messages")
 }
 
 // ============================================================================

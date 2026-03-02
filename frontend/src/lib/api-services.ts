@@ -356,6 +356,11 @@ export const reviewApi = {
         ApiResponse<{ reviews: Review[]; meta: PaginationMeta }>
       >("/reviews/me", { params })
       .then((r) => r.data),
+
+  respond: (reviewId: string, response: string) =>
+    api
+      .post<ApiResponse<Review>>(`/reviews/${reviewId}/respond`, { response })
+      .then((r) => r.data),
 };
 
 // ============================================================================
@@ -492,5 +497,286 @@ export const memberApi = {
   ) =>
     api
       .post<any>(`/auth/register-from-invite/${token}`, data)
+      .then((r) => r.data),
+};
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+export const notificationApi = {
+  getAll: (page = 1, limit = 20) =>
+    api
+      .get<ApiResponse<{
+        notifications: Array<{
+          id: string;
+          type: string;
+          title: string;
+          body: string | null;
+          link: string | null;
+          isRead: boolean;
+          createdAt: string;
+        }>;
+        unreadCount: number;
+        meta: PaginationMeta;
+      }>>("/notifications", { params: { page, limit } })
+      .then((r) => r.data),
+
+  getUnreadCount: () =>
+    api
+      .get<ApiResponse<{ unreadCount: number }>>("/notifications/unread-count")
+      .then((r) => r.data),
+
+  markAsRead: (id: string) =>
+    api.patch(`/notifications/${id}/read`).then((r) => r.data),
+
+  markAllAsRead: () =>
+    api.patch("/notifications/read-all").then((r) => r.data),
+
+  delete: (id: string) =>
+    api.delete(`/notifications/${id}`).then((r) => r.data),
+
+  clearAll: () =>
+    api.delete("/notifications").then((r) => r.data),
+};
+
+// ============================================================================
+// REFERRALS
+// ============================================================================
+
+export const referralApi = {
+  getMyReferral: () =>
+    api
+      .get<ApiResponse<{
+        referral: {
+          id: string;
+          code: string;
+          status: string;
+          createdAt: string;
+        };
+        stats: {
+          totalSent: number;
+          totalRedeemed: number;
+          pendingCount: number;
+          recentRedeemed: Array<{
+            id: string;
+            redeemedAt: string | null;
+            receiver: {
+              id: string;
+              firstName: string | null;
+              lastName: string | null;
+              avatarUrl: string | null;
+            } | null;
+          }>;
+        };
+        shareUrl: string;
+      }>>("/referrals/me")
+      .then((r) => r.data),
+
+  redeem: (code: string) =>
+    api.post<ApiResponse<any>>("/referrals/redeem", { code }).then((r) => r.data),
+};
+
+// ============================================================================
+// MESSAGING
+// ============================================================================
+
+export interface ConversationListItem {
+  id: string;
+  otherUser: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    avatarUrl: string | null;
+  };
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  createdAt: string;
+}
+
+export interface MessageItem {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
+  sender: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    avatarUrl: string | null;
+  };
+}
+
+export const messagingApi = {
+  getConversations: () =>
+    api
+      .get<ApiResponse<ConversationListItem[]>>("/messages/conversations")
+      .then((r) => r.data),
+
+  startConversation: (userId: string) =>
+    api
+      .post<ApiResponse<any>>("/messages/conversations", { userId })
+      .then((r) => r.data),
+
+  getMessages: (conversationId: string, page = 1, limit = 50) =>
+    api
+      .get<
+        ApiResponse<{
+          messages: MessageItem[];
+          meta: PaginationMeta;
+        }>
+      >(`/messages/conversations/${conversationId}/messages`, {
+        params: { page, limit },
+      })
+      .then((r) => r.data),
+
+  sendMessage: (conversationId: string, content: string) =>
+    api
+      .post<ApiResponse<MessageItem>>(
+        `/messages/conversations/${conversationId}/messages`,
+        { content },
+      )
+      .then((r) => r.data),
+
+  getUnreadCount: () =>
+    api
+      .get<ApiResponse<{ unreadCount: number }>>("/messages/unread-count")
+      .then((r) => r.data),
+};
+
+// ============================================================================
+// PORTFOLIO
+// ============================================================================
+
+export interface PortfolioImageItem {
+  id: string;
+  providerId: string;
+  serviceId: string | null;
+  imageUrl: string;
+  caption: string | null;
+  sortOrder: number;
+  createdAt: string;
+  service: { id: string; name: string } | null;
+}
+
+export const portfolioApi = {
+  getByProvider: (providerId: string, serviceId?: string) =>
+    api
+      .get<ApiResponse<PortfolioImageItem[]>>(
+        `/portfolio/provider/${providerId}`,
+        { params: serviceId ? { serviceId } : {} },
+      )
+      .then((r) => r.data),
+
+  add: (data: { imageUrl: string; caption?: string; serviceId?: string }) =>
+    api.post<ApiResponse<PortfolioImageItem>>("/portfolio", data).then((r) => r.data),
+
+  update: (id: string, data: { caption?: string; sortOrder?: number }) =>
+    api.patch<ApiResponse<PortfolioImageItem>>(`/portfolio/${id}`, data).then((r) => r.data),
+
+  delete: (id: string) =>
+    api.delete<ApiResponse<void>>(`/portfolio/${id}`).then((r) => r.data),
+};
+
+// ============================================================================
+// BOOKING TIMELINE
+// ============================================================================
+
+export interface BookingActivityItem {
+  id: string;
+  bookingId: string;
+  action: string;
+  performedBy: string | null;
+  note: string | null;
+  createdAt: string;
+  performer: {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    avatarUrl: string | null;
+  } | null;
+}
+
+export const bookingTimelineApi = {
+  get: (bookingId: string) =>
+    api
+      .get<ApiResponse<BookingActivityItem[]>>(
+        `/bookings/${bookingId}/timeline`,
+      )
+      .then((r) => r.data),
+};
+
+// ============================================================================
+// EXPORT & REPORTING
+// ============================================================================
+
+export interface RevenueSummary {
+  period: { from: string; to: string };
+  totalRevenue: number;
+  totalCompleted: number;
+  averagePerBooking: number;
+  byService: {
+    serviceId: string;
+    serviceName: string;
+    revenue: number;
+    count: number;
+  }[];
+  daily: {
+    date: string;
+    revenue: number;
+    bookings: number;
+  }[];
+}
+
+export const exportApi = {
+  downloadBookingsCsv: (filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+  }) =>
+    api
+      .get("/export/bookings/csv", {
+        params: filters,
+        responseType: "blob",
+      })
+      .then((r) => {
+        const blob = new Blob([r.data as any], { type: "text/csv" });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `foglalasok_${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }),
+
+  getRevenueSummary: (dateFrom: string, dateTo: string) =>
+    api
+      .get<ApiResponse<RevenueSummary>>("/export/revenue-summary", {
+        params: { dateFrom, dateTo },
+      })
+      .then((r) => r.data),
+};
+
+// ============================================================================
+// BUSINESS HOURS (public)
+// ============================================================================
+
+export interface BusinessHourItem {
+  dayOfWeek: number;
+  dayName: string;
+  isOpen: boolean;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+export const businessHoursApi = {
+  get: (providerId: string) =>
+    api
+      .get<ApiResponse<BusinessHourItem[]>>(
+        `/providers/${providerId}/business-hours`,
+      )
       .then((r) => r.data),
 };

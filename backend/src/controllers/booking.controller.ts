@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import * as bookingService from "../services/booking.service.js";
+import * as bookingActivityService from "../services/booking-activity.service.js";
 import { AuthenticatedRequest } from "../types/index.js";
 
 export async function getAvailableSlots(
@@ -117,6 +118,23 @@ export async function getBookingById(
       req.params.id,
     );
     res.json({ success: true, data: booking });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getBookingTimeline(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    // Verify user has access to this booking
+    await bookingService.getBookingById(req.user!.userId, req.params.id);
+    const timeline = await bookingActivityService.getBookingTimeline(
+      req.params.id,
+    );
+    res.json({ success: true, data: timeline });
   } catch (error) {
     next(error);
   }

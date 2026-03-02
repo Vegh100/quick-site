@@ -11,6 +11,7 @@ import { AppError } from "./lib/errors.js";
 import { uploadConfig } from "./config/upload.config.js";
 import { authConfig } from "./config/auth.config.js";
 import { verifyEmailConnection } from "./services/email.service.js";
+import { startBookingReminderJob, stopBookingReminderJob } from "./jobs/booking-reminders.js";
 
 // Routes
 import authRoutes from "./routes/auth.routes.js";
@@ -21,6 +22,11 @@ import bookingRoutes from "./routes/booking.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 import favoriteRoutes from "./routes/favorite.routes.js";
 import categoryRoutes from "./routes/category.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
+import referralRoutes from "./routes/referral.routes.js";
+import messagingRoutes from "./routes/messaging.routes.js";
+import portfolioRoutes from "./routes/portfolio.routes.js";
+import exportRoutes from "./routes/export.routes.js";
 
 dotenv.config();
 
@@ -113,6 +119,11 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/categories", categoryRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/referrals", referralRoutes);
+app.use("/api/messages", messagingRoutes);
+app.use("/api/portfolio", portfolioRoutes);
+app.use("/api/export", exportRoutes);
 
 // Public invite info endpoint (no auth required)
 import * as memberController from "./controllers/member.controller.js";
@@ -194,6 +205,9 @@ app.listen(PORT, () => {
   // Verify email service
   verifyEmailConnection();
 
+  // Start background jobs
+  startBookingReminderJob();
+
   // Security warnings
   if (!process.env.JWT_SECRET) {
     console.warn(
@@ -213,6 +227,7 @@ app.listen(PORT, () => {
 
 const shutdown = async (signal: string) => {
   console.log(`\n${signal} received. Shutting down gracefully...`);
+  stopBookingReminderJob();
   await prisma.$disconnect();
   process.exit(0);
 };

@@ -133,5 +133,6 @@ router.get(
 // PUBLIC PROVIDER BY ID (must be AFTER /me routes)
 // ============================================================================
 router.get("/:id", providerController.getProviderById);
+router.get("/:id/business-hours", providerController.getBusinessHours);
 
 export default router;

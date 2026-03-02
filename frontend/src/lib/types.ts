@@ -295,12 +295,18 @@ export interface Review {
   targetId: string;
   rating: number;
   comment: string | null;
+  providerResponse: string | null;
+  providerRespondedAt: string | null;
   createdAt: string;
   author?: {
     id: string;
     firstName: string | null;
     lastName: string | null;
     avatarUrl: string | null;
+  };
+  booking?: {
+    service?: { name: string };
+    scheduledDate?: string;
   };
 }
 

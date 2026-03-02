@@ -10,6 +10,8 @@ import {
   useUpdateBookingStatus,
   useBooking,
   useTeamMembers,
+  useStartConversation,
+  useRespondToReview,
 } from "../../hooks/useApi";
 import { HeaderWithSettings } from "../layout/HeaderWithSettings";
 import { Footer } from "../layout/Footer";
@@ -26,6 +28,9 @@ import { ProviderOnboardingFlow } from "./ProviderOnboardingFlow";
 import { ClientManagement } from "../clients/ClientManagement";
 import { TeamManagement } from "./TeamManagement";
 import { CalendarView } from "../booking/CalendarView";
+import { MessagingPage } from "../messaging/MessagingPage";
+import { PortfolioManager } from "../portfolio/PortfolioGallery";
+import { ExportReportPanel } from "../export/ExportReportPanel";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -47,6 +52,9 @@ import {
   Mail,
   FileText,
   ChevronRight,
+  MessageSquare,
+  Image as ImageIcon,
+  BarChart3,
 } from "lucide-react";
 import { Toaster } from "../ui/sonner";
 import { toast } from "sonner";
@@ -75,12 +83,16 @@ const ownerNavItems = [
   { id: "calendar", label: "Naptáram" },
   { id: "clients", label: "Ügyfeleim" },
   { id: "team", label: "Csapat" },
+  { id: "messages", label: "Üzenetek", icon: MessageSquare },
+  { id: "portfolio", label: "Portfólió", icon: ImageIcon },
+  { id: "reports", label: "Riportok", icon: BarChart3 },
 ];
 
 const employeeNavItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "bookings", label: "Foglalásaim" },
   { id: "calendar", label: "Naptár" },
+  { id: "messages", label: "Üzenetek", icon: MessageSquare },
 ];
 
 // Map URL segments to internal tab names
@@ -91,6 +103,9 @@ const TAB_FROM_URL: Record<string, string> = {
   csapat: "team",
   beallitasok: "settings",
   profil: "profile",
+  uzenetek: "messages",
+  portfolio: "portfolio",
+  riportok: "reports",
 };
 const TAB_TO_URL: Record<string, string> = {
   bookings: "foglalasok",
@@ -99,6 +114,9 @@ const TAB_TO_URL: Record<string, string> = {
   team: "csapat",
   settings: "beallitasok",
   profile: "profil",
+  messages: "uzenetek",
+  portfolio: "portfolio",
+  reports: "riportok",
 };
 
 export function ProviderApp() {
@@ -163,6 +181,7 @@ export function ProviderApp() {
     ownerMemberId,
   );
   const { data: reviewsData } = useProviderReviews(provider?.id);
+  const respondToReview = useRespondToReview();
   const updateStatus = useUpdateBookingStatus();
   const { data: singleBookingData, isLoading: loadingSingleBooking } =
     useBooking(detailBookingId);
@@ -374,13 +393,21 @@ export function ProviderApp() {
                   {reviews.slice(0, 3).map((review) => (
                     <ReviewCard
                       key={review.id}
+                      reviewId={review.id}
                       customer={`${review.author?.firstName || ""} ${review.author?.lastName || ""}`}
                       rating={review.rating}
                       comment={review.comment || ""}
                       date={new Date(review.createdAt).toLocaleDateString(
                         "hu-HU",
                       )}
-                      service=""
+                      service={review.booking?.service?.name || ""}
+                      providerResponse={review.providerResponse}
+                      providerRespondedAt={review.providerRespondedAt}
+                      canRespond={true}
+                      onRespond={(id, response) =>
+                        respondToReview.mutate({ reviewId: id, response })
+                      }
+                      isResponding={respondToReview.isPending}
                     />
                   ))}
                 </div>
@@ -601,6 +628,15 @@ export function ProviderApp() {
                       )}
                     </div>
                   </Card>
+
+                  {/* Message Customer Button */}
+                  {singleBooking.customer?.id && singleBooking.status !== "CANCELLED" && (
+                    <MessageCustomerButton
+                      customerId={singleBooking.customer.id}
+                      customerName={`${singleBooking.customer?.firstName || ''} ${singleBooking.customer?.lastName || ''}`.trim()}
+                      onNavigate={() => setActiveTab('messages')}
+                    />
+                  )}
 
                   {/* Service & Price */}
                   <Card className="p-6">
@@ -865,13 +901,21 @@ export function ProviderApp() {
                     {reviews.map((review) => (
                       <ReviewCard
                         key={review.id}
+                        reviewId={review.id}
                         customer={`${review.author?.firstName || ""} ${review.author?.lastName || ""}`}
                         rating={review.rating}
                         comment={review.comment || ""}
                         date={new Date(review.createdAt).toLocaleDateString(
                           "hu-HU",
                         )}
-                        service=""
+                        service={review.booking?.service?.name || ""}
+                        providerResponse={review.providerResponse}
+                        providerRespondedAt={review.providerRespondedAt}
+                        canRespond={true}
+                        onRespond={(id, response) =>
+                          respondToReview.mutate({ reviewId: id, response })
+                        }
+                        isResponding={respondToReview.isPending}
                       />
                     ))}
                   </div>
@@ -913,13 +957,21 @@ export function ProviderApp() {
                           {reviews.slice(0, 3).map((review) => (
                             <ReviewCard
                               key={review.id}
+                              reviewId={review.id}
                               customer={`${review.author?.firstName || ""} ${review.author?.lastName || ""}`}
                               rating={review.rating}
                               comment={review.comment || ""}
                               date={new Date(
                                 review.createdAt,
                               ).toLocaleDateString("hu-HU")}
-                              service=""
+                              service={review.booking?.service?.name || ""}
+                              providerResponse={review.providerResponse}
+                              providerRespondedAt={review.providerRespondedAt}
+                              canRespond={true}
+                              onRespond={(id, response) =>
+                                respondToReview.mutate({ reviewId: id, response })
+                              }
+                              isResponding={respondToReview.isPending}
                             />
                           ))}
                         </div>
@@ -951,6 +1003,45 @@ export function ProviderApp() {
             </Tabs>
           </div>
         )}
+
+        {/* Messages Tab */}
+        {activeTab === "messages" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1>Üzenetek</h1>
+                <p className="text-muted-foreground">Kommunikáció ügyfelekkel</p>
+              </div>
+            </div>
+            <MessagingPage />
+          </div>
+        )}
+
+        {/* Portfolio Tab */}
+        {activeTab === "portfolio" && provider && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1>Portfólió</h1>
+                <p className="text-muted-foreground">Munkáid bemutatása</p>
+              </div>
+            </div>
+            <PortfolioManager providerId={provider.id} />
+          </div>
+        )}
+
+        {/* Reports Tab */}
+        {activeTab === "reports" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1>Riportok</h1>
+                <p className="text-muted-foreground">Bevételi statisztikák és exportálás</p>
+              </div>
+            </div>
+            <ExportReportPanel />
+          </div>
+        )}
       </main>
 
       <Footer />
@@ -966,6 +1057,44 @@ export function ProviderApp() {
       />
       <Toaster />
     </div>
+  );
+}
+
+// ============================================================================
+// MESSAGE CUSTOMER BUTTON
+// ============================================================================
+
+function MessageCustomerButton({
+  customerId,
+  customerName,
+  onNavigate,
+}: {
+  customerId: string;
+  customerName: string;
+  onNavigate: () => void;
+}) {
+  const startConversation = useStartConversation();
+
+  return (
+    <Card className="p-4">
+      <Button
+        variant="outline"
+        className="w-full gap-2"
+        disabled={startConversation.isPending}
+        onClick={() => {
+          startConversation.mutate(customerId, {
+            onSuccess: () => onNavigate(),
+          });
+        }}
+      >
+        {startConversation.isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <MessageSquare className="h-4 w-4" />
+        )}
+        Üzenet küldése ({customerName || "ügyfél"})
+      </Button>
+    </Card>
   );
 }
 

@@ -31,4 +31,11 @@ router.get(
   reviewController.getMyReviews,
 );
 
+// Provider responds to a review
+router.post(
+  "/:id/respond",
+  authenticate,
+  reviewController.respondToReview,
+);
+
 export default router;

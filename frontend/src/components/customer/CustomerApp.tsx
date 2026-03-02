@@ -42,6 +42,7 @@ import { CustomerSettingsPanel } from "../settings/CustomerSettingsPanel";
 import { BookingModal } from "../booking/BookingModal";
 import { ProviderDetailPage } from "./ProviderDetailPage";
 import { BookingDetailPage } from "./BookingDetailPage";
+import { MessagingPage } from "../messaging/MessagingPage";
 import { Toaster } from "../ui/sonner";
 import { toast } from "sonner";
 import type {
@@ -67,18 +68,19 @@ const STATUS_HU: Record<BookingStatus, string> = {
   CANCELLED: "Lemondva",
 };
 
-// Map URL segments to internal tab names
 const TAB_FROM_URL: Record<string, string> = {
   foglalasok: "bookings",
   kedvencek: "favorites",
   beallitasok: "settings",
   tevekenyse: "analytics",
+  uzenetek: "messages",
 };
 const TAB_TO_URL: Record<string, string> = {
   bookings: "foglalasok",
   favorites: "kedvencek",
   settings: "beallitasok",
   analytics: "tevekenyse",
+  messages: "uzenetek",
 };
 
 export function CustomerApp() {
@@ -294,6 +296,13 @@ export function CustomerApp() {
                 className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
               >
                 Tevékenység
+              </TabsTrigger>
+              <TabsTrigger
+                value="messages"
+                className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+              >
+                <MessageSquare className="h-4 w-4 mr-1" />
+                Üzenetek
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -924,6 +933,16 @@ export function CustomerApp() {
                     </div>
                   </Card>
                 </div>
+              </div>
+            )}
+
+            {activeTab === "messages" && (
+              <div className="space-y-4">
+                <div>
+                  <h1>Üzenetek</h1>
+                  <p className="text-muted-foreground">Kommunikáció szolgáltatókkal</p>
+                </div>
+                <MessagingPage />
               </div>
             )}
           </>

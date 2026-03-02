@@ -4,6 +4,7 @@ import {
   CreateReviewInput,
   ReviewFilterInput,
 } from "../validators/review.validators.js";
+import { createNotification } from "./notification.service.js";
 
 // ============================================================================
 // CREATE REVIEW
@@ -60,14 +61,77 @@ export async function createReview(authorId: string, data: CreateReviewInput) {
   // If reviewing a provider, update their aggregate rating
   if (isCustomer) {
     await updateProviderRating(booking.providerId);
+
+    // Notify the provider about the new review
+    const authorName = [review.author.firstName, review.author.lastName]
+      .filter(Boolean)
+      .join(" ") || "Ügyfél";
+    createNotification({
+      userId: booking.provider.userId,
+      type: "REVIEW_RECEIVED",
+      title: "Új értékelés érkezett",
+      body: `${authorName} ${data.rating}★ értékelést adott.${data.comment ? ` "${data.comment.substring(0, 60)}..."` : ""}`,
+      link: `/szolgaltato/foglalasok`,
+    });
   }
 
   return review;
 }
 
 // ============================================================================
+// RESPOND TO REVIEW (Provider reply)
+// ============================================================================
+
+export async function respondToReview(
+  userId: string,
+  reviewId: string,
+  response: string,
+) {
+  const review = await prisma.review.findUnique({
+    where: { id: reviewId },
+    include: {
+      booking: { include: { provider: true } },
+    },
+  });
+
+  if (!review) throw new NotFoundError("Review");
+
+  // Only the provider (target) can respond
+  if (review.targetId !== userId && review.booking.provider.userId !== userId) {
+    throw new ForbiddenError("Only the provider can respond to this review");
+  }
+
+  // Can't respond to own reviews (provider reviewing customer)
+  if (review.authorId === userId) {
+    throw new AppError("Cannot respond to your own review", 400);
+  }
+
+  // Already responded?
+  if (review.providerResponse) {
+    throw new AppError("Már válaszoltál erre az értékelésre", 409);
+  }
+
+  return prisma.review.update({
+    where: { id: reviewId },
+    data: {
+      providerResponse: response,
+      providerRespondedAt: new Date(),
+    },
+    include: {
+      author: {
+        select: { id: true, firstName: true, lastName: true, avatarUrl: true },
+      },
+      booking: {
+        select: { service: { select: { name: true } }, scheduledDate: true },
+      },
+    },
+  });
+}
+
+// ============================================================================
 // GET REVIEWS
 // ============================================================================
+
 
 export async function getProviderReviews(
   providerId: string,

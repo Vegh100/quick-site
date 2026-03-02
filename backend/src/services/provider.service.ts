@@ -227,6 +227,65 @@ export async function getProviderById(providerId: string) {
 }
 
 // ============================================================================
+// BUSINESS HOURS (public)
+// ============================================================================
+
+const DAY_NAMES_HU = [
+  "Vasárnap",
+  "Hétfő",
+  "Kedd",
+  "Szerda",
+  "Csütörtök",
+  "Péntek",
+  "Szombat",
+];
+
+export async function getBusinessHours(providerId: string) {
+  const provider = await prisma.provider.findUnique({
+    where: { id: providerId },
+    select: { id: true },
+  });
+  if (!provider) throw new NotFoundError("Provider");
+
+  // Get all availability for active members
+  const availability = await prisma.availability.findMany({
+    where: {
+      providerId,
+      isEnabled: true,
+      member: { status: "ACTIVE" },
+    },
+    orderBy: { dayOfWeek: "asc" },
+  });
+
+  // Group by day and find earliest start / latest end
+  const byDay = new Map<number, { startTime: string; endTime: string }>();
+
+  for (const a of availability) {
+    const existing = byDay.get(a.dayOfWeek);
+    if (!existing) {
+      byDay.set(a.dayOfWeek, { startTime: a.startTime, endTime: a.endTime });
+    } else {
+      if (a.startTime < existing.startTime) existing.startTime = a.startTime;
+      if (a.endTime > existing.endTime) existing.endTime = a.endTime;
+    }
+  }
+
+  // Build result for all 7 days
+  const hours = Array.from({ length: 7 }, (_, i) => {
+    const day = byDay.get(i);
+    return {
+      dayOfWeek: i,
+      dayName: DAY_NAMES_HU[i],
+      isOpen: !!day,
+      startTime: day?.startTime || null,
+      endTime: day?.endTime || null,
+    };
+  });
+
+  return hours;
+}
+
+// ============================================================================
 // SEARCH / DISCOVERY
 // ============================================================================
 
@@ -263,13 +322,35 @@ export async function searchProviders(filters: ProviderSearchInput) {
   }
 
   if (filters.city) {
-    where.serviceArea = { contains: filters.city, mode: "insensitive" };
+    // Use AND to ensure city filter doesn't clash with search OR
+    where.AND = [
+      ...((where.AND as any[]) || []),
+      {
+        OR: [
+          { city: { contains: filters.city, mode: "insensitive" } },
+          { serviceArea: { contains: filters.city, mode: "insensitive" } },
+        ],
+      },
+    ];
+  }
+
+  if (filters.county) {
+    where.county = { contains: filters.county, mode: "insensitive" };
+  }
+
+  // Build services filter incrementally
+  const serviceFilter: Record<string, any> = { isActive: true };
+
+  if (filters.serviceTypeId) {
+    serviceFilter.serviceTypeId = filters.serviceTypeId;
   }
 
   if (filters.maxPrice) {
-    where.services = {
-      some: { priceAmount: { lte: filters.maxPrice }, isActive: true },
-    };
+    serviceFilter.priceAmount = { lte: filters.maxPrice };
+  }
+
+  if (filters.serviceTypeId || filters.maxPrice) {
+    where.services = { some: serviceFilter };
   }
 
   // Build order by

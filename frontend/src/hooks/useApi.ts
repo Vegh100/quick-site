@@ -7,6 +7,13 @@ import {
   categoryApi,
   userApi,
   memberApi,
+  notificationApi,
+  referralApi,
+  messagingApi,
+  portfolioApi,
+  bookingTimelineApi,
+  exportApi,
+  businessHoursApi,
 } from "../lib/api-services";
 import type { CreateBookingInput, Address } from "../lib/types";
 
@@ -321,6 +328,18 @@ export function useCreateReview() {
   });
 }
 
+export function useRespondToReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reviewId, response }: { reviewId: string; response: string }) =>
+      reviewApi.respond(reviewId, response),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["reviews"] });
+      qc.invalidateQueries({ queryKey: ["providers"] });
+    },
+  });
+}
+
 // ============================================================================
 // FAVORITES
 // ============================================================================
@@ -569,5 +588,202 @@ export function useInviteInfo(token: string | undefined) {
     queryKey: ["invites", token],
     queryFn: () => memberApi.getInviteInfo(token!),
     enabled: !!token,
+  });
+}
+
+// ============================================================================
+// NOTIFICATIONS
+// ============================================================================
+
+export function useNotifications(page = 1, limit = 20) {
+  return useQuery({
+    queryKey: ["notifications", page, limit],
+    queryFn: () => notificationApi.getAll(page, limit),
+  });
+}
+
+export function useUnreadCount() {
+  return useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: () => notificationApi.getUnreadCount(),
+    refetchInterval: 30_000, // poll every 30s
+  });
+}
+
+export function useMarkAsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => notificationApi.markAsRead(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+export function useMarkAllAsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => notificationApi.markAllAsRead(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+export function useDeleteNotification() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => notificationApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+  });
+}
+
+// ============================================================================
+// REFERRALS
+// ============================================================================
+
+export function useMyReferral() {
+  return useQuery({
+    queryKey: ["referrals", "me"],
+    queryFn: () => referralApi.getMyReferral(),
+  });
+}
+
+export function useRedeemReferral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (code: string) => referralApi.redeem(code),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["referrals"] });
+    },
+  });
+}
+
+// ============================================================================
+// MESSAGING
+// ============================================================================
+
+export function useConversations() {
+  return useQuery({
+    queryKey: ["conversations"],
+    queryFn: () => messagingApi.getConversations(),
+    refetchInterval: 15_000,
+  });
+}
+
+export function useMessages(conversationId: string | null, page = 1) {
+  return useQuery({
+    queryKey: ["messages", conversationId, page],
+    queryFn: () => messagingApi.getMessages(conversationId!, page),
+    enabled: !!conversationId,
+    refetchInterval: 5_000,
+  });
+}
+
+export function useSendMessage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ conversationId, content }: { conversationId: string; content: string }) =>
+      messagingApi.sendMessage(conversationId, content),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ["messages", variables.conversationId] });
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+}
+
+export function useStartConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => messagingApi.startConversation(userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+    },
+  });
+}
+
+export function useMessageUnreadCount() {
+  return useQuery({
+    queryKey: ["messages", "unread-count"],
+    queryFn: () => messagingApi.getUnreadCount(),
+    refetchInterval: 30_000,
+  });
+}
+
+// ============================================================================
+// PORTFOLIO
+// ============================================================================
+
+export function usePortfolioImages(providerId: string | undefined, serviceId?: string) {
+  return useQuery({
+    queryKey: ["portfolio", providerId, serviceId],
+    queryFn: () => portfolioApi.getByProvider(providerId!, serviceId),
+    enabled: !!providerId,
+  });
+}
+
+export function useAddPortfolioImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { imageUrl: string; caption?: string; serviceId?: string }) =>
+      portfolioApi.add(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+    },
+  });
+}
+
+export function useDeletePortfolioImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => portfolioApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+    },
+  });
+}
+
+// ============================================================================
+// BOOKING TIMELINE
+// ============================================================================
+
+export function useBookingTimeline(bookingId: string | undefined) {
+  return useQuery({
+    queryKey: ["booking-timeline", bookingId],
+    queryFn: () => bookingTimelineApi.get(bookingId!),
+    enabled: !!bookingId,
+  });
+}
+
+// ============================================================================
+// EXPORT & REPORTING
+// ============================================================================
+
+export function useRevenueSummary(dateFrom: string, dateTo: string, enabled = true) {
+  return useQuery({
+    queryKey: ["revenue-summary", dateFrom, dateTo],
+    queryFn: () => exportApi.getRevenueSummary(dateFrom, dateTo),
+    enabled: enabled && !!dateFrom && !!dateTo,
+  });
+}
+
+export function useExportBookingsCsv() {
+  return useMutation({
+    mutationFn: (filters?: { dateFrom?: string; dateTo?: string; status?: string }) =>
+      exportApi.downloadBookingsCsv(filters),
+  });
+}
+
+// ============================================================================
+// BUSINESS HOURS
+// ============================================================================
+
+export function useBusinessHours(providerId: string | undefined) {
+  return useQuery({
+    queryKey: ["business-hours", providerId],
+    queryFn: () => businessHoursApi.get(providerId!),
+    enabled: !!providerId,
   });
 }
