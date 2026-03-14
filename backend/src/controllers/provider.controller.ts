@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import * as providerService from "../services/provider.service.js";
 import { AuthenticatedRequest } from "../types/index.js";
+import { getFileUrl } from "../lib/upload.js";
+import { uploadConfig } from "../config/upload.config.js";
 
 // ============================================================================
 // PROVIDER PROFILE (owner)
@@ -149,6 +151,32 @@ export async function deleteService(
   try {
     await providerService.deleteService(req.user!.userId, req.params.serviceId);
     res.json({ success: true, message: "Service deleted" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function uploadServiceImage(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: "No file uploaded" });
+      return;
+    }
+
+    const imageUrl = getFileUrl(
+      uploadConfig.subdirs.services,
+      req.file.filename,
+    );
+    const service = await providerService.updateService(
+      req.user!.userId,
+      req.params.serviceId,
+      { imageUrl },
+    );
+    res.json({ success: true, data: service });
   } catch (error) {
     next(error);
   }

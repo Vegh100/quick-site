@@ -3,6 +3,7 @@ import * as providerController from "../controllers/provider.controller.js";
 import { authenticate } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
 import { requireRole } from "../middleware/role.js";
+import { uploadServiceImage } from "../lib/upload.js";
 import {
   createProviderSchema,
   updateProviderSchema,
@@ -78,6 +79,14 @@ router.delete(
   authenticate,
   requireRole("PROVIDER", "EMPLOYEE"),
   providerController.deleteService,
+);
+
+router.post(
+  "/me/services/:serviceId/image",
+  authenticate,
+  requireRole("PROVIDER", "EMPLOYEE"),
+  uploadServiceImage,
+  providerController.uploadServiceImage,
 );
 
 // Availability

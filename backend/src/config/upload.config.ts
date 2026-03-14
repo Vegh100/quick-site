@@ -15,6 +15,7 @@ export const uploadConfig = {
     logos: "logos",
     documents: "documents",
     services: "services",
+    portfolio: "portfolio",
   } as const,
   allowedMimeTypes: {
     images: ["image/jpeg", "image/png", "image/webp", "image/gif"],

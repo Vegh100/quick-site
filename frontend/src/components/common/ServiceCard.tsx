@@ -15,6 +15,7 @@ interface ServiceCardProps {
   availability: string;
   image?: string;
   category: string;
+  onClick?: () => void;
 }
 
 export function ServiceCard({
@@ -27,9 +28,15 @@ export function ServiceCard({
   availability,
   image,
   category,
+  onClick,
 }: ServiceCardProps) {
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+    <Card
+      className={`overflow-hidden hover:shadow-lg transition-shadow ${
+        onClick ? "cursor-pointer" : ""
+      }`}
+      onClick={onClick}
+    >
       <div className="aspect-video bg-muted relative overflow-hidden">
         {image && (
           <ImageWithFallback
@@ -48,7 +55,10 @@ export function ServiceCard({
           <div className="flex items-center gap-2">
             <Avatar className="h-10 w-10">
               <AvatarFallback className="bg-primary/10 text-primary">
-                {provider.split(" ").map(n => n[0]).join("")}
+                {provider
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")}
               </AvatarFallback>
             </Avatar>
             <div>

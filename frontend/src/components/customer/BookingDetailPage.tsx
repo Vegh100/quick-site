@@ -24,6 +24,10 @@ import {
   MessageSquare,
   Briefcase,
   Building2,
+  Globe,
+  CreditCard,
+  Home,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { BookingStatus } from "../../lib/types";
@@ -42,6 +46,12 @@ const STATUS_HU: Record<BookingStatus, string> = {
   IN_PROGRESS: "Folyamatban",
   COMPLETED: "Befejezve",
   CANCELLED: "Lemondva",
+};
+
+const PRICE_TYPE_HU: Record<string, string> = {
+  FIXED: "Átalány ár",
+  PER_HOUR: "Óradíj",
+  PER_SERVICE: "Szolgáltatásonként",
 };
 
 const STATUS_DESCRIPTION: Record<BookingStatus, string> = {
@@ -178,6 +188,27 @@ export function BookingDetailPage({
             </Button>
           )}
         </div>
+        {booking.status === "CANCELLED" && booking.cancelReason && (
+          <div className="mt-3 flex items-start gap-2 rounded-md bg-red-100 dark:bg-red-950/30 px-3 py-2 text-sm text-red-700 dark:text-red-400">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>
+              <span className="font-medium">Lemondás oka:</span>{" "}
+              {booking.cancelReason}
+            </span>
+          </div>
+        )}
+        {booking.status === "COMPLETED" && booking.completedAt && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Teljesítve:{" "}
+            {new Date(booking.completedAt).toLocaleDateString("hu-HU", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        )}
       </Card>
 
       {/* Booking details */}
@@ -227,6 +258,43 @@ export function BookingDetailPage({
                 </span>
               </div>
             </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                Helyszín
+              </p>
+              {booking.address ? (
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <div>
+                    {booking.address.label && (
+                      <p className="text-xs text-muted-foreground">
+                        {booking.address.label}
+                      </p>
+                    )}
+                    <p className="text-sm font-medium">
+                      {booking.address.formattedAddress ||
+                        `${booking.address.street}, ${booking.address.zipCode} ${booking.address.city}`}
+                    </p>
+                  </div>
+                </div>
+              ) : provider &&
+                (provider.city || provider.address || provider.serviceArea) ? (
+                <div className="flex items-start gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                  <p className="text-sm font-medium">
+                    {provider.address
+                      ? `${provider.address}${provider.city ? `, ${provider.city}` : ""}`
+                      : provider.city
+                        ? [provider.city, (provider as any).county]
+                            .filter(Boolean)
+                            .join(", ")
+                        : provider.serviceArea}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Nincs megadva</p>
+              )}
+            </div>
           </div>
           <div className="space-y-3">
             <div>
@@ -236,6 +304,11 @@ export function BookingDetailPage({
               <p className="text-2xl font-bold text-primary">
                 {Number(booking.totalAmount)} {booking.currency}
               </p>
+              {service?.priceType && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {PRICE_TYPE_HU[service.priceType] ?? service.priceType}
+                </p>
+              )}
             </div>
             {booking.notes && (
               <div>
@@ -312,7 +385,44 @@ export function BookingDetailPage({
                   {provider.description}
                 </p>
               )}
+              {(provider as any).rating > 0 && (
+                <div className="flex items-center gap-1 mt-2">
+                  <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                  <span className="text-sm font-medium">
+                    {Number((provider as any).rating).toFixed(1)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    ({(provider as any).reviewCount} értékelés)
+                  </span>
+                </div>
+              )}
+              {(provider as any).website && (
+                <a
+                  href={(provider as any).website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-primary hover:underline mt-1"
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  {(provider as any).website.replace(/^https?:\/\//, "")}
+                </a>
+              )}
             </div>
+          </div>
+          <div className="mt-4 pt-4 border-t">
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => {
+                const providerUserId = (provider as any)?.userId;
+                if (providerUserId) {
+                  navigate(`/ugyfel/uzenetek?userId=${providerUserId}`);
+                }
+              }}
+            >
+              <MessageSquare className="h-4 w-4" />
+              Üzenet küldése
+            </Button>
           </div>
         </Card>
       )}
@@ -338,29 +448,77 @@ export function BookingDetailPage({
             </div>
             <div>
               <h3 className="font-semibold">{memberName}</h3>
-              {member.role === "OWNER" && (
-                <span className="text-xs text-muted-foreground">
-                  Tulajdonos
-                </span>
-              )}
+              <span className="text-xs text-muted-foreground">
+                {member.role === "OWNER" ? "Tulajdonos" : "Munkatárs"}
+              </span>
             </div>
           </div>
-
-          {/* Chat button — message the provider */}
-          <div className="mt-4 pt-4 border-t">
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => {
-                const providerUserId = (provider as any)?.userId;
-                if (providerUserId) {
-                  navigate(`/ugyfel/uzenetek?userId=${providerUserId}`);
-                }
-              }}
-            >
-              <MessageSquare className="h-4 w-4" />
-              Üzenet küldése
-            </Button>
+        </Card>
+      )}
+    
+      {/* Payment info */}
+      {(booking as any).payment && (
+        <Card className="p-6">
+          <h2 className="font-semibold text-lg mb-4 flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Fizetés
+          </h2>
+          <div className="grid sm:grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                Státusz
+              </p>
+              <p className="font-medium">
+                {(
+                  {
+                    PENDING: "Függőben",
+                    PROCESSING: "Feldolgozás alatt",
+                    COMPLETED: "Befizetve",
+                    FAILED: "Sikertelen",
+                    REFUNDED: "Visszatérítve",
+                  } as Record<string, string>
+                )[(booking as any).payment.status] ??
+                  (booking as any).payment.status}
+              </p>
+            </div>
+            {(booking as any).payment.paymentMethod && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                  Fizetési mód
+                </p>
+                <p className="font-medium">
+                  {(booking as any).payment.paymentMethod}
+                </p>
+              </div>
+            )}
+            {(booking as any).payment.paidAt && (
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                  Fizetés időpontja
+                </p>
+                <p className="font-medium">
+                  {new Date((booking as any).payment.paidAt).toLocaleDateString(
+                    "hu-HU",
+                    {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    },
+                  )}
+                </p>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                Összeg
+              </p>
+              <p className="font-medium">
+                {Number((booking as any).payment.amount)}{" "}
+                {(booking as any).payment.currency}
+              </p>
+            </div>
           </div>
         </Card>
       )}

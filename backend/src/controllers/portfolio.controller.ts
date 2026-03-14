@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthenticatedRequest } from "../types/index.js";
 import * as portfolioService from "../services/portfolio.service.js";
+import { getFileUrl } from "../lib/upload.js";
+import { uploadConfig } from "../config/upload.config.js";
 
 export async function getPortfolioImages(
   req: Request,
@@ -62,6 +64,35 @@ export async function deletePortfolioImage(
       req.params.id,
     );
     res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function uploadPortfolioImageFile(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: "No file uploaded" });
+      return;
+    }
+    const imageUrl = getFileUrl(
+      uploadConfig.subdirs.portfolio,
+      req.file.filename,
+    );
+    const caption =
+      typeof req.body.caption === "string" ? req.body.caption : undefined;
+    const serviceId =
+      typeof req.body.serviceId === "string" ? req.body.serviceId : undefined;
+    const image = await portfolioService.addPortfolioImage(req.user!.userId, {
+      imageUrl,
+      caption,
+      serviceId,
+    });
+    res.status(201).json({ success: true, data: image });
   } catch (error) {
     next(error);
   }

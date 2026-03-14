@@ -29,6 +29,7 @@ import {
   useAddService,
   useUpdateService,
   useDeleteService,
+  useUploadServiceImage,
   useSetAvailability,
   useUploadAvatar,
   useServiceTypes,
@@ -59,6 +60,7 @@ export function ProviderSettingsPanel() {
   const addServiceMut = useAddService();
   const updateServiceMut = useUpdateService();
   const deleteServiceMut = useDeleteService();
+  const uploadServiceImageMut = useUploadServiceImage();
   const setAvailabilityMut = useSetAvailability();
   const uploadAvatarMut = useUploadAvatar();
   const { data: serviceTypesData } = useServiceTypes();
@@ -94,6 +96,8 @@ export function ProviderSettingsPanel() {
   const [svcPriceType, setSvcPriceType] = useState<
     "PER_HOUR" | "FIXED" | "PER_SERVICE"
   >("FIXED");
+  const [svcImageUrl, setSvcImageUrl] = useState<string>("");
+  const [svcImageFile, setSvcImageFile] = useState<File | null>(null);
 
   // Service slot picker
   const [slotPickerServiceId, setSlotPickerServiceId] = useState<string | null>(
@@ -201,6 +205,8 @@ export function ProviderSettingsPanel() {
     setSvcPrice("");
     setSvcDuration("60");
     setSvcPriceType("FIXED");
+    setSvcImageUrl("");
+    setSvcImageFile(null);
     setEditingService(null);
     setShowServiceForm(false);
   };
@@ -213,6 +219,8 @@ export function ProviderSettingsPanel() {
     setSvcPrice(String(Number(svc.priceAmount)));
     setSvcDuration(String(svc.durationMin));
     setSvcPriceType(svc.priceType);
+    setSvcImageUrl(svc.imageUrl || "");
+    setSvcImageFile(null);
     setShowServiceForm(true);
   };
 
@@ -245,23 +253,40 @@ export function ProviderSettingsPanel() {
       slotIntervalMin: duration,
     };
 
+    let savedServiceId: string;
     try {
       if (editingService) {
-        await updateServiceMut.mutateAsync({
+        const result = await updateServiceMut.mutateAsync({
           serviceId: editingService.id,
           data,
         });
+        savedServiceId = result.data?.id ?? editingService.id;
         toast.success("Szolgáltatás frissítve!");
       } else {
-        await addServiceMut.mutateAsync(data);
+        const result = await addServiceMut.mutateAsync(data);
+        savedServiceId = result.data?.id ?? "";
         toast.success("Szolgáltatás hozzáadva!");
       }
-      resetServiceForm();
     } catch {
       toast.error(
         "Nem sikerült menteni a szolgáltatást. Ellenőrizd az adatokat!",
       );
+      return;
     }
+
+    // Upload image if a new file was selected
+    if (svcImageFile && savedServiceId) {
+      try {
+        await uploadServiceImageMut.mutateAsync({
+          serviceId: savedServiceId,
+          file: svcImageFile,
+        });
+      } catch {
+        toast.error("A kép feltöltése nem sikerült. Próbáld újra!");
+      }
+    }
+
+    resetServiceForm();
   };
 
   const handleDeleteService = async (serviceId: string) => {
@@ -617,6 +642,45 @@ export function ProviderSettingsPanel() {
                       Hozzávetőleg mennyi időt vesz igénybe a szolgáltatás
                     </p>
                   </div>
+                  <div>
+                    <Label>Szolgáltatás képe</Label>
+                    <div className="mt-1 space-y-2">
+                      {(svcImageUrl || svcImageFile) && (
+                        <div className="relative w-full h-36 rounded-md overflow-hidden border">
+                          <img
+                            src={
+                              svcImageFile
+                                ? URL.createObjectURL(svcImageFile)
+                                : svcImageUrl
+                            }
+                            alt="Szolgáltatás képe"
+                            className="w-full h-full object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSvcImageFile(null);
+                              setSvcImageUrl("");
+                            }}
+                            className="absolute top-1 right-1 bg-black/60 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-black/80"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) setSvcImageFile(file);
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Ajánlott méret: 800×500 px. Max 5 MB.
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={resetServiceForm}>
@@ -625,11 +689,14 @@ export function ProviderSettingsPanel() {
                   <Button
                     onClick={handleSaveService}
                     disabled={
-                      addServiceMut.isPending || updateServiceMut.isPending
+                      addServiceMut.isPending ||
+                      updateServiceMut.isPending ||
+                      uploadServiceImageMut.isPending
                     }
                   >
                     {(addServiceMut.isPending ||
-                      updateServiceMut.isPending) && (
+                      updateServiceMut.isPending ||
+                      uploadServiceImageMut.isPending) && (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     )}
                     Mentés
@@ -649,6 +716,15 @@ export function ProviderSettingsPanel() {
                     key={svc.id}
                     className="border rounded-lg overflow-hidden"
                   >
+                    {svc.imageUrl && (
+                      <div className="w-full h-24 overflow-hidden">
+                        <img
+                          src={svc.imageUrl}
+                          alt={svc.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
                     <div className="flex items-center justify-between p-4">
                       <div>
                         <h4 className="font-medium">{svc.name}</h4>

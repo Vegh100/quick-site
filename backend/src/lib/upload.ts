@@ -92,6 +92,12 @@ export const uploadServiceImage = multer({
   fileFilter: imageFilter,
 }).single("image");
 
+export const uploadPortfolioImage = multer({
+  storage: createStorage(uploadConfig.subdirs.portfolio),
+  limits: { fileSize: uploadConfig.maxFileSize },
+  fileFilter: imageFilter,
+}).single("image");
+
 // Helper: get public URL from file path
 export function getFileUrl(subdir: string, filename: string): string {
   return `${uploadConfig.urlPrefix}/${subdir}/${filename}`;

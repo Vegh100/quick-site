@@ -354,6 +354,15 @@ export function ProviderDetailPage({
       {/* Featured Service + Inline Booking */}
       {featuredService && (
         <Card className="p-0 overflow-hidden">
+          {featuredService.imageUrl && (
+            <div className="w-full h-48 overflow-hidden">
+              <img
+                src={featuredService.imageUrl}
+                alt={featuredService.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
           <div className="grid md:grid-cols-5 gap-0">
             {/* Service info – left 2/5 */}
             <div className="md:col-span-2 p-6 bg-primary/5 border-b md:border-b-0 md:border-r">
@@ -761,7 +770,7 @@ export function ProviderDetailPage({
               return (
                 <Card
                   key={service.id}
-                  className="p-4 hover:border-primary/50 cursor-pointer transition-colors"
+                  className="p-0 hover:border-primary/50 cursor-pointer transition-colors overflow-hidden"
                   onClick={() => {
                     setFeaturedServiceId(service.id);
                     setBookingDate(undefined);
@@ -771,37 +780,48 @@ export function ProviderDetailPage({
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      {service.serviceType?.category && (
-                        <Badge variant="secondary" className="mb-1.5 text-xs">
-                          {service.serviceType.category.icon && (
-                            <span className="mr-1">
-                              {service.serviceType.category.icon}
-                            </span>
-                          )}
-                          {service.serviceType.category.name}
-                        </Badge>
-                      )}
-                      <h3 className="font-medium text-sm">{service.name}</h3>
+                  {service.imageUrl && (
+                    <div className="w-full h-28 overflow-hidden">
+                      <img
+                        src={service.imageUrl}
+                        alt={service.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
-                    <div className="text-right flex-shrink-0 ml-3">
-                      <div className="font-bold text-primary">
-                        {Number(service.priceAmount)} {service.priceCurrency}
+                  )}
+                  <div className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        {service.serviceType?.category && (
+                          <Badge variant="secondary" className="mb-1.5 text-xs">
+                            {service.serviceType.category.icon && (
+                              <span className="mr-1">
+                                {service.serviceType.category.icon}
+                              </span>
+                            )}
+                            {service.serviceType.category.name}
+                          </Badge>
+                        )}
+                        <h3 className="font-medium text-sm">{service.name}</h3>
+                      </div>
+                      <div className="text-right flex-shrink-0 ml-3">
+                        <div className="font-bold text-primary">
+                          {Number(service.priceAmount)} {service.priceCurrency}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {service.durationMin} perc
-                    </div>
-                    {svcMembers.length > 0 && (
+                    <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        {svcMembers.length} szakember
+                        <Clock className="h-3 w-3" />
+                        {service.durationMin} perc
                       </div>
-                    )}
+                      {svcMembers.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <User className="h-3 w-3" />
+                          {svcMembers.length} szakember
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </Card>
               );

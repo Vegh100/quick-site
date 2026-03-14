@@ -285,6 +285,7 @@ model Service {
   slotIntervalMin Int       @default(60) @map("slot_interval_min")
   isActive        Boolean   @default(true) @map("is_active")
   sortOrder       Int       @default(0) @map("sort_order")
+  imageUrl        String?   @map("image_url") @db.VarChar(500)
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

@@ -24,6 +24,7 @@ export const addServiceSchema = z.object({
   priceType: z.enum(["PER_HOUR", "FIXED", "PER_SERVICE"]).default("FIXED"),
   durationMin: z.number().int().positive("Duration must be positive"),
   slotIntervalMin: z.number().int().min(15).max(480).default(60),
+  imageUrl: z.string().url().max(500).optional().nullable(),
 });
 
 export const updateServiceSchema = addServiceSchema.partial();

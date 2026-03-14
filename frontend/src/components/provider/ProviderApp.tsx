@@ -5,7 +5,6 @@ import {
   useMyProvider,
   useProviderStats,
   useProviderBookings,
-  useProviderClients,
   useProviderReviews,
   useUpdateBookingStatus,
   useBooking,
@@ -156,13 +155,20 @@ export function ProviderApp() {
   const provider = providerData?.data;
 
   // Fetch team members to find owner's member ID
-  const { data: teamData } = useTeamMembers();
+  const { data: teamData, isLoading: isLoadingTeam } = useTeamMembers();
   const ownerMemberId = isOwner
     ? (teamData?.data || []).find((m) => m.role === "OWNER")?.id
     : undefined;
 
+  // For owners: wait until team data has loaded (so ownerMemberId is known)
+  // This prevents personal tabs from briefly showing company-wide data
+  const personalReady = !isOwner || !isLoadingTeam;
+
   // Personal stats (filtered by owner's member ID for owners)
-  const { data: statsData } = useProviderStats(!!provider, ownerMemberId);
+  const { data: statsData } = useProviderStats(
+    !!provider && personalReady,
+    ownerMemberId,
+  );
   // Company-wide stats (no memberId filter)
   const { data: companyStatsData } = useProviderStats(!!provider && isOwner);
   const { data: bookingsData, isLoading: loadingBookings } =
@@ -172,14 +178,8 @@ export function ProviderApp() {
         limit: 20,
         ...(ownerMemberId ? { memberId: ownerMemberId } : {}),
       },
-      !!provider,
+      !!provider && personalReady,
     );
-  const { data: clientsData } = useProviderClients(
-    1,
-    20,
-    !!provider && isOwner,
-    ownerMemberId,
-  );
   const { data: reviewsData } = useProviderReviews(provider?.id);
   const respondToReview = useRespondToReview();
   const updateStatus = useUpdateBookingStatus();
@@ -589,6 +589,41 @@ export function ProviderApp() {
                           {singleBooking.durationMin} perc
                         </span>
                       </div>
+                      <div className="flex justify-between border-t pt-3 mt-1">
+                        <span className="text-muted-foreground">
+                          Létrehozva
+                        </span>
+                        <span className="font-medium">
+                          {new Date(singleBooking.createdAt).toLocaleDateString(
+                            "hu-HU",
+                            {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            },
+                          )}
+                        </span>
+                      </div>
+                      {singleBooking.completedAt && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">
+                            Befejezve
+                          </span>
+                          <span className="font-medium">
+                            {new Date(
+                              singleBooking.completedAt,
+                            ).toLocaleDateString("hu-HU", {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </Card>
 
@@ -627,16 +662,17 @@ export function ProviderApp() {
                         </div>
                       )}
                     </div>
+                    {singleBooking.customer?.id &&
+                      singleBooking.status !== "CANCELLED" && (
+                        <div className="mt-4 pt-4 border-t">
+                          <MessageCustomerButton
+                            customerId={singleBooking.customer.id}
+                            customerName={`${singleBooking.customer?.firstName || ""} ${singleBooking.customer?.lastName || ""}`.trim()}
+                            onNavigate={() => setActiveTab("messages")}
+                          />
+                        </div>
+                      )}
                   </Card>
-
-                  {/* Message Customer Button */}
-                  {singleBooking.customer?.id && singleBooking.status !== "CANCELLED" && (
-                    <MessageCustomerButton
-                      customerId={singleBooking.customer.id}
-                      customerName={`${singleBooking.customer?.firstName || ''} ${singleBooking.customer?.lastName || ''}`.trim()}
-                      onNavigate={() => setActiveTab('messages')}
-                    />
-                  )}
 
                   {/* Service & Price */}
                   <Card className="p-6">
@@ -665,72 +701,6 @@ export function ProviderApp() {
                           <p className="text-sm text-muted-foreground">
                             {singleBooking.service.description}
                           </p>
-                        </div>
-                      )}
-                    </div>
-                  </Card>
-
-                  {/* Assigned Member */}
-                  <Card className="p-6">
-                    <h3 className="font-semibold mb-4 flex items-center gap-2">
-                      <Star className="h-4 w-4 text-muted-foreground" />
-                      Munkatárs & Státusz
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Munkatárs</span>
-                        <span className="font-medium">
-                          {singleBooking.assignedMember
-                            ? singleBooking.assignedMember.displayName ||
-                              `${singleBooking.assignedMember.user?.firstName || ""} ${singleBooking.assignedMember.user?.lastName || ""}`.trim() ||
-                              "—"
-                            : "Nincs hozzárendelve"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Státusz</span>
-                        <Badge
-                          className={
-                            STATUS_COLORS[singleBooking.status as BookingStatus]
-                          }
-                        >
-                          {STATUS_HU[singleBooking.status as BookingStatus] ||
-                            singleBooking.status}
-                        </Badge>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">
-                          Létrehozva
-                        </span>
-                        <span className="font-medium">
-                          {new Date(singleBooking.createdAt).toLocaleDateString(
-                            "hu-HU",
-                            {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
-                        </span>
-                      </div>
-                      {singleBooking.completedAt && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Befejezve
-                          </span>
-                          <span className="font-medium">
-                            {new Date(
-                              singleBooking.completedAt,
-                            ).toLocaleDateString("hu-HU", {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
                         </div>
                       )}
                     </div>
@@ -865,7 +835,13 @@ export function ProviderApp() {
                   : "Foglalásaid naptári nézete"}
               </p>
             </div>
-            <CalendarView memberId={ownerMemberId} />
+            {personalReady ? (
+              <CalendarView memberId={ownerMemberId} />
+            ) : (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            )}
           </div>
         )}
 
@@ -886,7 +862,13 @@ export function ProviderApp() {
               </TabsList>
 
               <TabsContent value="list" className="mt-6">
-                <ClientManagement memberId={ownerMemberId} />
+                {personalReady ? (
+                  <ClientManagement memberId={ownerMemberId} />
+                ) : (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="reviews" className="mt-6">
@@ -969,7 +951,10 @@ export function ProviderApp() {
                               providerRespondedAt={review.providerRespondedAt}
                               canRespond={true}
                               onRespond={(id, response) =>
-                                respondToReview.mutate({ reviewId: id, response })
+                                respondToReview.mutate({
+                                  reviewId: id,
+                                  response,
+                                })
                               }
                               isResponding={respondToReview.isPending}
                             />
@@ -1005,9 +990,7 @@ export function ProviderApp() {
         )}
 
         {/* Messages Tab */}
-        {activeTab === "messages" && (
-          <MessagingPage />
-        )}
+        {activeTab === "messages" && <MessagingPage />}
 
         {/* Portfolio Tab */}
         {activeTab === "portfolio" && provider && (
@@ -1028,7 +1011,9 @@ export function ProviderApp() {
             <div className="flex items-center justify-between">
               <div>
                 <h1>Riportok</h1>
-                <p className="text-muted-foreground">Bevételi statisztikák és exportálás</p>
+                <p className="text-muted-foreground">
+                  Bevételi statisztikák és exportálás
+                </p>
               </div>
             </div>
             <ExportReportPanel />
@@ -1068,25 +1053,23 @@ function MessageCustomerButton({
   const startConversation = useStartConversation();
 
   return (
-    <Card className="p-4">
-      <Button
-        variant="outline"
-        className="w-full gap-2"
-        disabled={startConversation.isPending}
-        onClick={() => {
-          startConversation.mutate(customerId, {
-            onSuccess: () => onNavigate(),
-          });
-        }}
-      >
-        {startConversation.isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <MessageSquare className="h-4 w-4" />
-        )}
-        Üzenet küldése ({customerName || "ügyfél"})
-      </Button>
-    </Card>
+    <Button
+      variant="outline"
+      className="w-full gap-2"
+      disabled={startConversation.isPending}
+      onClick={() => {
+        startConversation.mutate(customerId, {
+          onSuccess: () => onNavigate(),
+        });
+      }}
+    >
+      {startConversation.isPending ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <MessageSquare className="h-4 w-4" />
+      )}
+      Üzenet küldése ({customerName || "ügyfél"})
+    </Button>
   );
 }
 

@@ -154,6 +154,17 @@ export function useDeleteService() {
   });
 }
 
+export function useUploadServiceImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ serviceId, file }: { serviceId: string; file: File }) =>
+      providerApi.uploadServiceImage(serviceId, file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me"] });
+    },
+  });
+}
+
 export function useSetAvailability() {
   const qc = useQueryClient();
   return useMutation({
@@ -331,8 +342,13 @@ export function useCreateReview() {
 export function useRespondToReview() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ reviewId, response }: { reviewId: string; response: string }) =>
-      reviewApi.respond(reviewId, response),
+    mutationFn: ({
+      reviewId,
+      response,
+    }: {
+      reviewId: string;
+      response: string;
+    }) => reviewApi.respond(reviewId, response),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["reviews"] });
       qc.invalidateQueries({ queryKey: ["providers"] });
@@ -685,10 +701,17 @@ export function useMessages(conversationId: string | null, page = 1) {
 export function useSendMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ conversationId, content }: { conversationId: string; content: string }) =>
-      messagingApi.sendMessage(conversationId, content),
+    mutationFn: ({
+      conversationId,
+      content,
+    }: {
+      conversationId: string;
+      content: string;
+    }) => messagingApi.sendMessage(conversationId, content),
     onSuccess: (_data, variables) => {
-      qc.invalidateQueries({ queryKey: ["messages", variables.conversationId] });
+      qc.invalidateQueries({
+        queryKey: ["messages", variables.conversationId],
+      });
       qc.invalidateQueries({ queryKey: ["conversations"] });
     },
   });
@@ -716,7 +739,10 @@ export function useMessageUnreadCount() {
 // PORTFOLIO
 // ============================================================================
 
-export function usePortfolioImages(providerId: string | undefined, serviceId?: string) {
+export function usePortfolioImages(
+  providerId: string | undefined,
+  serviceId?: string,
+) {
   return useQuery({
     queryKey: ["portfolio", providerId, serviceId],
     queryFn: () => portfolioApi.getByProvider(providerId!, serviceId),
@@ -727,8 +753,11 @@ export function usePortfolioImages(providerId: string | undefined, serviceId?: s
 export function useAddPortfolioImage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { imageUrl: string; caption?: string; serviceId?: string }) =>
-      portfolioApi.add(data),
+    mutationFn: (data: {
+      imageUrl: string;
+      caption?: string;
+      serviceId?: string;
+    }) => portfolioApi.add(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
     },
@@ -739,6 +768,24 @@ export function useDeletePortfolioImage() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => portfolioApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["portfolio"] });
+    },
+  });
+}
+
+export function useUploadPortfolioImage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      file,
+      caption,
+      serviceId,
+    }: {
+      file: File;
+      caption?: string;
+      serviceId?: string;
+    }) => portfolioApi.uploadFile(file, caption, serviceId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
     },
@@ -761,7 +808,11 @@ export function useBookingTimeline(bookingId: string | undefined) {
 // EXPORT & REPORTING
 // ============================================================================
 
-export function useRevenueSummary(dateFrom: string, dateTo: string, enabled = true) {
+export function useRevenueSummary(
+  dateFrom: string,
+  dateTo: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ["revenue-summary", dateFrom, dateTo],
     queryFn: () => exportApi.getRevenueSummary(dateFrom, dateTo),
@@ -771,8 +822,11 @@ export function useRevenueSummary(dateFrom: string, dateTo: string, enabled = tr
 
 export function useExportBookingsCsv() {
   return useMutation({
-    mutationFn: (filters?: { dateFrom?: string; dateTo?: string; status?: string }) =>
-      exportApi.downloadBookingsCsv(filters),
+    mutationFn: (filters?: {
+      dateFrom?: string;
+      dateTo?: string;
+      status?: string;
+    }) => exportApi.downloadBookingsCsv(filters),
   });
 }
 

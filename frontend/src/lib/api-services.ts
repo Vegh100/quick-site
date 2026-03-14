@@ -206,6 +206,16 @@ export const providerApi = {
   deleteService: (serviceId: string) =>
     api.delete(`/providers/me/services/${serviceId}`).then((r) => r.data),
 
+  uploadServiceImage: (serviceId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    return api
+      .post<
+        ApiResponse<Service>
+      >(`/providers/me/services/${serviceId}/image`, formData, { headers: { "Content-Type": "multipart/form-data" } })
+      .then((r) => r.data);
+  },
+
   setAvailability: (
     memberId: string,
     availability: {
@@ -507,19 +517,21 @@ export const memberApi = {
 export const notificationApi = {
   getAll: (page = 1, limit = 20) =>
     api
-      .get<ApiResponse<{
-        notifications: Array<{
-          id: string;
-          type: string;
-          title: string;
-          body: string | null;
-          link: string | null;
-          isRead: boolean;
-          createdAt: string;
-        }>;
-        unreadCount: number;
-        meta: PaginationMeta;
-      }>>("/notifications", { params: { page, limit } })
+      .get<
+        ApiResponse<{
+          notifications: Array<{
+            id: string;
+            type: string;
+            title: string;
+            body: string | null;
+            link: string | null;
+            isRead: boolean;
+            createdAt: string;
+          }>;
+          unreadCount: number;
+          meta: PaginationMeta;
+        }>
+      >("/notifications", { params: { page, limit } })
       .then((r) => r.data),
 
   getUnreadCount: () =>
@@ -530,14 +542,12 @@ export const notificationApi = {
   markAsRead: (id: string) =>
     api.patch(`/notifications/${id}/read`).then((r) => r.data),
 
-  markAllAsRead: () =>
-    api.patch("/notifications/read-all").then((r) => r.data),
+  markAllAsRead: () => api.patch("/notifications/read-all").then((r) => r.data),
 
   delete: (id: string) =>
     api.delete(`/notifications/${id}`).then((r) => r.data),
 
-  clearAll: () =>
-    api.delete("/notifications").then((r) => r.data),
+  clearAll: () => api.delete("/notifications").then((r) => r.data),
 };
 
 // ============================================================================
@@ -547,34 +557,38 @@ export const notificationApi = {
 export const referralApi = {
   getMyReferral: () =>
     api
-      .get<ApiResponse<{
-        referral: {
-          id: string;
-          code: string;
-          status: string;
-          createdAt: string;
-        };
-        stats: {
-          totalSent: number;
-          totalRedeemed: number;
-          pendingCount: number;
-          recentRedeemed: Array<{
+      .get<
+        ApiResponse<{
+          referral: {
             id: string;
-            redeemedAt: string | null;
-            receiver: {
+            code: string;
+            status: string;
+            createdAt: string;
+          };
+          stats: {
+            totalSent: number;
+            totalRedeemed: number;
+            pendingCount: number;
+            recentRedeemed: Array<{
               id: string;
-              firstName: string | null;
-              lastName: string | null;
-              avatarUrl: string | null;
-            } | null;
-          }>;
-        };
-        shareUrl: string;
-      }>>("/referrals/me")
+              redeemedAt: string | null;
+              receiver: {
+                id: string;
+                firstName: string | null;
+                lastName: string | null;
+                avatarUrl: string | null;
+              } | null;
+            }>;
+          };
+          shareUrl: string;
+        }>
+      >("/referrals/me")
       .then((r) => r.data),
 
   redeem: (code: string) =>
-    api.post<ApiResponse<any>>("/referrals/redeem", { code }).then((r) => r.data),
+    api
+      .post<ApiResponse<any>>("/referrals/redeem", { code })
+      .then((r) => r.data),
 };
 
 // ============================================================================
@@ -635,10 +649,9 @@ export const messagingApi = {
 
   sendMessage: (conversationId: string, content: string) =>
     api
-      .post<ApiResponse<MessageItem>>(
-        `/messages/conversations/${conversationId}/messages`,
-        { content },
-      )
+      .post<
+        ApiResponse<MessageItem>
+      >(`/messages/conversations/${conversationId}/messages`, { content })
       .then((r) => r.data),
 
   getUnreadCount: () =>
@@ -665,20 +678,35 @@ export interface PortfolioImageItem {
 export const portfolioApi = {
   getByProvider: (providerId: string, serviceId?: string) =>
     api
-      .get<ApiResponse<PortfolioImageItem[]>>(
-        `/portfolio/provider/${providerId}`,
-        { params: serviceId ? { serviceId } : {} },
-      )
+      .get<
+        ApiResponse<PortfolioImageItem[]>
+      >(`/portfolio/provider/${providerId}`, { params: serviceId ? { serviceId } : {} })
       .then((r) => r.data),
 
   add: (data: { imageUrl: string; caption?: string; serviceId?: string }) =>
-    api.post<ApiResponse<PortfolioImageItem>>("/portfolio", data).then((r) => r.data),
+    api
+      .post<ApiResponse<PortfolioImageItem>>("/portfolio", data)
+      .then((r) => r.data),
 
   update: (id: string, data: { caption?: string; sortOrder?: number }) =>
-    api.patch<ApiResponse<PortfolioImageItem>>(`/portfolio/${id}`, data).then((r) => r.data),
+    api
+      .patch<ApiResponse<PortfolioImageItem>>(`/portfolio/${id}`, data)
+      .then((r) => r.data),
 
   delete: (id: string) =>
     api.delete<ApiResponse<void>>(`/portfolio/${id}`).then((r) => r.data),
+
+  uploadFile: (file: File, caption?: string, serviceId?: string) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    if (caption) formData.append("caption", caption);
+    if (serviceId) formData.append("serviceId", serviceId);
+    return api
+      .post<ApiResponse<PortfolioImageItem>>("/portfolio/upload", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      })
+      .then((r) => r.data);
+  },
 };
 
 // ============================================================================
@@ -703,9 +731,9 @@ export interface BookingActivityItem {
 export const bookingTimelineApi = {
   get: (bookingId: string) =>
     api
-      .get<ApiResponse<BookingActivityItem[]>>(
-        `/bookings/${bookingId}/timeline`,
-      )
+      .get<
+        ApiResponse<BookingActivityItem[]>
+      >(`/bookings/${bookingId}/timeline`)
       .then((r) => r.data),
 };
 
@@ -775,8 +803,8 @@ export interface BusinessHourItem {
 export const businessHoursApi = {
   get: (providerId: string) =>
     api
-      .get<ApiResponse<BusinessHourItem[]>>(
-        `/providers/${providerId}/business-hours`,
-      )
+      .get<
+        ApiResponse<BusinessHourItem[]>
+      >(`/providers/${providerId}/business-hours`)
       .then((r) => r.data),
 };

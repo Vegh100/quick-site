@@ -103,6 +103,7 @@ export interface Service {
   slotIntervalMin: number;
   isActive: boolean;
   sortOrder: number;
+  imageUrl?: string | null;
   serviceType?: ServiceType;
   serviceSlots?: { dayOfWeek: number; memberId: string }[];
 }

@@ -1,16 +1,10 @@
 import { useState } from "react";
 import {
   usePortfolioImages,
-  useAddPortfolioImage,
+  useUploadPortfolioImage,
   useDeletePortfolioImage,
 } from "../../hooks/useApi";
-import {
-  Image as ImageIcon,
-  Plus,
-  X,
-  Loader2,
-  Trash2,
-} from "lucide-react";
+import { Image as ImageIcon, Plus, X, Loader2, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import type { PortfolioImageItem } from "../../lib/api-services";
@@ -99,30 +93,31 @@ export function PortfolioGallery({
 // PROVIDER PORTFOLIO MANAGER (for settings)
 // ============================================================================
 
-export function PortfolioManager({
-  providerId,
-}: {
-  providerId: string;
-}) {
+export function PortfolioManager({ providerId }: { providerId: string }) {
   const { data: imageData, isLoading } = usePortfolioImages(providerId);
-  const addImage = useAddPortfolioImage();
+  const uploadImage = useUploadPortfolioImage();
   const deleteImage = useDeletePortfolioImage();
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newUrl, setNewUrl] = useState("");
+  const [newFile, setNewFile] = useState<File | null>(null);
   const [newCaption, setNewCaption] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
 
   const images: PortfolioImageItem[] = imageData?.data ?? [];
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setNewFile(file);
+    setPreview(file ? URL.createObjectURL(file) : null);
+  };
+
   const handleAdd = () => {
-    if (!newUrl.trim()) return;
-    addImage.mutate(
-      {
-        imageUrl: newUrl.trim(),
-        caption: newCaption.trim() || undefined,
-      },
+    if (!newFile) return;
+    uploadImage.mutate(
+      { file: newFile, caption: newCaption.trim() || undefined },
       {
         onSuccess: () => {
-          setNewUrl("");
+          setNewFile(null);
+          setPreview(null);
           setNewCaption("");
           setShowAddForm(false);
         },
@@ -154,11 +149,16 @@ export function PortfolioManager({
 
       {showAddForm && (
         <div className="rounded-xl border p-4 space-y-3 bg-muted/30">
-          <Input
-            value={newUrl}
-            onChange={(e) => setNewUrl(e.target.value)}
-            placeholder="Kép URL (https://...)"
-          />
+          {preview && (
+            <div className="relative w-full h-36 rounded-md overflow-hidden border">
+              <img
+                src={preview}
+                alt="Előnézet"
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+          <Input type="file" accept="image/*" onChange={handleFileChange} />
           <Input
             value={newCaption}
             onChange={(e) => setNewCaption(e.target.value)}
@@ -168,19 +168,24 @@ export function PortfolioManager({
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setShowAddForm(false)}
+              onClick={() => {
+                setShowAddForm(false);
+                setNewFile(null);
+                setPreview(null);
+                setNewCaption("");
+              }}
             >
               Mégse
             </Button>
             <Button
               size="sm"
               onClick={handleAdd}
-              disabled={!newUrl.trim() || addImage.isPending}
+              disabled={!newFile || uploadImage.isPending}
             >
-              {addImage.isPending && (
+              {uploadImage.isPending && (
                 <Loader2 className="h-3 w-3 animate-spin mr-1" />
               )}
-              Hozzáadás
+              Feltöltés
             </Button>
           </div>
         </div>

@@ -543,6 +543,15 @@ export function CustomerApp() {
                             );
                           }}
                         >
+                          {service.imageUrl && (
+                            <div className="w-full h-24 overflow-hidden">
+                              <img
+                                src={service.imageUrl}
+                                alt={service.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
                           <div className="p-5 space-y-3">
                             {/* Category badge + favorite */}
                             <div className="flex items-start justify-between">
