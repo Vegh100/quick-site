@@ -9,7 +9,7 @@ quick-site/
 ├── backend/           # TypeScript backend (Express + Prisma)
 ├── frontend/          # Frontend (TODO)
 ├── docker-compose.yml # PostgreSQL database
-└── init.sql          # Database initialization (auto-run on first start)
+└── init.sql           # Legacy SQL (nem hasznalt bootstrap)
 ```
 
 ## Előfeltételek
@@ -23,23 +23,23 @@ quick-site/
 ### 1. Adatbázis indítása
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-Ez automatikusan létrehozza az összes táblát az `init.sql` alapján.
+Ez csak a PostgreSQL konténert indítja el.
 
 ### 2. Backend indítása
 
 ```bash
 cd backend
-npm installgenerate
+npm install
+cp .env.example .env
+npm run db:init
+npm run prisma:generate
 npm run dev
 ```
 
-**Megjegyzés:** A Prisma schema ([backend/prisma/schema.prisma](backend/prisma/schema.prisma)) szinkronban van az [init.sql](init.sql)-lel. Ha új táblát adsz hozzá, frissítsd mindkettőt! run prisma:seed
-npm run dev
-
-```
+**Megjegyzés:** Az adatbázis sémát a Prisma migrationök kezelik a [backend/prisma/migrations](backend/prisma/migrations) mappában.
 
 Backend elérhető: `http://localhost:3000`
 
@@ -47,9 +47,9 @@ Backend elérhető: `http://localhost:3000`
 
 ### Adatbázis
 
-- Indítás: `docker-compose up -d`
-- Leállítás: `docker-compose down`
-- Törlés (adatokkal): `docker-compose down -v`
+- Indítás: `docker compose up -d`
+- Leállítás: `docker compose down`
+- Törlés (adatokkal): `docker compose down -v`
 
 ### Backend
 
@@ -59,9 +59,6 @@ Lásd: [backend/README.md](backend/README.md)
 
 - **Host:** localhost
 - **Port:** 5432
-- \*\*Databas# Quick Site
-
-WebUser:\*\* quickuser
-
+- **Database:** quickdb
+- **User:** quickuser
 - **Password:** quickpass
-```

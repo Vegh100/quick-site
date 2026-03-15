@@ -17,13 +17,25 @@ npm install
 cp .env.example .env
 ```
 
-3. Prisma kliens generálása:
+3. Adatbázis indítása (a repo gyökeréből):
+
+```bash
+docker compose up -d
+```
+
+4. Adatbázis séma + seed inicializálása:
+
+```bash
+npm run db:init
+```
+
+5. Prisma kliens generálása:
 
 ```bash
 npm run prisma:generate
 ```
 
-4. Development szerver indítása:
+6. Development szerver indítása:
 
 ```bash
 npm run dev
@@ -36,9 +48,11 @@ npm run dev
 - `npm start` - Production szerver indítása
 - `npm run prisma:studio` - Prisma Studio GUI
 - `npm run prisma:generate` - Prisma kliens generálása
+- `npm run prisma:migrate:deploy` - Minden migration futtatása (production-safe)
 - `npm run prisma:seed` - Seed data betöltése (optional)
+- `npm run db:init` - Migration + seed friss adatbázishoz
 
-**Megjegyzés:** Az adatbázis séma az [init.sql](../init.sql)-ben van definiálva. A Prisma schema ([prisma/schema.prisma](prisma/schema.prisma)) csak a TypeScript típusokat generálja.
+**Megjegyzés:** Az adatbázis séma forrása a Prisma migrationök és a [prisma/schema.prisma](prisma/schema.prisma). Ne használd a root [init.sql](../init.sql) fájlt bootstrapre.
 
 ## Endpoints
 
@@ -57,7 +71,9 @@ backend/
 │   ├── middleware/        # Middleware (TODO)
 │   └── server.ts          # Main server
 ├── prisma/
-│   └── schema.prisma      # Database schema
+│   ├── schema.prisma      # Prisma schema
+│   ├── migrations/        # Adatbázis migration history
+│   └── seed.ts            # Seed adatok
 ├── package.json
 └── tsconfig.json
 ```
