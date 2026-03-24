@@ -74,32 +74,38 @@ export async function getAvailableSlots(
     },
   });
 
-  // If service-specific slots exist, use them instead of general availability
+  // If service-specific slots exist, use them — but always constrained by Availability
   const useServiceSlots = serviceSlots.length > 0;
 
-  // Get relevant availability (fallback when no service slots)
+  // Always fetch availability (needed for both modes)
   let availabilities: any[] = [];
-  if (!useServiceSlots) {
-    if (memberId) {
-      const avail = await prisma.availability.findUnique({
-        where: { memberId_dayOfWeek: { memberId, dayOfWeek } },
-      });
-      availabilities = avail ? [avail] : [];
-    } else {
-      availabilities = await prisma.availability.findMany({
-        where: { providerId, dayOfWeek, isEnabled: true },
-        include: { member: { select: { id: true, status: true } } },
-      });
-      availabilities = availabilities.filter(
-        (a) => (a as any).member?.status === "ACTIVE",
-      );
-    }
+  if (memberId) {
+    const avail = await prisma.availability.findUnique({
+      where: { memberId_dayOfWeek: { memberId, dayOfWeek } },
+    });
+    availabilities = avail ? [avail] : [];
+  } else {
+    availabilities = await prisma.availability.findMany({
+      where: { providerId, dayOfWeek, isEnabled: true },
+      include: { member: { select: { id: true, status: true } } },
+    });
+    availabilities = availabilities.filter(
+      (a) => (a as any).member?.status === "ACTIVE",
+    );
+  }
 
-    if (
-      availabilities.length === 0 ||
-      !availabilities.some((a) => a.isEnabled)
-    ) {
-      return { slots: [], date, serviceId };
+  if (
+    availabilities.length === 0 ||
+    !availabilities.some((a) => a.isEnabled)
+  ) {
+    return { slots: [], date, serviceId };
+  }
+
+  // Build a map of memberId → availability window for quick lookup
+  const availabilityMap = new Map<string, { startTime: string; endTime: string }>();
+  for (const a of availabilities) {
+    if (a.isEnabled) {
+      availabilityMap.set(a.memberId, { startTime: a.startTime, endTime: a.endTime });
     }
   }
 
@@ -124,7 +130,8 @@ export async function getAvailableSlots(
 
   if (useServiceSlots) {
     // SERVICE SLOTS MODE: each slot is a pre-defined bookable time block per member
-    // Fetch member details for all members who have slots
+    // Slots are intersected with Availability — a slot only counts if the member
+    // is also available (Availability.isEnabled + within start/end window).
     const slotMemberIds = [...new Set(serviceSlots.map((s) => s.memberId))];
     const memberDetails = await prisma.providerMember.findMany({
       where: { id: { in: slotMemberIds } },
@@ -136,9 +143,16 @@ export async function getAvailableSlots(
     });
     const memberMap = new Map(memberDetails.map((m) => [m.id, m]));
 
+    // Filter service slots: only keep slots that fall within the member's Availability
+    const validServiceSlots = serviceSlots.filter((s) => {
+      const memberAvail = availabilityMap.get(s.memberId);
+      if (!memberAvail) return false; // member has no enabled availability for this day
+      return s.startTime >= memberAvail.startTime && s.endTime <= memberAvail.endTime;
+    });
+
     // Deduplicate by startTime (multiple members may have the same time)
     const uniqueStartTimes = [
-      ...new Set(serviceSlots.map((s) => s.startTime)),
+      ...new Set(validServiceSlots.map((s) => s.startTime)),
     ].sort();
 
     const slots = uniqueStartTimes.map((startTime) => {
@@ -170,8 +184,8 @@ export async function getAvailableSlots(
           }
         }
       } else {
-        // Check each member who has this slot defined
-        const membersWithSlot = serviceSlots
+        // Check each member who has this slot defined (only from valid slots)
+        const membersWithSlot = validServiceSlots
           .filter((s) => s.startTime === startTime)
           .map((s) => s.memberId);
         for (const mId of membersWithSlot) {
@@ -366,6 +380,26 @@ export async function createBooking(
   });
 
   const hasServiceSlots = serviceSlots.length > 0;
+
+  // Always check member availability first (hierarchy: Availability > ServiceSlot)
+  const memberIdToCheck = data.assignedMemberId || (hasServiceSlots
+    ? serviceSlots.find((s) => s.startTime === data.scheduledTime)?.memberId
+    : undefined);
+
+  if (memberIdToCheck) {
+    const memberAvail = await prisma.availability.findUnique({
+      where: { memberId_dayOfWeek: { memberId: memberIdToCheck, dayOfWeek } },
+    });
+    if (!memberAvail || !memberAvail.isEnabled) {
+      throw new AppError("Ezen a napon a munkatárs nem elérhető", 400);
+    }
+    if (
+      data.scheduledTime < memberAvail.startTime ||
+      bookingEndTime > memberAvail.endTime
+    ) {
+      throw new AppError("A kiválasztott idő a munkaidőn kívül esik", 400);
+    }
+  }
 
   if (hasServiceSlots) {
     // Validate that the requested time matches one of the defined slots

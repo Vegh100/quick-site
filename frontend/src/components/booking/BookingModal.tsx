@@ -164,12 +164,6 @@ export function BookingModal({
     return Array.from(merged.values());
   }, [resolvedProvider.members]);
 
-  // Collect days with service slots for the selected service
-  const serviceSlotDays = useMemo(() => {
-    if (!selectedService?.serviceSlots) return new Set<number>();
-    return new Set(selectedService.serviceSlots.map((s) => s.dayOfWeek));
-  }, [selectedService]);
-
   // Fetch available slots from API (all members merged)
   const dateStr = date ? date.toISOString().split("T")[0] : "";
   const slotsParams =
@@ -185,12 +179,12 @@ export function BookingModal({
   const timeSlots: TimeSlot[] = slotsData?.data?.slots || [];
 
   // Disable days where provider is not available or in the past
+  // Availability is always the top-level constraint (hierarchy: Availability > ServiceSlot)
   const disabledDays = (checkDate: Date) => {
     if (checkDate < new Date(new Date().setHours(0, 0, 0, 0))) return true;
     const dow = checkDate.getDay();
-    // Enable if there are service slots on this day
-    if (serviceSlotDays.has(dow)) return false;
     if (availability.length === 0) return false;
+    // Day must have at least one member with enabled Availability — regardless of ServiceSlots
     return !availability.some((a) => a.dayOfWeek === dow && a.isEnabled);
   };
 

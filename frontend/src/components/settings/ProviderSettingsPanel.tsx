@@ -771,6 +771,7 @@ export function ProviderSettingsPanel() {
                         <ServiceSlotPicker
                           service={svc}
                           memberId={currentMember.id}
+                          memberAvailability={availSlots}
                         />
                       </div>
                     )}

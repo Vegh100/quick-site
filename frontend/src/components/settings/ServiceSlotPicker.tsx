@@ -3,14 +3,22 @@ import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { Loader2, Save, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { Loader2, Save, ChevronDown, ChevronUp, Plus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useServiceSlots, useSetServiceSlots } from "../../hooks/useApi";
 import type { Service } from "../../lib/types";
 
+interface AvailabilitySlot {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isEnabled: boolean;
+}
+
 interface ServiceSlotPickerProps {
   service: Service;
   memberId: string;
+  memberAvailability?: AvailabilitySlot[];
 }
 
 const DAYS_HU = [
@@ -74,6 +82,7 @@ function generateSlots(
 export function ServiceSlotPicker({
   service,
   memberId,
+  memberAvailability,
 }: ServiceSlotPickerProps) {
   const { data: slotsData, isLoading } = useServiceSlots(service.id, memberId);
   const setSlotsMut = useSetServiceSlots();
@@ -281,6 +290,12 @@ export function ServiceSlotPicker({
         {DAYS_HU.map((dayName, idx) => {
           const day = days[idx];
           const isExpanded = expandedDay === idx;
+          const dow = DAY_MAP[idx];
+          const avail = memberAvailability?.find((a) => a.dayOfWeek === dow);
+          const availDisabled = !avail || !avail.isEnabled;
+          const slotsOutsideAvail = !availDisabled && day.isEnabled && day.slots.some(
+            (s) => s.startTime < avail.startTime || s.endTime > avail.endTime,
+          );
           // Generate all possible slots within the range (for rendering toggles)
           const allPossible = generateSlots(
             day.rangeStart,
@@ -311,23 +326,33 @@ export function ServiceSlotPicker({
                 >
                   <input
                     type="checkbox"
-                    checked={day.isEnabled}
+                    checked={day.isEnabled && !availDisabled}
                     onChange={() => handleToggleDay(idx)}
-                    className="h-4 w-4 rounded"
+                    disabled={availDisabled}
+                    className="h-4 w-4 rounded disabled:opacity-50"
                   />
                 </label>
                 <span className="text-sm font-medium w-24">{dayName}</span>
-                {day.isEnabled ? (
+                {availDisabled ? (
+                  <span className="text-xs text-muted-foreground flex-1">
+                    Zárva (munkaidő kikapcsolva)
+                  </span>
+                ) : day.isEnabled ? (
                   <span className="text-xs text-muted-foreground flex-1">
                     {day.slots.length} időpont ({day.rangeStart} -{" "}
                     {day.rangeEnd})
+                    {slotsOutsideAvail && (
+                      <span className="text-amber-600 ml-2">
+                        ⚠ Időpontok kívül esnek
+                      </span>
+                    )}
                   </span>
                 ) : (
                   <span className="text-xs text-muted-foreground flex-1">
                     Zárva
                   </span>
                 )}
-                {day.isEnabled &&
+                {(day.isEnabled || availDisabled) &&
                   (isExpanded ? (
                     <ChevronUp className="h-4 w-4 text-muted-foreground" />
                   ) : (
@@ -336,8 +361,27 @@ export function ServiceSlotPicker({
               </div>
 
               {/* Expanded: range inputs + slot grid */}
-              {day.isEnabled && isExpanded && (
+              {(day.isEnabled || availDisabled) && isExpanded && (
                 <div className="px-3 pb-3 space-y-3 border-t bg-muted/20">
+                  {availDisabled ? (
+                    <div className="flex items-center gap-2 mt-3 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>
+                        A munkaidő ezen a napon ki van kapcsolva. Az itt beállított
+                        időpontok nem lesznek láthatóak az ügyfelek számára. Először
+                        kapcsold be a napot az „Elérhetőségi időpontok" fülön.
+                      </span>
+                    </div>
+                  ) : (<>
+                  {slotsOutsideAvail && (
+                    <div className="flex items-center gap-2 mt-3 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>
+                        Egyes időpontok a munkaidőn kívül esnek ({avail.startTime}–{avail.endTime}).
+                        Ezeket az ügyfelek nem fogják látni.
+                      </span>
+                    </div>
+                  )}
                   {/* Time range */}
                   <div className="flex items-center gap-2 pt-3">
                     <Label className="text-xs whitespace-nowrap">
@@ -453,6 +497,7 @@ export function ServiceSlotPicker({
                       Mind kikapcsolása
                     </Button>
                   </div>
+                  </>)}
                 </div>
               )}
             </div>

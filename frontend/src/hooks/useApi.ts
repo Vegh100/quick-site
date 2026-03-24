@@ -178,6 +178,9 @@ export function useSetAvailability() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["providers", "me"] });
       qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
+      // Availability changes cascade to service slots and available slots
+      qc.invalidateQueries({ queryKey: ["service-slots"] });
+      qc.invalidateQueries({ queryKey: ["available-slots"] });
     },
   });
 }

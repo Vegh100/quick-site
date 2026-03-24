@@ -558,6 +558,31 @@ export async function setAvailability(
     ),
   );
 
+  // Cascade: remove ServiceSlots that fall outside the new availability window
+  // If a day is disabled, delete all slots for that day.
+  // If a day's time window changed, delete slots that no longer fit.
+  await Promise.all(
+    data.availability.map((slot) => {
+      if (!slot.isEnabled) {
+        // Day disabled → delete all service slots for this member on this day
+        return prisma.serviceSlot.deleteMany({
+          where: { memberId, dayOfWeek: slot.dayOfWeek },
+        });
+      }
+      // Day enabled but time window may have changed → delete slots outside window
+      return prisma.serviceSlot.deleteMany({
+        where: {
+          memberId,
+          dayOfWeek: slot.dayOfWeek,
+          OR: [
+            { startTime: { lt: slot.startTime } },
+            { endTime: { gt: slot.endTime } },
+          ],
+        },
+      });
+    }),
+  );
+
   return results;
 }
 
