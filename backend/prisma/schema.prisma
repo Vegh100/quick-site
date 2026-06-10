@@ -43,6 +43,7 @@ model User {
   conversationsAsUser2 Conversation[]      @relation("ConversationUser2")
   messagesSent         Message[]
   bookingActivities    BookingActivity[]
+  emailVerificationTokens EmailVerificationToken[]
 
   @@index([email])
   @@index([role])
@@ -92,6 +93,19 @@ model Session {
   @@map("sessions")
 }
 
+model EmailVerificationToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("email_verification_tokens")
+}
+
 // ============================================================================
 // PROVIDER / BUSINESS
 // ============================================================================
@@ -119,6 +133,7 @@ model Provider {
   weekendPremium  Boolean      @default(false) @map("weekend_premium")
   weekendPremiumPercent Int    @default(20) @map("weekend_premium_percent")
   autoAccept      Boolean      @default(false) @map("auto_accept")
+  timezone        String       @default("Europe/Bucharest") @db.VarChar(100)
   createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -131,6 +146,7 @@ model Provider {
   subscription    Subscription?
   favorites       Favorite[]
   portfolioImages PortfolioImage[]
+  webhooks        Webhook[]
 
   @@index([userId])
   @@index([rating])
@@ -283,6 +299,11 @@ model Service {
   priceType       PriceType @default(FIXED) @map("price_type")
   durationMin     Int       @map("duration_min")
   slotIntervalMin Int       @default(60) @map("slot_interval_min")
+  templateKey     String?   @map("template_key") @db.VarChar(120)
+  serviceKey      String?   @map("service_key") @db.VarChar(100)
+  variantKey      String?   @map("variant_key") @db.VarChar(100)
+  pricingUnit     String    @default("FIXED") @map("pricing_unit") @db.VarChar(20)
+  isMatrixManaged Boolean   @default(false) @map("is_matrix_managed")
   isActive        Boolean   @default(true) @map("is_active")
   sortOrder       Int       @default(0) @map("sort_order")
   imageUrl        String?   @map("image_url") @db.VarChar(500)
@@ -298,6 +319,8 @@ model Service {
 
   @@index([providerId])
   @@index([serviceTypeId])
+  @@index([templateKey])
+  @@index([providerId, templateKey])
   @@index([isActive])
   @@map("services")
 }
@@ -414,6 +437,8 @@ model Booking {
   @@index([assignedMemberId])
   @@index([status])
   @@index([scheduledDate])
+  @@index([providerId, status])
+  @@index([providerId, scheduledDate])
   @@map("bookings")
 }
 
@@ -715,4 +740,61 @@ enum ReferralStatus {
   EXPIRED
 
   @@map("referral_status")
+}
+
+// ============================================================================
+// AUDIT LOG
+// ============================================================================
+
+model AuditLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  action    String   @db.VarChar(50)
+  entity    String   @db.VarChar(50)
+  entityId  String   @map("entity_id") @db.Uuid
+  changes   Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// WEBHOOKS
+// ============================================================================
+
+model Webhook {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  providerId  String    @map("provider_id") @db.Uuid
+  url         String    @db.VarChar(500)
+  secret      String    @db.VarChar(255)
+  events      String[]
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  provider    Provider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+
+  @@index([providerId])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webhookId   String   @map("webhook_id") @db.Uuid
+  event       String   @db.VarChar(50)
+  payload     Json
+  status      String   @default("PENDING") @db.VarChar(20)
+  attempts    Int      @default(0)
+  responseCode Int?    @map("response_code")
+  lastError   String?  @map("last_error") @db.Text
+  deliveredAt DateTime? @map("delivered_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  webhook     Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([status])
+  @@map("webhook_deliveries")
 }

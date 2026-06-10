@@ -17,17 +17,9 @@ function clearSessionCookie(res: Response) {
   });
 }
 
-export async function register(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function register(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await authService.register(
-      req.body,
-      req.headers["user-agent"],
-      req.ip,
-    );
+    const result = await authService.register(req.body, req.headers["user-agent"], req.ip);
 
     setSessionCookie(res, result.token);
 
@@ -42,11 +34,7 @@ export async function register(
 
 export async function login(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await authService.login(
-      req.body,
-      req.headers["user-agent"],
-      req.ip,
-    );
+    const result = await authService.login(req.body, req.headers["user-agent"], req.ip);
 
     setSessionCookie(res, result.token);
 
@@ -59,11 +47,7 @@ export async function login(req: Request, res: Response, next: NextFunction) {
   }
 }
 
-export async function googleAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function googleAuth(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await authService.googleAuth(
       req.body.credential,
@@ -86,11 +70,7 @@ export async function googleAuth(
   }
 }
 
-export async function logout(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function logout(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     if (req.user?.sessionId) {
       await authService.logout(req.user.sessionId);
@@ -104,11 +84,7 @@ export async function logout(
   }
 }
 
-export async function logoutAll(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function logoutAll(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     if (req.user?.userId) {
       await authService.logoutAll(req.user.userId);
@@ -122,11 +98,7 @@ export async function logoutAll(
   }
 }
 
-export async function me(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function me(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
@@ -153,11 +125,7 @@ export async function me(
   }
 }
 
-export async function changePassword(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function changePassword(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     await authService.changePassword(
       req.user!.userId,
@@ -171,11 +139,7 @@ export async function changePassword(
   }
 }
 
-export async function registerFromInvite(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function registerFromInvite(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await authService.registerFromInvite(
       req.params.token,
@@ -190,6 +154,28 @@ export async function registerFromInvite(
       success: true,
       data: { user: result.user, provider: result.provider },
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function verifyEmail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await authService.verifyEmail(req.body.token);
+    res.json({ success: true, message: result.message });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function resendVerification(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const result = await authService.sendEmailVerification(req.user!.userId);
+    res.json({ success: true, message: result.message });
   } catch (error) {
     next(error);
   }

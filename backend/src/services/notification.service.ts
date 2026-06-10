@@ -1,5 +1,6 @@
 import { NotificationType } from "@prisma/client";
 import prisma from "../lib/prisma.js";
+import { logger } from "../lib/logger.js";
 
 // ============================================================================
 // CREATE NOTIFICATION
@@ -17,9 +18,7 @@ interface CreateNotificationParams {
  * Create an in-app notification for a user.
  * Fire-and-forget — never throws.
  */
-export async function createNotification(
-  params: CreateNotificationParams,
-): Promise<void> {
+export async function createNotification(params: CreateNotificationParams): Promise<void> {
   try {
     await prisma.inAppNotification.create({
       data: {
@@ -31,16 +30,14 @@ export async function createNotification(
       },
     });
   } catch (error) {
-    console.error("Failed to create notification:", (error as Error).message);
+    logger.error({ err: error }, "Failed to create notification");
   }
 }
 
 /**
  * Create notifications for multiple users at once.
  */
-export async function createNotifications(
-  params: CreateNotificationParams[],
-): Promise<void> {
+export async function createNotifications(params: CreateNotificationParams[]): Promise<void> {
   try {
     await prisma.inAppNotification.createMany({
       data: params.map((p) => ({
@@ -52,10 +49,7 @@ export async function createNotifications(
       })),
     });
   } catch (error) {
-    console.error(
-      "Failed to create notifications:",
-      (error as Error).message,
-    );
+    logger.error({ err: error }, "Failed to create notifications");
   }
 }
 
@@ -66,11 +60,7 @@ export async function createNotifications(
 /**
  * Get notifications for a user (paginated, newest first).
  */
-export async function getUserNotifications(
-  userId: string,
-  page = 1,
-  limit = 20,
-) {
+export async function getUserNotifications(userId: string, page = 1, limit = 20) {
   const skip = (page - 1) * limit;
 
   const [notifications, total, unreadCount] = await Promise.all([
@@ -112,10 +102,7 @@ export async function getUnreadCount(userId: string): Promise<number> {
 /**
  * Mark a single notification as read.
  */
-export async function markAsRead(
-  userId: string,
-  notificationId: string,
-): Promise<void> {
+export async function markAsRead(userId: string, notificationId: string): Promise<void> {
   await prisma.inAppNotification.updateMany({
     where: { id: notificationId, userId },
     data: { isRead: true },
@@ -139,10 +126,7 @@ export async function markAllAsRead(userId: string): Promise<void> {
 /**
  * Delete a single notification.
  */
-export async function deleteNotification(
-  userId: string,
-  notificationId: string,
-): Promise<void> {
+export async function deleteNotification(userId: string, notificationId: string): Promise<void> {
   await prisma.inAppNotification.deleteMany({
     where: { id: notificationId, userId },
   });

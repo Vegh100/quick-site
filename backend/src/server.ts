@@ -1,17 +1,23 @@
 import express, { Request, Response, NextFunction } from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import helmet from "helmet";
+import pinoHttp from "pino-http";
+import { logger } from "./lib/logger.js";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import { fileURLToPath } from "url";
 import prisma from "./lib/prisma.js";
+import redis from "./lib/redis.js";
 import { AppError } from "./lib/errors.js";
 import { uploadConfig } from "./config/upload.config.js";
+import { env } from "./config/env.config.js";
 import { authConfig } from "./config/auth.config.js";
+import { swaggerSpec } from "./config/swagger.js";
+import swaggerUi from "swagger-ui-express";
 import { verifyEmailConnection } from "./services/email.service.js";
 import { startBookingReminderJob, stopBookingReminderJob } from "./jobs/booking-reminders.js";
+import { startSessionCleanupJob, stopSessionCleanupJob } from "./jobs/session-cleanup.js";
 
 // Routes
 import authRoutes from "./routes/auth.routes.js";
@@ -28,13 +34,11 @@ import messagingRoutes from "./routes/messaging.routes.js";
 import portfolioRoutes from "./routes/portfolio.routes.js";
 import exportRoutes from "./routes/export.routes.js";
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.APP_PORT || 3000;
+const PORT = env.APP_PORT;
 
 // ============================================================================
 // SECURITY MIDDLEWARE
@@ -48,15 +52,17 @@ app.use(
 
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: env.FRONTEND_URL,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
 
+app.use(pinoHttp({ logger }));
+
 // Rate limiting
-const isDev = process.env.NODE_ENV !== "production";
+const isDev = env.NODE_ENV !== "production";
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -88,7 +94,7 @@ app.use("/api/auth/", authLimiter);
 // BODY PARSING & COOKIES
 // ============================================================================
 
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
@@ -99,15 +105,55 @@ app.use(cookieParser());
 app.use(uploadConfig.urlPrefix, express.static(uploadConfig.baseDir));
 
 // ============================================================================
+// API DOCS
+// ============================================================================
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// ============================================================================
 // HEALTH CHECK
 // ============================================================================
 
-app.get("/health", (_req: Request, res: Response) => {
-  res.json({
-    status: "ok",
+app.get("/health", async (_req: Request, res: Response) => {
+  const checks: Record<string, string> = {};
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    checks.database = "ok";
+  } catch {
+    checks.database = "error";
+  }
+
+  try {
+    await redis.ping();
+    checks.redis = "ok";
+  } catch {
+    checks.redis = "error";
+  }
+
+  const mem = process.memoryUsage();
+  const allOk = Object.values(checks).every((v) => v === "ok");
+
+  res.status(allOk ? 200 : 503).json({
+    status: allOk ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || "development",
+    environment: env.NODE_ENV,
+    uptime: Math.floor(process.uptime()),
+    memory: {
+      rss: Math.round(mem.rss / 1024 / 1024),
+      heapUsed: Math.round(mem.heapUsed / 1024 / 1024),
+    },
+    checks,
   });
+});
+
+app.get("/ready", async (_req: Request, res: Response) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ready" });
+  } catch {
+    res.status(503).json({ status: "not ready" });
+  }
 });
 
 // ============================================================================
@@ -145,10 +191,10 @@ app.use((_req: Request, res: Response) => {
 // ============================================================================
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-  console.error("Error:", err.message);
+  logger.error({ err }, "Unhandled error");
 
-  if (process.env.NODE_ENV === "development") {
-    console.error(err.stack);
+  if (env.NODE_ENV === "development") {
+    logger.error(err.stack);
   }
 
   if (err instanceof AppError) {
@@ -187,10 +233,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
   res.status(500).json({
     success: false,
-    error:
-      process.env.NODE_ENV === "production"
-        ? "Internal server error"
-        : err.message,
+    error: env.NODE_ENV === "production" ? "Internal server error" : err.message,
   });
 });
 
@@ -199,26 +242,30 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // ============================================================================
 
 app.listen(PORT, () => {
-  console.log(`🚀 Qvick API running on http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || "development"}`);
-  console.log(
-    `🌐 Frontend URL: ${process.env.FRONTEND_URL || "http://localhost:5173"}`,
-  );
+  logger.info({ port: PORT }, "Qvick API running");
+  logger.info({ environment: env.NODE_ENV }, "Environment");
+  logger.info({ frontendUrl: env.FRONTEND_URL }, "Frontend URL");
+
+  // Connect Redis (lazy, non-blocking)
+  redis.connect().catch((err) => {
+    logger.warn({ err }, "Redis connection failed — caching disabled");
+  });
 
   // Verify email service
   verifyEmailConnection();
 
   // Start background jobs
   startBookingReminderJob();
+  startSessionCleanupJob();
 
   // Security warnings
-  if (!process.env.JWT_SECRET) {
-    console.warn(
+  if (!env.JWT_SECRET) {
+    logger.warn(
       "JWT_SECRET is not set – using insecure dev default. Set it in .env for production!",
     );
   }
-  if (!process.env.COOKIE_SECRET) {
-    console.warn(
+  if (!env.COOKIE_SECRET) {
+    logger.warn(
       "COOKIE_SECRET is not set – using insecure dev default. Set it in .env for production!",
     );
   }
@@ -229,8 +276,10 @@ app.listen(PORT, () => {
 // ============================================================================
 
 const shutdown = async (signal: string) => {
-  console.log(`\n${signal} received. Shutting down gracefully...`);
+  logger.info({ signal }, "Shutting down gracefully...");
   stopBookingReminderJob();
+  stopSessionCleanupJob();
+  await redis.quit().catch(() => {});
   await prisma.$disconnect();
   process.exit(0);
 };

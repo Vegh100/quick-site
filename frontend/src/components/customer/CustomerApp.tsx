@@ -45,12 +45,8 @@ import { BookingDetailPage } from "./BookingDetailPage";
 import { MessagingPage } from "../messaging/MessagingPage";
 import { Toaster } from "../ui/sonner";
 import { toast } from "sonner";
-import type {
-  Provider,
-  BookingStatus,
-  Booking,
-  Service,
-} from "../../lib/types";
+import type { Provider, BookingStatus, Booking, Service } from "../../lib/types";
+import { formatServicePrice } from "../../lib/pricing";
 
 const STATUS_COLORS: Record<BookingStatus, string> = {
   PENDING: "bg-yellow-500",
@@ -129,28 +125,26 @@ export function CustomerApp() {
 
   // API calls
   const { data: categoriesData } = useCategories();
-  const { data: providersData, isLoading: loadingProviders } =
-    useProviderSearch({
-      categorySlug: selectedCategory || undefined,
-      search: searchQuery || undefined,
-      maxPrice,
-      minRating,
-      sortBy,
-      sortOrder,
-      page,
-      limit: 12,
-    });
-  const { data: bookingsData, isLoading: loadingBookings } =
-    useCustomerBookings({
-      status:
-        bookingTab === "upcoming"
-          ? "PENDING,CONFIRMED,IN_PROGRESS"
-          : bookingTab === "past"
-            ? "COMPLETED"
-            : "CANCELLED",
-      page: 1,
-      limit: 20,
-    });
+  const { data: providersData, isLoading: loadingProviders } = useProviderSearch({
+    categorySlug: selectedCategory || undefined,
+    search: searchQuery || undefined,
+    maxPrice,
+    minRating,
+    sortBy,
+    sortOrder,
+    page,
+    limit: 12,
+  });
+  const { data: bookingsData, isLoading: loadingBookings } = useCustomerBookings({
+    status:
+      bookingTab === "upcoming"
+        ? "PENDING,CONFIRMED,IN_PROGRESS"
+        : bookingTab === "past"
+          ? "COMPLETED"
+          : "CANCELLED",
+    page: 1,
+    limit: 20,
+  });
   const { data: favoritesData, isLoading: loadingFavorites } = useFavorites();
   const { add: addFav, remove: removeFav } = useToggleFavorite();
   const cancelBooking = useUpdateBookingStatus();
@@ -225,24 +219,16 @@ export function CustomerApp() {
   if (activeTab === "settings") {
     return (
       <div className="min-h-screen flex flex-col bg-background">
-        <HeaderWithSettings
-          userType="customer"
-          onSettingsClick={() => setActiveTab("settings")}
-        />
+        <HeaderWithSettings userType="customer" onSettingsClick={() => setActiveTab("settings")} />
 
         <main className="flex-1 container mx-auto px-4 py-8">
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h1>Fiókbeállítások</h1>
-                <p className="text-muted-foreground">
-                  Fiókod és beállításaid kezelése
-                </p>
+                <p className="text-muted-foreground">Fiókod és beállításaid kezelése</p>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => setActiveTab("discover")}
-              >
+              <Button variant="outline" onClick={() => setActiveTab("discover")}>
                 Vissza
               </Button>
             </div>
@@ -259,19 +245,12 @@ export function CustomerApp() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <HeaderWithSettings
-        userType="customer"
-        onSettingsClick={() => setActiveTab("settings")}
-      />
+      <HeaderWithSettings userType="customer" onSettingsClick={() => setActiveTab("settings")} />
 
       {/* Customer Navigation */}
       <div className="border-b bg-card">
         <div className="container mx-auto px-4">
-          <Tabs
-            value={activeTab}
-            onValueChange={setActiveTab}
-            className="w-full"
-          >
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="w-full justify-start h-12 bg-transparent border-0 rounded-none">
               <TabsTrigger
                 value="discover"
@@ -309,14 +288,11 @@ export function CustomerApp() {
         </div>
       </div>
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main id="main-content" className="flex-1 container mx-auto px-4 py-8">
         {/* Booking Detail Page */}
         {detailBookingId ? (
           <ErrorBoundary>
-            <BookingDetailPage
-              bookingId={detailBookingId}
-              onBack={() => navigate(-1)}
-            />
+            <BookingDetailPage bookingId={detailBookingId} onBack={() => navigate(-1)} />
           </ErrorBoundary>
         ) : detailProviderId ? (
           <ErrorBoundary>
@@ -455,10 +431,7 @@ export function CustomerApp() {
                                 type="radio"
                                 name="sortBy"
                                 className="h-4 w-4"
-                                checked={
-                                  sortBy === opt.sortBy &&
-                                  sortOrder === opt.sortOrder
-                                }
+                                checked={sortBy === opt.sortBy && sortOrder === opt.sortOrder}
                                 onChange={() => {
                                   setSortBy(opt.sortBy);
                                   setSortOrder(opt.sortOrder);
@@ -494,17 +467,11 @@ export function CustomerApp() {
                     {apiCategories.map((category) => (
                       <Button
                         key={category.id}
-                        variant={
-                          selectedCategory === category.slug
-                            ? "default"
-                            : "outline"
-                        }
+                        variant={selectedCategory === category.slug ? "default" : "outline"}
                         onClick={() => setSelectedCategory(category.slug)}
                         className="flex-shrink-0"
                       >
-                        {category.icon && (
-                          <span className="mr-2">{category.icon}</span>
-                        )}
+                        {category.icon && <span className="mr-2">{category.icon}</span>}
                         {category.name}
                       </Button>
                     ))}
@@ -538,9 +505,7 @@ export function CustomerApp() {
                           key={`${provider.id}-${service.id}`}
                           className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
                           onClick={() => {
-                            navigate(
-                              `/ugyfel/szolgaltato/${provider.id}?service=${service.id}`,
-                            );
+                            navigate(`/ugyfel/szolgaltato/${provider.id}?service=${service.id}`);
                           }}
                         >
                           {service.imageUrl && (
@@ -557,10 +522,7 @@ export function CustomerApp() {
                             <div className="flex items-start justify-between">
                               <div className="flex-1 min-w-0">
                                 {service.serviceType?.category && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="mb-2 text-xs"
-                                  >
+                                  <Badge variant="secondary" className="mb-2 text-xs">
                                     {service.serviceType.category.icon && (
                                       <span className="mr-1">
                                         {service.serviceType.category.icon}
@@ -596,14 +558,8 @@ export function CustomerApp() {
                             {/* Price - prominent */}
                             <div className="flex items-baseline gap-1.5">
                               <span className="text-xl font-bold text-primary">
-                                {Number(service.priceAmount)}{" "}
-                                {service.priceCurrency}
+                                {formatServicePrice(service)}
                               </span>
-                              {service.priceType === "PER_HOUR" && (
-                                <span className="text-sm text-muted-foreground">
-                                  /óra
-                                </span>
-                              )}
                             </div>
 
                             {/* Rating + Duration */}
@@ -684,9 +640,7 @@ export function CustomerApp() {
               <div className="space-y-6">
                 <div>
                   <h1>Foglalásaim</h1>
-                  <p className="text-muted-foreground">
-                    Kövesd és kezeld a foglalásaidat
-                  </p>
+                  <p className="text-muted-foreground">Kövesd és kezeld a foglalásaidat</p>
                 </div>
 
                 <Tabs value={bookingTab} onValueChange={setBookingTab}>
@@ -703,9 +657,7 @@ export function CustomerApp() {
                       </div>
                     ) : bookings.length === 0 ? (
                       <Card className="p-8 text-center">
-                        <p className="text-muted-foreground">
-                          Nincsenek foglalások
-                        </p>
+                        <p className="text-muted-foreground">Nincsenek foglalások</p>
                       </Card>
                     ) : (
                       <div className="space-y-4">
@@ -713,9 +665,7 @@ export function CustomerApp() {
                           <Card
                             key={booking.id}
                             className="p-6 cursor-pointer hover:border-primary/50 transition-colors"
-                            onClick={() =>
-                              navigate(`/ugyfel/foglalas/${booking.id}`)
-                            }
+                            onClick={() => navigate(`/ugyfel/foglalas/${booking.id}`)}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex gap-4">
@@ -723,19 +673,14 @@ export function CustomerApp() {
                                   <Calendar className="h-6 w-6 text-muted-foreground" />
                                 </div>
                                 <div>
-                                  <h3>
-                                    {booking.service?.name || "Szolgáltatás"}
-                                  </h3>
+                                  <h3>{booking.service?.name || "Szolgáltatás"}</h3>
                                   <p className="text-sm text-muted-foreground mb-2">
-                                    {booking.provider?.businessName ||
-                                      "Szolgáltató"}
+                                    {booking.provider?.businessName || "Szolgáltató"}
                                   </p>
                                   <div className="flex gap-4 text-sm text-muted-foreground">
                                     <div className="flex items-center gap-1">
                                       <Calendar className="h-4 w-4" />
-                                      {new Date(
-                                        booking.scheduledDate,
-                                      ).toLocaleDateString("hu-HU")}
+                                      {new Date(booking.scheduledDate).toLocaleDateString("hu-HU")}
                                     </div>
                                     <div className="flex items-center gap-1">
                                       <Clock className="h-4 w-4" />
@@ -757,14 +702,11 @@ export function CustomerApp() {
                                 </div>
                               </div>
                               <div className="text-right space-y-2">
-                                <Badge
-                                  className={STATUS_COLORS[booking.status]}
-                                >
+                                <Badge className={STATUS_COLORS[booking.status]}>
                                   {STATUS_HU[booking.status]}
                                 </Badge>
                                 <p className="text-sm font-semibold">
-                                  {Number(booking.totalAmount)}{" "}
-                                  {booking.currency}
+                                  {Number(booking.totalAmount)} {booking.currency}
                                 </p>
                                 {/* Cancel button for PENDING/CONFIRMED */}
                                 {(booking.status === "PENDING" ||
@@ -784,8 +726,7 @@ export function CustomerApp() {
                                 )}
                                 {/* Review button for COMPLETED (hide if already reviewed) */}
                                 {booking.status === "COMPLETED" &&
-                                  (!booking.reviews ||
-                                    booking.reviews.length === 0) && (
+                                  (!booking.reviews || booking.reviews.length === 0) && (
                                     <Button
                                       size="sm"
                                       variant="outline"
@@ -816,9 +757,7 @@ export function CustomerApp() {
               <div className="space-y-6">
                 <div>
                   <h1>Kedvenc szolgáltatók</h1>
-                  <p className="text-muted-foreground">
-                    Az elmentett szolgáltatóid
-                  </p>
+                  <p className="text-muted-foreground">Az elmentett szolgáltatóid</p>
                 </div>
 
                 {loadingFavorites ? (
@@ -828,9 +767,7 @@ export function CustomerApp() {
                 ) : favorites.length === 0 ? (
                   <Card className="p-8 text-center">
                     <Heart className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground">
-                      Még nincsenek kedvenceid
-                    </p>
+                    <p className="text-muted-foreground">Még nincsenek kedvenceid</p>
                     <p className="text-sm text-muted-foreground mt-1">
                       Kattints a szív ikonra a szolgáltatóknál
                     </p>
@@ -856,22 +793,16 @@ export function CustomerApp() {
                               <Heart className="h-4 w-4 fill-red-500 text-red-500" />
                             </Button>
                           </div>
-                          <p className="text-sm text-muted-foreground mb-3">
-                            {p.description}
-                          </p>
+                          <p className="text-sm text-muted-foreground mb-3">{p.description}</p>
                           <div className="flex items-center gap-2 text-sm">
                             <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                             <span>{Number(p.rating).toFixed(1)}</span>
-                            <span className="text-muted-foreground">
-                              ({p.reviewCount})
-                            </span>
+                            <span className="text-muted-foreground">({p.reviewCount})</span>
                           </div>
                           <Button
                             size="sm"
                             className="mt-3"
-                            onClick={() =>
-                              navigate(`/ugyfel/szolgaltato/${p.id}`)
-                            }
+                            onClick={() => navigate(`/ugyfel/szolgaltato/${p.id}`)}
                           >
                             Részletek
                           </Button>
@@ -888,9 +819,7 @@ export function CustomerApp() {
               <div className="space-y-6">
                 <div>
                   <h1>Tevékenységed</h1>
-                  <p className="text-muted-foreground">
-                    Foglalási előzmények és kiadások
-                  </p>
+                  <p className="text-muted-foreground">Foglalási előzmények és kiadások</p>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-6">
@@ -900,9 +829,7 @@ export function CustomerApp() {
                         <CheckCircle2 className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">
-                          Összes foglalás
-                        </p>
+                        <p className="text-sm text-muted-foreground">Összes foglalás</p>
                         <p className="text-2xl">{bookings.length}</p>
                       </div>
                     </div>
@@ -914,15 +841,9 @@ export function CustomerApp() {
                         <DollarSign className="h-5 w-5 text-secondary" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">
-                          Össz. kiadás
-                        </p>
+                        <p className="text-sm text-muted-foreground">Össz. kiadás</p>
                         <p className="text-2xl">
-                          {bookings.reduce(
-                            (sum, b) => sum + Number(b.totalAmount),
-                            0,
-                          )}{" "}
-                          RON
+                          {bookings.reduce((sum, b) => sum + Number(b.totalAmount), 0)} RON
                         </p>
                       </div>
                     </div>
@@ -934,9 +855,7 @@ export function CustomerApp() {
                         <Heart className="h-5 w-5 text-accent" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">
-                          Kedvencek
-                        </p>
+                        <p className="text-sm text-muted-foreground">Kedvencek</p>
                         <p className="text-2xl">{favorites.length}</p>
                       </div>
                     </div>
@@ -946,9 +865,7 @@ export function CustomerApp() {
             )}
 
             {activeTab === "messages" && (
-              <MessagingPage
-                initialUserId={searchParams.get("userId") ?? undefined}
-              />
+              <MessagingPage initialUserId={searchParams.get("userId") ?? undefined} />
             )}
           </>
         )}
@@ -956,17 +873,11 @@ export function CustomerApp() {
 
       {/* Booking Modal */}
       {bookingProvider && (
-        <BookingModal
-          provider={bookingProvider}
-          onClose={() => setBookingProvider(null)}
-        />
+        <BookingModal provider={bookingProvider} onClose={() => setBookingProvider(null)} />
       )}
 
       {/* Review Dialog */}
-      <Dialog
-        open={!!reviewBooking}
-        onOpenChange={(open) => !open && setReviewBooking(null)}
-      >
+      <Dialog open={!!reviewBooking} onOpenChange={(open) => !open && setReviewBooking(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Értékelés írása</DialogTitle>
@@ -974,8 +885,7 @@ export function CustomerApp() {
           <div className="space-y-4">
             <div>
               <p className="text-sm text-muted-foreground">
-                {reviewBooking?.service?.name} –{" "}
-                {reviewBooking?.provider?.businessName}
+                {reviewBooking?.service?.name} – {reviewBooking?.provider?.businessName}
               </p>
             </div>
             <div>
@@ -1007,13 +917,8 @@ export function CustomerApp() {
               <Button variant="outline" onClick={() => setReviewBooking(null)}>
                 Mégse
               </Button>
-              <Button
-                onClick={handleSubmitReview}
-                disabled={createReview.isPending}
-              >
-                {createReview.isPending && (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                )}
+              <Button onClick={handleSubmitReview} disabled={createReview.isPending}>
+                {createReview.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                 Értékelés küldése
               </Button>
             </div>

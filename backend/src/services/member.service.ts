@@ -1,11 +1,9 @@
 import { MemberRole, MemberStatus } from "@prisma/client";
 import crypto from "crypto";
 import prisma from "../lib/prisma.js";
+import { logger } from "../lib/logger.js";
 import { NotFoundError, ForbiddenError, AppError } from "../lib/errors.js";
-import {
-  InviteMemberInput,
-  UpdateMemberInput,
-} from "../validators/member.validators.js";
+import { InviteMemberInput, UpdateMemberInput } from "../validators/member.validators.js";
 import { sendInviteEmail } from "./email.service.js";
 
 // ============================================================================
@@ -72,10 +70,7 @@ export async function inviteMember(userId: string, data: InviteMemberInput) {
     },
   });
   if (existing) {
-    throw new AppError(
-      "This email is already a member or has a pending invite",
-      409,
-    );
+    throw new AppError("This email is already a member or has a pending invite", 409);
   }
 
   // Check if the email already belongs to a user in another company
@@ -126,9 +121,7 @@ export async function inviteMember(userId: string, data: InviteMemberInput) {
     inviteToken,
     businessName: provider.businessName,
     displayName: data.displayName,
-  }).catch((err) =>
-    console.error("Failed to send invite email:", err.message),
-  );
+  }).catch((err) => logger.error({ err }, "Failed to send invite email"));
 
   return { ...member, inviteToken };
 }
@@ -176,11 +169,7 @@ export async function listMembers(userId: string) {
 // UPDATE MEMBER (displayName — Owner only)
 // ============================================================================
 
-export async function updateMember(
-  userId: string,
-  memberId: string,
-  data: UpdateMemberInput,
-) {
+export async function updateMember(userId: string, memberId: string, data: UpdateMemberInput) {
   const { provider, memberRole } = await getProviderForUser(userId);
 
   if (memberRole !== "OWNER") {
@@ -199,9 +188,7 @@ export async function updateMember(
   return prisma.providerMember.update({
     where: { id: memberId },
     data: {
-      ...(data.displayName !== undefined
-        ? { displayName: data.displayName }
-        : {}),
+      ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
     },
     include: {
       user: {
@@ -258,11 +245,7 @@ export async function deactivateMember(userId: string, memberId: string) {
 // ASSIGN SERVICE TO MEMBER (Owner only)
 // ============================================================================
 
-export async function assignService(
-  userId: string,
-  memberId: string,
-  serviceId: string,
-) {
+export async function assignService(userId: string, memberId: string, serviceId: string) {
   const { provider, memberRole } = await getProviderForUser(userId);
 
   if (memberRole !== "OWNER") {
@@ -289,11 +272,7 @@ export async function assignService(
 // REMOVE SERVICE FROM MEMBER (Owner only)
 // ============================================================================
 
-export async function removeService(
-  userId: string,
-  memberId: string,
-  serviceId: string,
-) {
+export async function removeService(userId: string, memberId: string, serviceId: string) {
   const { provider, memberRole } = await getProviderForUser(userId);
 
   if (memberRole !== "OWNER") {

@@ -60,6 +60,24 @@ export const updatePricingSettingsSchema = z.object({
   autoAccept: z.boolean().optional(),
 });
 
+export const serviceMatrixSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        templateKey: z.string().min(1).max(120),
+        priceAmount: z.number().positive("Price must be positive"),
+        durationMin: z
+          .number()
+          .int()
+          .positive("Duration must be positive")
+          .max(480, "Duration must be 480 minutes or less"),
+        isActive: z.boolean().optional(),
+      }),
+    )
+    .min(1, "At least one matrix entry is required")
+    .max(20, "Too many matrix entries"),
+});
+
 export const providerSearchSchema = z.object({
   categorySlug: z.string().optional(),
   search: z.string().optional(),
@@ -71,9 +89,7 @@ export const providerSearchSchema = z.object({
   isVerified: z.coerce.boolean().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(50).default(12),
-  sortBy: z
-    .enum(["rating", "price", "reviewCount", "createdAt", "newest"])
-    .default("rating"),
+  sortBy: z.enum(["rating", "price", "reviewCount", "createdAt", "newest"]).default("rating"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
@@ -83,7 +99,6 @@ export type AddServiceInput = z.infer<typeof addServiceSchema>;
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 export type SetAvailabilityInput = z.infer<typeof setAvailabilitySchema>;
 export type SetServiceSlotsInput = z.infer<typeof setServiceSlotsSchema>;
-export type UpdatePricingSettingsInput = z.infer<
-  typeof updatePricingSettingsSchema
->;
+export type UpdatePricingSettingsInput = z.infer<typeof updatePricingSettingsSchema>;
+export type ServiceMatrixInput = z.infer<typeof serviceMatrixSchema>;
 export type ProviderSearchInput = z.infer<typeof providerSearchSchema>;

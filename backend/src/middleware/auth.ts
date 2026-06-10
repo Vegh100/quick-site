@@ -26,8 +26,10 @@ export async function authenticate(
       throw new UnauthorizedError("No session token provided");
     }
 
-    // Verify JWT
-    const payload = jwt.verify(token, authConfig.jwt.secret) as AuthPayload;
+    // Verify JWT with algorithm pinning to prevent confusion attacks
+    const payload = jwt.verify(token, authConfig.jwt.secret, {
+      algorithms: [authConfig.jwt.algorithm],
+    }) as AuthPayload;
 
     // Check session exists and is not expired
     const session = await prisma.session.findUnique({
@@ -82,7 +84,9 @@ export async function optionalAuth(
       return next();
     }
 
-    const payload = jwt.verify(token, authConfig.jwt.secret) as AuthPayload;
+    const payload = jwt.verify(token, authConfig.jwt.secret, {
+      algorithms: [authConfig.jwt.algorithm],
+    }) as AuthPayload;
     const session = await prisma.session.findUnique({
       where: { id: payload.sessionId },
       include: { user: true },

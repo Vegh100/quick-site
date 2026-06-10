@@ -5,15 +5,7 @@ import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
-import {
-  MapPin,
-  Search,
-  ArrowRight,
-  TrendingUp,
-  Sparkles,
-  Star,
-  Loader2,
-} from "lucide-react";
+import { MapPin, Search, ArrowRight, TrendingUp, Sparkles, Star, Loader2 } from "lucide-react";
 import { useCategories } from "../../hooks/useApi";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -39,8 +31,7 @@ const benefits = [
     image:
       "https://images.unsplash.com/photo-1729860646477-c0f603c0300b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxpbnN0YW50JTIwb25saW5lJTIwYm9va2luZyUyMHNtYXJ0cGhvbmV8ZW58MXx8fHwxNzcwNjMxODg0fDA&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral",
     title: "Azonnali foglalás",
-    description:
-      "Foglalj szolgáltatást másodpercek alatt, valós idejű elérhetőséggel",
+    description: "Foglalj szolgáltatást másodpercek alatt, valós idejű elérhetőséggel",
   },
   {
     image:
@@ -53,15 +44,14 @@ const benefits = [
 export function WelcomeScreen() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const { data: categoriesData, isLoading: loadingCategories } =
-    useCategories();
+  const { data: categoriesData, isLoading: loadingCategories } = useCategories();
   const apiCategories = categoriesData?.data || [];
 
   const goToCustomerApp = (category?: string) => {
     if (isAuthenticated) {
       navigate(category ? `/ugyfel?kategoria=${category}` : "/ugyfel");
     } else {
-      navigate("/bejelentkezes", { state: { pendingRole: "CUSTOMER" } });
+      navigate(category ? `/szolgaltatasok?kategoria=${category}` : "/szolgaltatasok");
     }
   };
 
@@ -78,19 +68,13 @@ export function WelcomeScreen() {
           </div>
 
           <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              onClick={() => navigate("/regisztracio/szolgaltato")}
-            >
+            <Button variant="ghost" onClick={() => navigate("/regisztracio/szolgaltato")}>
               Vállalkozásoknak
             </Button>
             <Button variant="ghost" onClick={() => navigate("/bejelentkezes")}>
               Bejelentkezés
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate("/regisztracio/ugyfel")}
-            >
+            <Button variant="outline" onClick={() => navigate("/regisztracio/ugyfel")}>
               Regisztráció
             </Button>
           </div>
@@ -118,8 +102,8 @@ export function WelcomeScreen() {
               </h1>
 
               <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-                Takarítás, kertészet, autómosás és más – találd meg a megbízható
-                helyi szolgáltatókat pillanatok alatt.
+                Lakástakarítás és autókozmetika - találd meg a megbízható helyi szolgáltatókat
+                pillanatok alatt.
               </p>
 
               {/* Search Bar */}
@@ -137,11 +121,7 @@ export function WelcomeScreen() {
                       className="border-0 focus-visible:ring-0 text-base"
                     />
                   </div>
-                  <Button
-                    size="lg"
-                    className="rounded-xl px-8"
-                    onClick={() => goToCustomerApp()}
-                  >
+                  <Button size="lg" className="rounded-xl px-8" onClick={() => goToCustomerApp()}>
                     <Search className="h-5 w-5 mr-2" />
                     Keresés
                   </Button>
@@ -185,7 +165,7 @@ export function WelcomeScreen() {
             <p className="text-muted-foreground">Mit keresel ma?</p>
           </motion.div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
             {loadingCategories ? (
               <div className="col-span-full flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -250,9 +230,7 @@ export function WelcomeScreen() {
                       <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent" />
                     </div>
                     <h3 className="mb-2">{benefit.title}</h3>
-                    <p className="text-muted-foreground">
-                      {benefit.description}
-                    </p>
+                    <p className="text-muted-foreground">{benefit.description}</p>
                   </Card>
                 </motion.div>
               );
@@ -298,8 +276,8 @@ export function WelcomeScreen() {
 
                   <h2 className="mb-3">Szolgáltatást keresek</h2>
                   <p className="text-muted-foreground mb-6 flex-1">
-                    Találd meg és foglald le a legjobb helyi szolgáltatókat –
-                    takarítás, kertészet, autómosás és sok más
+                    Találd meg és foglald le a legjobb helyi szolgáltatókat lakástakarításhoz és
+                    autókozmetikához.
                   </p>
 
                   <div className="space-y-3">
@@ -347,8 +325,8 @@ export function WelcomeScreen() {
 
                   <h2 className="mb-3">Szolgáltató vagyok</h2>
                   <p className="text-muted-foreground mb-6 flex-1">
-                    Növeld a vállalkozásodat – kapcsolódj ügyfelekhez, akiknek
-                    szükségük van a szolgáltatásaidra
+                    Növeld a vállalkozásodat – kapcsolódj ügyfelekhez, akiknek szükségük van a
+                    szolgáltatásaidra
                   </p>
 
                   <div className="space-y-3">

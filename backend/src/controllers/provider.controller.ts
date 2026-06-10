@@ -8,47 +8,27 @@ import { uploadConfig } from "../config/upload.config.js";
 // PROVIDER PROFILE (owner)
 // ============================================================================
 
-export async function createProvider(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function createProvider(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const provider = await providerService.createProvider(
-      req.user!.userId,
-      req.body,
-    );
+    const provider = await providerService.createProvider(req.user!.userId, req.body);
     res.status(201).json({ success: true, data: provider });
   } catch (error) {
     next(error);
   }
 }
 
-export async function updateProvider(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function updateProvider(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const provider = await providerService.updateProvider(
-      req.user!.userId,
-      req.body,
-    );
+    const provider = await providerService.updateProvider(req.user!.userId, req.body);
     res.json({ success: true, data: provider });
   } catch (error) {
     next(error);
   }
 }
 
-export async function getMyProvider(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getMyProvider(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const provider = await providerService.getProviderByUserId(
-      req.user!.userId,
-    );
+    const provider = await providerService.getProviderByUserId(req.user!.userId);
     res.json({ success: true, data: provider });
   } catch (error: any) {
     // Return null instead of 404 so the frontend can show onboarding
@@ -64,11 +44,7 @@ export async function getMyProvider(
 // PUBLIC PROVIDER VIEWS
 // ============================================================================
 
-export async function getProviderById(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getProviderById(req: Request, res: Response, next: NextFunction) {
   try {
     const provider = await providerService.getProviderById(req.params.id);
     res.json({ success: true, data: provider });
@@ -77,11 +53,7 @@ export async function getProviderById(
   }
 }
 
-export async function searchProviders(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function searchProviders(req: Request, res: Response, next: NextFunction) {
   try {
     const result = await providerService.searchProviders(req.query as any);
     res.json({
@@ -93,11 +65,7 @@ export async function searchProviders(
   }
 }
 
-export async function getBusinessHours(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getBusinessHours(req: Request, res: Response, next: NextFunction) {
   try {
     const hours = await providerService.getBusinessHours(req.params.id);
     res.json({ success: true, data: hours });
@@ -110,27 +78,16 @@ export async function getBusinessHours(
 // SERVICES
 // ============================================================================
 
-export async function addService(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function addService(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const service = await providerService.addService(
-      req.user!.userId,
-      req.body,
-    );
+    const service = await providerService.addService(req.user!.userId, req.body);
     res.status(201).json({ success: true, data: service });
   } catch (error) {
     next(error);
   }
 }
 
-export async function updateService(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function updateService(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const service = await providerService.updateService(
       req.user!.userId,
@@ -143,11 +100,7 @@ export async function updateService(
   }
 }
 
-export async function deleteService(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function deleteService(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     await providerService.deleteService(req.user!.userId, req.params.serviceId);
     res.json({ success: true, message: "Service deleted" });
@@ -167,16 +120,37 @@ export async function uploadServiceImage(
       return;
     }
 
-    const imageUrl = getFileUrl(
-      uploadConfig.subdirs.services,
-      req.file.filename,
-    );
-    const service = await providerService.updateService(
-      req.user!.userId,
-      req.params.serviceId,
-      { imageUrl },
-    );
+    const imageUrl = getFileUrl(uploadConfig.subdirs.services, req.file.filename);
+    const service = await providerService.updateService(req.user!.userId, req.params.serviceId, {
+      imageUrl,
+    });
     res.json({ success: true, data: service });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getServiceMatrix(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const matrix = await providerService.getServiceMatrix(req.user!.userId);
+    res.json({ success: true, data: matrix });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function upsertServiceMatrix(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const matrix = await providerService.upsertServiceMatrix(req.user!.userId, req.body);
+    res.json({ success: true, data: matrix });
   } catch (error) {
     next(error);
   }
@@ -192,10 +166,7 @@ export async function setAvailability(
   next: NextFunction,
 ) {
   try {
-    const availability = await providerService.setAvailability(
-      req.user!.userId,
-      req.body,
-    );
+    const availability = await providerService.setAvailability(req.user!.userId, req.body);
     res.json({ success: true, data: availability });
   } catch (error) {
     next(error);
@@ -212,10 +183,7 @@ export async function setServiceSlots(
   next: NextFunction,
 ) {
   try {
-    const slots = await providerService.setServiceSlots(
-      req.user!.userId,
-      req.body,
-    );
+    const slots = await providerService.setServiceSlots(req.user!.userId, req.body);
     res.json({ success: true, data: slots });
   } catch (error) {
     next(error);
@@ -249,10 +217,7 @@ export async function updatePricingSettings(
   next: NextFunction,
 ) {
   try {
-    const provider = await providerService.updatePricingSettings(
-      req.user!.userId,
-      req.body,
-    );
+    const provider = await providerService.updatePricingSettings(req.user!.userId, req.body);
     res.json({ success: true, data: provider });
   } catch (error) {
     next(error);
@@ -263,28 +228,17 @@ export async function updatePricingSettings(
 // STATS & CLIENTS
 // ============================================================================
 
-export async function getStats(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getStats(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const memberId = req.query.memberId as string | undefined;
-    const stats = await providerService.getProviderStats(
-      req.user!.userId,
-      memberId,
-    );
+    const stats = await providerService.getProviderStats(req.user!.userId, memberId);
     res.json({ success: true, data: stats });
   } catch (error) {
     next(error);
   }
 }
 
-export async function getClients(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getClients(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;

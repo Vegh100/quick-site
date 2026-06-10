@@ -3,6 +3,7 @@ import axios from "axios";
 const api = axios.create({
   baseURL: "/api",
   withCredentials: true,
+  timeout: 15000,
   headers: { "Content-Type": "application/json" },
 });
 
@@ -10,10 +11,15 @@ const api = axios.create({
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+
+    if (status === 401) {
       // Clear auth state and redirect to welcome
       window.dispatchEvent(new CustomEvent("auth:logout"));
+    } else if (status === 429) {
+      console.warn("Rate limited — please slow down.");
     }
+
     return Promise.reject(error);
   },
 );

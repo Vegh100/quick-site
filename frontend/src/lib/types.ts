@@ -101,11 +101,57 @@ export interface Service {
   priceType: "PER_HOUR" | "FIXED" | "PER_SERVICE";
   durationMin: number;
   slotIntervalMin: number;
+  templateKey?: string | null;
+  serviceKey?: string | null;
+  variantKey?: string | null;
+  pricingUnit?: "FIXED" | "PER_SQM" | string;
+  isMatrixManaged?: boolean;
   isActive: boolean;
   sortOrder: number;
   imageUrl?: string | null;
   serviceType?: ServiceType;
   serviceSlots?: { dayOfWeek: number; memberId: string }[];
+}
+
+export interface ServiceMatrixDefinition {
+  templateKey: string;
+  categorySlug: "house-cleaning" | "car-detailing";
+  categoryName: string;
+  serviceKey: string;
+  serviceTypeName: string;
+  serviceLabel: string;
+  variantKey: string;
+  variantLabel: string;
+  variantDescription: string;
+  name: string;
+  description: string;
+  pricingUnit: "FIXED" | "PER_SQM";
+  defaultDurationMin: number;
+  sortOrder: number;
+}
+
+export interface ServiceMatrixEntry {
+  serviceId?: string;
+  templateKey: string;
+  priceAmount: string;
+  durationMin: number;
+  isActive: boolean;
+  pricingUnit: "FIXED" | "PER_SQM" | string;
+}
+
+export interface ServiceMatrixInput {
+  entries: {
+    templateKey: string;
+    priceAmount: number;
+    durationMin: number;
+    isActive?: boolean;
+  }[];
+}
+
+export interface ServiceMatrixResponse {
+  definitions: ServiceMatrixDefinition[];
+  entries: ServiceMatrixEntry[];
+  services?: Service[];
 }
 
 export interface Availability {
@@ -227,12 +273,7 @@ export interface Subscription {
 // BOOKING TYPES
 // ============================================================================
 
-export type BookingStatus =
-  | "PENDING"
-  | "CONFIRMED"
-  | "IN_PROGRESS"
-  | "COMPLETED"
-  | "CANCELLED";
+export type BookingStatus = "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
 export interface Booking {
   id: string;

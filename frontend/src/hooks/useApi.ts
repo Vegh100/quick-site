@@ -86,12 +86,7 @@ export function useProviderStats(enabled = true, memberId?: string) {
   });
 }
 
-export function useProviderClients(
-  page = 1,
-  limit = 20,
-  enabled = true,
-  memberId?: string,
-) {
+export function useProviderClients(page = 1, limit = 20, enabled = true, memberId?: string) {
   return useQuery({
     queryKey: ["providers", "me", "clients", page, limit, memberId],
     queryFn: () => providerApi.getClients(page, limit, memberId),
@@ -165,6 +160,25 @@ export function useUploadServiceImage() {
   });
 }
 
+export function useServiceMatrix() {
+  return useQuery({
+    queryKey: ["providers", "me", "service-matrix"],
+    queryFn: () => providerApi.getServiceMatrix(),
+  });
+}
+
+export function useUpsertServiceMatrix() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: providerApi.upsertServiceMatrix,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["providers", "me"] });
+      qc.invalidateQueries({ queryKey: ["providers", "me", "service-matrix"] });
+      qc.invalidateQueries({ queryKey: ["providers", "search"] });
+    },
+  });
+}
+
 export function useSetAvailability() {
   const qc = useQueryClient();
   return useMutation({
@@ -226,11 +240,7 @@ export function useUpdatePricingSettings() {
 // BOOKINGS
 // ============================================================================
 
-export function useCustomerBookings(params?: {
-  status?: string;
-  page?: number;
-  limit?: number;
-}) {
+export function useCustomerBookings(params?: { status?: string; page?: number; limit?: number }) {
   return useQuery({
     queryKey: ["bookings", "customer", params],
     queryFn: () => bookingApi.getCustomerBookings(params),
@@ -285,8 +295,7 @@ export function useAvailableSlots(
   return useQuery({
     queryKey: ["available-slots", params],
     queryFn: () => bookingApi.getAvailableSlots(params!),
-    enabled:
-      !!params && !!params.providerId && !!params.serviceId && !!params.date,
+    enabled: !!params && !!params.providerId && !!params.serviceId && !!params.date,
     staleTime: 1000 * 30, // 30 seconds
   });
 }
@@ -345,13 +354,8 @@ export function useCreateReview() {
 export function useRespondToReview() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      reviewId,
-      response,
-    }: {
-      reviewId: string;
-      response: string;
-    }) => reviewApi.respond(reviewId, response),
+    mutationFn: ({ reviewId, response }: { reviewId: string; response: string }) =>
+      reviewApi.respond(reviewId, response),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["reviews"] });
       qc.invalidateQueries({ queryKey: ["providers"] });
@@ -449,13 +453,8 @@ export function useAddAddress() {
 export function useUpdateAddress() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      data,
-    }: {
-      id: string;
-      data: Partial<Omit<Address, "id" | "userId">>;
-    }) => userApi.updateAddress(id, data),
+    mutationFn: ({ id, data }: { id: string; data: Partial<Omit<Address, "id" | "userId">> }) =>
+      userApi.updateAddress(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["user", "addresses"] });
     },
@@ -556,13 +555,8 @@ export function useDeactivateMember() {
 export function useAssignServiceToMember() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      memberId,
-      serviceId,
-    }: {
-      memberId: string;
-      serviceId: string;
-    }) => memberApi.assignService(memberId, serviceId),
+    mutationFn: ({ memberId, serviceId }: { memberId: string; serviceId: string }) =>
+      memberApi.assignService(memberId, serviceId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
     },
@@ -572,13 +566,8 @@ export function useAssignServiceToMember() {
 export function useRemoveServiceFromMember() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      memberId,
-      serviceId,
-    }: {
-      memberId: string;
-      serviceId: string;
-    }) => memberApi.removeService(memberId, serviceId),
+    mutationFn: ({ memberId, serviceId }: { memberId: string; serviceId: string }) =>
+      memberApi.removeService(memberId, serviceId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["providers", "me", "members"] });
     },
@@ -704,13 +693,8 @@ export function useMessages(conversationId: string | null, page = 1) {
 export function useSendMessage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      conversationId,
-      content,
-    }: {
-      conversationId: string;
-      content: string;
-    }) => messagingApi.sendMessage(conversationId, content),
+    mutationFn: ({ conversationId, content }: { conversationId: string; content: string }) =>
+      messagingApi.sendMessage(conversationId, content),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({
         queryKey: ["messages", variables.conversationId],
@@ -742,10 +726,7 @@ export function useMessageUnreadCount() {
 // PORTFOLIO
 // ============================================================================
 
-export function usePortfolioImages(
-  providerId: string | undefined,
-  serviceId?: string,
-) {
+export function usePortfolioImages(providerId: string | undefined, serviceId?: string) {
   return useQuery({
     queryKey: ["portfolio", providerId, serviceId],
     queryFn: () => portfolioApi.getByProvider(providerId!, serviceId),
@@ -756,11 +737,8 @@ export function usePortfolioImages(
 export function useAddPortfolioImage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: {
-      imageUrl: string;
-      caption?: string;
-      serviceId?: string;
-    }) => portfolioApi.add(data),
+    mutationFn: (data: { imageUrl: string; caption?: string; serviceId?: string }) =>
+      portfolioApi.add(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["portfolio"] });
     },
@@ -811,11 +789,7 @@ export function useBookingTimeline(bookingId: string | undefined) {
 // EXPORT & REPORTING
 // ============================================================================
 
-export function useRevenueSummary(
-  dateFrom: string,
-  dateTo: string,
-  enabled = true,
-) {
+export function useRevenueSummary(dateFrom: string, dateTo: string, enabled = true) {
   return useQuery({
     queryKey: ["revenue-summary", dateFrom, dateTo],
     queryFn: () => exportApi.getRevenueSummary(dateFrom, dateTo),
@@ -825,11 +799,8 @@ export function useRevenueSummary(
 
 export function useExportBookingsCsv() {
   return useMutation({
-    mutationFn: (filters?: {
-      dateFrom?: string;
-      dateTo?: string;
-      status?: string;
-    }) => exportApi.downloadBookingsCsv(filters),
+    mutationFn: (filters?: { dateFrom?: string; dateTo?: string; status?: string }) =>
+      exportApi.downloadBookingsCsv(filters),
   });
 }
 
