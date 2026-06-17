@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useParams, useNavigate, useMatch } from "react-router-dom";
+import { useParams, useNavigate, useMatch, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   useMyProvider,
@@ -16,8 +15,6 @@ import { HeaderWithSettings } from "../layout/HeaderWithSettings";
 import { Footer } from "../layout/Footer";
 import { PersonalDashboard, CompanyDashboard } from "../dashboard/CompanyDashboard";
 import { ReviewCard } from "../common/ReviewCard";
-import { PaywallModal } from "../pricing/PaywallModal";
-import { ReferralModal } from "../common/ReferralModal";
 import { ProviderSettingsPanel } from "../settings/ProviderSettingsPanel";
 import { EmployeeProfilePanel } from "../settings/EmployeeProfilePanel";
 import { ProviderOnboardingFlow } from "./ProviderOnboardingFlow";
@@ -33,8 +30,6 @@ import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
-  Gift,
-  CreditCard,
   Calendar,
   Clock,
   Loader2,
@@ -70,6 +65,19 @@ const STATUS_HU: Record<BookingStatus, string> = {
   COMPLETED: "Befejezve",
   CANCELLED: "Lemondva",
 };
+
+type ApiError = {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+};
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const apiError = error as ApiError;
+  return apiError.response?.data?.error || fallback;
+}
 
 // Provider navigation items
 const ownerNavItems = [
@@ -125,6 +133,7 @@ export function ProviderApp() {
   const bookingMatch = useMatch("/szolgaltato/foglalas/:bookingId");
   const detailBookingId = bookingId || bookingMatch?.params.bookingId;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, logout } = useAuth();
   const isOwner = user?.role === "PROVIDER";
 
@@ -140,9 +149,6 @@ export function ProviderApp() {
       navigate(`/szolgaltato/${TAB_TO_URL[tab] || tab}`);
     }
   };
-
-  const [paywallModalOpen, setPaywallModalOpen] = useState(false);
-  const [referralModalOpen, setReferralModalOpen] = useState(false);
 
   // API calls
   const {
@@ -191,7 +197,7 @@ export function ProviderApp() {
       { id: bookingId, status },
       {
         onSuccess: () => toast.success("Foglalás állapota frissítve!"),
-        onError: (err: any) => toast.error(err?.response?.data?.error || "Hiba történt"),
+        onError: (err: unknown) => toast.error(getApiErrorMessage(err, "Hiba történt")),
       },
     );
   };
@@ -333,22 +339,21 @@ export function ProviderApp() {
         {/* Dashboard Tab */}
         {activeTab === "dashboard" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1>Dashboard</h1>
-                <p className="text-muted-foreground">
-                  {provider?.businessName || "Vállalkozásod áttekintése"}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setReferralModalOpen(true)}>
-                  <Gift className="mr-2 h-4 w-4" />
-                  Ajánlás
-                </Button>
-                <Button variant="outline" onClick={() => setPaywallModalOpen(true)}>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Csomag
-                </Button>
+            {/* Welcome banner */}
+            <div className="relative overflow-hidden rounded-xl border bg-white shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-[#2aa7a5]" />
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Üdvözöljük vissza</p>
+                  <h1 className="text-2xl font-bold leading-tight">
+                    {user?.firstName
+                      ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}!`
+                      : provider?.businessName || "Dashboard"}
+                  </h1>
+                  {provider?.businessName && (
+                    <p className="text-muted-foreground text-sm">{provider.businessName}</p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -363,7 +368,7 @@ export function ProviderApp() {
             {/* Recent Reviews */}
             {reviews.length > 0 && (
               <Card className="p-6">
-                <h3 className="mb-4">Legutóbbi értékelések</h3>
+                <h3 className="font-semibold text-base mb-4">Legutóbbi értékelések</h3>
                 <div className="space-y-4">
                   {reviews.slice(0, 3).map((review) => (
                     <ReviewCard
@@ -578,14 +583,12 @@ export function ProviderApp() {
                           <span className="font-medium">{singleBooking.customer.email}</span>
                         </div>
                       )}
-                      {(singleBooking.customer as any)?.phone && (
+                      {singleBooking.customer?.phone && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground flex items-center gap-1">
                             <Phone className="h-3 w-3" /> Telefon
                           </span>
-                          <span className="font-medium">
-                            {(singleBooking.customer as any).phone}
-                          </span>
+                          <span className="font-medium">{singleBooking.customer.phone}</span>
                         </div>
                       )}
                     </div>
@@ -594,7 +597,9 @@ export function ProviderApp() {
                         <MessageCustomerButton
                           customerId={singleBooking.customer.id}
                           customerName={`${singleBooking.customer?.firstName || ""} ${singleBooking.customer?.lastName || ""}`.trim()}
-                          onNavigate={() => setActiveTab("messages")}
+                          onNavigate={(customerId) =>
+                            navigate(`/szolgaltato/uzenetek?userId=${customerId}`)
+                          }
                         />
                       </div>
                     )}
@@ -879,7 +884,9 @@ export function ProviderApp() {
         )}
 
         {/* Messages Tab */}
-        {activeTab === "messages" && <MessagingPage />}
+        {activeTab === "messages" && (
+          <MessagingPage initialUserId={searchParams.get("userId") ?? undefined} />
+        )}
 
         {/* Portfolio Tab */}
         {activeTab === "portfolio" && provider && (
@@ -910,9 +917,6 @@ export function ProviderApp() {
 
       <Footer />
 
-      {/* Modals */}
-      <PaywallModal open={paywallModalOpen} onOpenChange={setPaywallModalOpen} />
-      <ReferralModal open={referralModalOpen} onOpenChange={setReferralModalOpen} />
       <Toaster />
     </div>
   );
@@ -929,7 +933,7 @@ function MessageCustomerButton({
 }: {
   customerId: string;
   customerName: string;
-  onNavigate: () => void;
+  onNavigate: (customerId: string) => void;
 }) {
   const startConversation = useStartConversation();
 
@@ -940,7 +944,7 @@ function MessageCustomerButton({
       disabled={startConversation.isPending}
       onClick={() => {
         startConversation.mutate(customerId, {
-          onSuccess: () => onNavigate(),
+          onSuccess: () => onNavigate(customerId),
         });
       }}
     >

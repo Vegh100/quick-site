@@ -1,9 +1,6 @@
 import prisma from "../lib/prisma.js";
 import { NotFoundError, ForbiddenError, AppError } from "../lib/errors.js";
-import {
-  CreateReviewInput,
-  ReviewFilterInput,
-} from "../validators/review.validators.js";
+import { CreateReviewInput, ReviewFilterInput } from "../validators/review.validators.js";
 import { createNotification } from "./notification.service.js";
 
 // ============================================================================
@@ -63,9 +60,8 @@ export async function createReview(authorId: string, data: CreateReviewInput) {
     await updateProviderRating(booking.providerId);
 
     // Notify the provider about the new review
-    const authorName = [review.author.firstName, review.author.lastName]
-      .filter(Boolean)
-      .join(" ") || "Ügyfél";
+    const authorName =
+      [review.author.firstName, review.author.lastName].filter(Boolean).join(" ") || "Ügyfél";
     createNotification({
       userId: booking.provider.userId,
       type: "REVIEW_RECEIVED",
@@ -82,11 +78,7 @@ export async function createReview(authorId: string, data: CreateReviewInput) {
 // RESPOND TO REVIEW (Provider reply)
 // ============================================================================
 
-export async function respondToReview(
-  userId: string,
-  reviewId: string,
-  response: string,
-) {
+export async function respondToReview(userId: string, reviewId: string, response: string) {
   const review = await prisma.review.findUnique({
     where: { id: reviewId },
     include: {
@@ -132,11 +124,7 @@ export async function respondToReview(
 // GET REVIEWS
 // ============================================================================
 
-
-export async function getProviderReviews(
-  providerId: string,
-  filters: ReviewFilterInput,
-) {
+export async function getProviderReviews(providerId: string, filters: ReviewFilterInput) {
   const provider = await prisma.provider.findUnique({
     where: { id: providerId },
   });

@@ -28,6 +28,13 @@ const envSchema = z.object({
   UPLOAD_DIR: z.string().default("uploads"),
   MAX_FILE_SIZE: z.coerce.number().default(5242880),
 
+  // Cloudflare R2
+  R2_ACCOUNT_ID: z.string().default(""),
+  R2_ACCESS_KEY_ID: z.string().default(""),
+  R2_SECRET_ACCESS_KEY: z.string().default(""),
+  R2_BUCKET_NAME: z.string().default(""),
+  R2_PUBLIC_URL: z.string().default(""),
+
   // Email (SMTP)
   SMTP_HOST: z.string().default(""),
   SMTP_PORT: z.coerce.number().default(587),

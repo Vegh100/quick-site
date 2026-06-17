@@ -6,7 +6,17 @@ import {
   useMarkAsRead,
   useMarkAllAsRead,
 } from "../../hooks/useApi";
-import { Bell, Check, CheckCheck, Loader2, Calendar, Star, UserPlus, AlertCircle, X } from "lucide-react";
+import {
+  Bell,
+  Check,
+  CheckCheck,
+  Loader2,
+  Calendar,
+  Star,
+  UserPlus,
+  AlertCircle,
+  X,
+} from "lucide-react";
 import { Button } from "../ui/button";
 
 // Map notification types to icons and colors
@@ -108,9 +118,7 @@ export function NotificationBell() {
 
       {/* Dropdown Panel */}
       {isOpen && (
-        <div
-          className="absolute right-0 top-full mt-2 w-[380px] max-h-[480px] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-border/50 overflow-hidden z-50 animate-in slide-in-from-top-2 fade-in duration-200"
-        >
+        <div className="fixed left-3 right-3 top-[4.5rem] z-[80] max-h-[calc(100vh-5.5rem)] overflow-hidden rounded-2xl border border-border/50 bg-white shadow-2xl animate-in slide-in-from-top-2 fade-in duration-200 dark:bg-zinc-900 sm:left-auto sm:right-4 sm:w-[440px] md:w-[480px]">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-border/50">
             <h3 className="font-semibold text-sm">Értesítések</h3>
@@ -129,7 +137,7 @@ export function NotificationBell() {
           </div>
 
           {/* Notification List */}
-          <div className="overflow-y-auto max-h-[400px]">
+          <div className="max-h-[calc(100vh-10rem)] overflow-y-auto">
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -161,7 +169,9 @@ export function NotificationBell() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={`text-sm leading-5 ${!notif.isRead ? "font-semibold" : "font-medium text-muted-foreground"}`}>
+                        <p
+                          className={`text-sm leading-5 ${!notif.isRead ? "font-semibold" : "font-medium text-muted-foreground"}`}
+                        >
                           {notif.title}
                         </p>
                         {!notif.isRead && (

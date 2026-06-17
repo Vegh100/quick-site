@@ -29,7 +29,8 @@ export function PaywallModal({ open, onOpenChange }: PaywallModalProps) {
             ))}
           </div>
           <p className="text-center">
-            "Qvick transformed how we manage bookings. Our revenue increased by 40% in the first month!"
+            "Qvick transformed how we manage bookings. Our revenue increased by 40% in the first
+            month!"
           </p>
           <p className="text-center text-sm text-muted-foreground">
             — Maria, Amsterdam Cleaning Services

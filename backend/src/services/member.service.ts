@@ -303,6 +303,8 @@ export async function setMemberAvailability(
     startTime: string;
     endTime: string;
     isEnabled: boolean;
+    breakStart?: string | null;
+    breakEnd?: string | null;
   }[],
 ) {
   const { provider, memberRole, member } = await getProviderForUser(userId);
@@ -332,6 +334,8 @@ export async function setMemberAvailability(
           startTime: slot.startTime,
           endTime: slot.endTime,
           isEnabled: slot.isEnabled,
+          breakStart: slot.breakStart ?? null,
+          breakEnd: slot.breakEnd ?? null,
         },
         create: {
           providerId: provider.id,
@@ -340,9 +344,38 @@ export async function setMemberAvailability(
           startTime: slot.startTime,
           endTime: slot.endTime,
           isEnabled: slot.isEnabled,
+          breakStart: slot.breakStart ?? null,
+          breakEnd: slot.breakEnd ?? null,
         },
       }),
     ),
+  );
+
+  await Promise.all(
+    availability.map((slot) => {
+      if (!slot.isEnabled) {
+        return prisma.serviceSlot.deleteMany({
+          where: { memberId, dayOfWeek: slot.dayOfWeek },
+        });
+      }
+
+      const breakFilter =
+        slot.breakStart && slot.breakEnd
+          ? [{ startTime: { lt: slot.breakEnd }, endTime: { gt: slot.breakStart } }]
+          : [];
+
+      return prisma.serviceSlot.deleteMany({
+        where: {
+          memberId,
+          dayOfWeek: slot.dayOfWeek,
+          OR: [
+            { startTime: { lt: slot.startTime } },
+            { endTime: { gt: slot.endTime } },
+            ...breakFilter,
+          ],
+        },
+      });
+    }),
   );
 
   return results;

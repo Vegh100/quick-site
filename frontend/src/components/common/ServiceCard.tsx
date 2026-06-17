@@ -39,11 +39,7 @@ export function ServiceCard({
     >
       <div className="aspect-video bg-muted relative overflow-hidden">
         {image && (
-          <ImageWithFallback
-            src={image}
-            alt={service}
-            className="w-full h-full object-cover"
-          />
+          <ImageWithFallback src={image} alt={service} className="w-full h-full object-cover" />
         )}
         <Badge className="absolute top-3 right-3" variant="secondary">
           {category}

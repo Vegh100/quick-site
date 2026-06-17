@@ -21,7 +21,10 @@ export function Header() {
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" className="relative">
             <Bell className="h-5 w-5" />
-            <Badge className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center" variant="destructive">
+            <Badge
+              className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center"
+              variant="destructive"
+            >
               3
             </Badge>
           </Button>

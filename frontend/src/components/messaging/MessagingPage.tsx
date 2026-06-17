@@ -62,21 +62,12 @@ function formatDateSeparator(dateStr: string): string {
   });
 }
 
-function getUserName(u: {
-  firstName: string | null;
-  lastName: string | null;
-}): string {
+function getUserName(u: { firstName: string | null; lastName: string | null }): string {
   return [u.firstName, u.lastName].filter(Boolean).join(" ") || "Felhasználó";
 }
 
-function getInitials(u: {
-  firstName: string | null;
-  lastName: string | null;
-}): string {
-  return (
-    (u.firstName?.[0]?.toUpperCase() ?? "") +
-      (u.lastName?.[0]?.toUpperCase() ?? "") || "?"
-  );
+function getInitials(u: { firstName: string | null; lastName: string | null }): string {
+  return (u.firstName?.[0]?.toUpperCase() ?? "") + (u.lastName?.[0]?.toUpperCase() ?? "") || "?";
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -109,8 +100,7 @@ function Avatar({
     sm: "h-9 w-9 text-xs",
     md: "h-11 w-11 text-sm",
   };
-  const gi =
-    ((user.id || user.firstName || "")?.charCodeAt(0) || 0) % GRADIENTS.length;
+  const gi = ((user.id || user.firstName || "")?.charCodeAt(0) || 0) % GRADIENTS.length;
 
   if (user.avatarUrl) {
     return (
@@ -147,9 +137,7 @@ function ConversationList({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const list = q
-    ? conversations.filter((c) =>
-        getUserName(c.otherUser).toLowerCase().includes(q.toLowerCase()),
-      )
+    ? conversations.filter((c) => getUserName(c.otherUser).toLowerCase().includes(q.toLowerCase()))
     : conversations;
 
   /* ── Loading ── */
@@ -166,9 +154,7 @@ function ConversationList({
     return (
       <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-center">
         <MessageSquare className="h-8 w-8 text-muted-foreground/30 mb-3" />
-        <p className="text-sm font-medium text-foreground mb-1">
-          Nincsenek üzenetek
-        </p>
+        <p className="text-sm font-medium text-foreground mb-1">Nincsenek üzenetek</p>
         <p className="text-xs text-muted-foreground leading-relaxed">
           Küldj üzenetet egy foglalás részletoldaláról!
         </p>
@@ -220,9 +206,7 @@ function ConversationList({
                 key={conv.id}
                 onClick={() => onSelect(conv)}
                 className={`relative flex w-full items-center gap-3 px-4 py-3 text-left transition-colors ${
-                  active
-                    ? "bg-primary/10 dark:bg-primary/20"
-                    : "hover:bg-muted/60"
+                  active ? "bg-primary/10 dark:bg-primary/20" : "hover:bg-muted/60"
                 }`}
               >
                 {active && (
@@ -251,9 +235,7 @@ function ConversationList({
                     </span>
                     <span
                       className={`shrink-0 text-[10px] tabular-nums ${
-                        unread
-                          ? "font-semibold text-primary"
-                          : "text-muted-foreground"
+                        unread ? "font-semibold text-primary" : "text-muted-foreground"
                       }`}
                     >
                       {timeAgo(conv.lastMessageAt)}
@@ -262,9 +244,7 @@ function ConversationList({
                   {conv.lastMessage && (
                     <p
                       className={`mt-0.5 truncate text-xs ${
-                        unread
-                          ? "font-medium text-foreground/70"
-                          : "text-muted-foreground"
+                        unread ? "font-medium text-foreground/70" : "text-muted-foreground"
                       }`}
                     >
                       {conv.lastMessage}
@@ -365,9 +345,7 @@ function ChatView({
         <Avatar user={otherUser} size="sm" />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">
-            {getUserName(otherUser)}
-          </p>
+          <p className="truncate text-sm font-semibold">{getUserName(otherUser)}</p>
           <div className="flex items-center gap-1.5">
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
             <span className="text-[11px] text-muted-foreground">Online</span>
@@ -432,9 +410,7 @@ function ChatView({
                       {/* avatar slot */}
                       {!mine && (
                         <div className="w-7 shrink-0">
-                          {showAvatar ? (
-                            <Avatar user={otherUser} size="xs" />
-                          ) : null}
+                          {showAvatar ? <Avatar user={otherUser} size="xs" /> : null}
                         </div>
                       )}
 
@@ -450,15 +426,11 @@ function ChatView({
                           {msg.content}
                         </p>
                         <div
-                          className={`mt-0.5 flex items-center gap-1 ${
-                            mine ? "justify-end" : ""
-                          }`}
+                          className={`mt-0.5 flex items-center gap-1 ${mine ? "justify-end" : ""}`}
                         >
                           <span
                             className={`text-[10px] ${
-                              mine
-                                ? "text-primary-foreground/50"
-                                : "text-muted-foreground"
+                              mine ? "text-primary-foreground/50" : "text-muted-foreground"
                             }`}
                           >
                             {formatTime(msg.createdAt)}
@@ -524,15 +496,15 @@ interface MessagingPageProps {
 export function MessagingPage({ initialUserId }: MessagingPageProps = {}) {
   const [selected, setSelected] = useState<ConversationListItem | null>(null);
   const startConv = useStartConversation();
-  const [autoStarted, setAutoStarted] = useState(false);
+  const autoStarted = useRef(false);
   const { data: convData, isLoading } = useConversations();
   const hasConvs = (convData?.data ?? []).length > 0;
   const isMobile = useIsMobile();
 
   // auto-open conversation
   useEffect(() => {
-    if (!initialUserId || autoStarted) return;
-    setAutoStarted(true);
+    if (!initialUserId || autoStarted.current) return;
+    autoStarted.current = true;
     startConv.mutate(initialUserId, {
       onSuccess: (data) => {
         const c = data.data;
@@ -553,7 +525,7 @@ export function MessagingPage({ initialUserId }: MessagingPageProps = {}) {
         });
       },
     });
-  }, [initialUserId, autoStarted]);
+  }, [initialUserId, startConv]);
 
   const containerStyle = {
     height: "calc(100vh - 10rem)",
@@ -588,8 +560,7 @@ export function MessagingPage({ initialUserId }: MessagingPageProps = {}) {
         </div>
         <h2 className="text-lg font-bold">Üzenetek</h2>
         <p className="mt-2 max-w-xs text-sm text-muted-foreground leading-relaxed">
-          Itt fognak megjelenni a beszélgetéseid. Küldj üzenetet egy foglalás
-          részletoldaláról!
+          Itt fognak megjelenni a beszélgetéseid. Küldj üzenetet egy foglalás részletoldaláról!
         </p>
         <div className="mt-6 flex items-center gap-2 rounded-lg bg-muted/60 px-4 py-2 text-xs text-muted-foreground">
           <MessageSquare className="h-3.5 w-3.5 shrink-0" />
@@ -604,16 +575,11 @@ export function MessagingPage({ initialUserId }: MessagingPageProps = {}) {
   const showChat = isMobile ? !!selected : true;
 
   return (
-    <div
-      style={containerStyle}
-      className="flex overflow-hidden rounded-2xl border bg-card"
-    >
+    <div style={containerStyle} className="flex overflow-hidden rounded-2xl border bg-card">
       {/* LEFT — conversation list */}
       {showList && (
         <aside
-          className={`flex flex-col border-r ${
-            isMobile ? "w-full" : "w-80 lg:w-[340px] shrink-0"
-          }`}
+          className={`flex flex-col border-r ${isMobile ? "w-full" : "w-80 lg:w-[340px] shrink-0"}`}
         >
           {/* sidebar header */}
           <div className="flex shrink-0 items-center gap-2.5 border-b px-4 py-3">
@@ -622,10 +588,7 @@ export function MessagingPage({ initialUserId }: MessagingPageProps = {}) {
             </div>
             <h2 className="text-base font-bold">Üzenetek</h2>
           </div>
-          <ConversationList
-            onSelect={setSelected}
-            selectedId={selected?.id ?? null}
-          />
+          <ConversationList onSelect={setSelected} selectedId={selected?.id ?? null} />
         </aside>
       )}
 
@@ -641,9 +604,7 @@ export function MessagingPage({ initialUserId }: MessagingPageProps = {}) {
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
               <MessageSquare className="mb-4 h-10 w-10 text-muted-foreground/20" />
-              <p className="text-sm font-medium text-foreground/70">
-                Válassz egy beszélgetést
-              </p>
+              <p className="text-sm font-medium text-foreground/70">Válassz egy beszélgetést</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Kattints egy névre a bal oldalon.
               </p>

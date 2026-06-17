@@ -93,15 +93,15 @@ export default function App() {
         {/* Protected routes — require authentication */}
         <Route element={<ProtectedRoute />}>
           {/* Customer routes */}
-          <Route
-            path="/ugyfel/bemutatkozas"
-            element={
-              <Suspense fallback={<PageFallback />}>
-                <CustomerOnboardingFlow />
-              </Suspense>
-            }
-          />
           <Route element={<RequireRole role="CUSTOMER" />}>
+            <Route
+              path="/ugyfel/bemutatkozas"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <CustomerOnboardingFlow />
+                </Suspense>
+              }
+            />
             <Route
               path="/ugyfel"
               element={
@@ -137,15 +137,15 @@ export default function App() {
           </Route>
 
           {/* Provider routes */}
-          <Route
-            path="/szolgaltato/bemutatkozas"
-            element={
-              <Suspense fallback={<PageFallback />}>
-                <ProviderOnboardingFlow />
-              </Suspense>
-            }
-          />
           <Route element={<RequireRole role="PROVIDER" />}>
+            <Route
+              path="/szolgaltato/bemutatkozas"
+              element={
+                <Suspense fallback={<PageFallback />}>
+                  <ProviderOnboardingFlow />
+                </Suspense>
+              }
+            />
             <Route
               path="/szolgaltato"
               element={

@@ -28,7 +28,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
                     "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all",
                     isCompleted && "bg-primary border-primary",
                     isCurrent && "border-primary text-primary",
-                    !isCompleted && !isCurrent && "border-border text-muted-foreground"
+                    !isCompleted && !isCurrent && "border-border text-muted-foreground",
                   )}
                 >
                   {isCompleted ? (
@@ -40,7 +40,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
                 <span
                   className={cn(
                     "text-xs mt-2 text-center",
-                    (isCompleted || isCurrent) ? "text-foreground" : "text-muted-foreground"
+                    isCompleted || isCurrent ? "text-foreground" : "text-muted-foreground",
                   )}
                 >
                   {step.label}
@@ -51,7 +51,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
                   <div
                     className={cn(
                       "h-full transition-all",
-                      isCompleted ? "bg-primary" : "bg-border"
+                      isCompleted ? "bg-primary" : "bg-border",
                     )}
                   />
                 </div>

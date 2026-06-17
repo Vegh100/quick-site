@@ -20,10 +20,7 @@ export function PortfolioGallery({
   providerId: string;
   serviceId?: string;
 }) {
-  const { data: imageData, isLoading } = usePortfolioImages(
-    providerId,
-    serviceId,
-  );
+  const { data: imageData, isLoading } = usePortfolioImages(providerId, serviceId);
   const images: PortfolioImageItem[] = imageData?.data ?? [];
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
@@ -137,11 +134,7 @@ export function PortfolioManager({ providerId }: { providerId: string }) {
           <ImageIcon className="h-4 w-4 text-muted-foreground" />
           Portfólió ({images.length})
         </h3>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShowAddForm(!showAddForm)}
-        >
+        <Button size="sm" variant="outline" onClick={() => setShowAddForm(!showAddForm)}>
           <Plus className="h-3 w-3 mr-1" />
           Kép hozzáadása
         </Button>
@@ -151,11 +144,7 @@ export function PortfolioManager({ providerId }: { providerId: string }) {
         <div className="rounded-xl border p-4 space-y-3 bg-muted/30">
           {preview && (
             <div className="relative w-full h-36 rounded-md overflow-hidden border">
-              <img
-                src={preview}
-                alt="Előnézet"
-                className="w-full h-full object-cover"
-              />
+              <img src={preview} alt="Előnézet" className="w-full h-full object-cover" />
             </div>
           )}
           <Input type="file" accept="image/*" onChange={handleFileChange} />
@@ -177,14 +166,8 @@ export function PortfolioManager({ providerId }: { providerId: string }) {
             >
               Mégse
             </Button>
-            <Button
-              size="sm"
-              onClick={handleAdd}
-              disabled={!newFile || uploadImage.isPending}
-            >
-              {uploadImage.isPending && (
-                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-              )}
+            <Button size="sm" onClick={handleAdd} disabled={!newFile || uploadImage.isPending}>
+              {uploadImage.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
               Feltöltés
             </Button>
           </div>
@@ -214,9 +197,7 @@ export function PortfolioManager({ providerId }: { providerId: string }) {
               />
               {img.caption && (
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
-                  <p className="text-[11px] text-white truncate">
-                    {img.caption}
-                  </p>
+                  <p className="text-[11px] text-white truncate">{img.caption}</p>
                 </div>
               )}
               <button

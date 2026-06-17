@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, type Location } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -14,6 +14,24 @@ interface LoginScreenProps {
   mode: "login" | "register";
   /** The role to register as. Only used in register mode. */
   role?: UserRole;
+}
+
+type AuthLocationState = {
+  pendingRole?: UserRole;
+  from?: Pick<Location, "pathname" | "search">;
+};
+
+type ApiError = {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+};
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const apiError = error as ApiError;
+  return apiError.response?.data?.error || fallback;
 }
 
 const ROLE_CONFIG: Record<UserRole, { icon: typeof UserIcon; title: string; subtitle: string }> = {
@@ -42,25 +60,37 @@ const ROLE_CONFIG: Record<UserRole, { icon: typeof UserIcon; title: string; subt
 export function LoginScreen({ mode, role: roleProp = "CUSTOMER" }: LoginScreenProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const pendingRole = (location.state as any)?.pendingRole;
+  const locationState = location.state as AuthLocationState | null;
+  const pendingRole = locationState?.pendingRole;
   const { login, register, googleAuth } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
+  const dashboardFor = (user: User) =>
+    user.role === "PROVIDER" || user.role === "EMPLOYEE" ? "/szolgaltato" : "/ugyfel";
+
+  const canAccessPath = (user: User, pathname: string) => {
+    const isProviderUser = user.role === "PROVIDER" || user.role === "EMPLOYEE";
+    if (pathname.startsWith("/szolgaltato")) return isProviderUser;
+    if (pathname.startsWith("/ugyfel")) return user.role === "CUSTOMER";
+    return true;
+  };
+
   const navigateAfterAuth = (user: User) => {
-    // If redirected here from a protected route, go back there
-    const fromLocation = (location.state as any)?.from;
-    const from = fromLocation?.pathname;
-    if (from && from !== "/") {
-      navigate(`${from}${fromLocation.search || ""}`, { replace: true });
+    const fromLocation = locationState?.from;
+    const from = fromLocation?.pathname || "";
+
+    if (from && from !== "/" && canAccessPath(user, from)) {
+      navigate(`${from}${fromLocation?.search || ""}`, { replace: true });
       return;
     }
-    // Otherwise go to the user's dashboard
-    if (user.role === "PROVIDER" || user.role === "EMPLOYEE") {
-      navigate("/szolgaltato", { replace: true });
-    } else {
-      navigate("/ugyfel", { replace: true });
+
+    if (mode === "register" && user.role === "CUSTOMER") {
+      navigate("/ugyfel/bemutatkozas", { replace: true });
+      return;
     }
+
+    navigate(dashboardFor(user), { replace: true });
   };
 
   const handleSwitchMode = () => {
@@ -70,13 +100,13 @@ export function LoginScreen({ mode, role: roleProp = "CUSTOMER" }: LoginScreenPr
       navigate(`/regisztracio/${registerRole}`, {
         state: {
           pendingRole,
-          from: (location.state as any)?.from,
+          from: locationState?.from,
         },
       });
     } else {
       // Switch to login — pass the current role so login can switch back
       navigate("/bejelentkezes", {
-        state: { pendingRole: roleProp, from: (location.state as any)?.from },
+        state: { pendingRole: roleProp, from: locationState?.from },
       });
     }
   };
@@ -109,10 +139,11 @@ export function LoginScreen({ mode, role: roleProp = "CUSTOMER" }: LoginScreenPr
         toast.success("Sikeres regisztráció!");
       }
       navigateAfterAuth(user);
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.error ||
-        (mode === "login" ? "Sikertelen bejelentkezés" : "Sikertelen regisztráció");
+    } catch (err: unknown) {
+      const message = getApiErrorMessage(
+        err,
+        mode === "login" ? "Sikertelen bejelentkezés" : "Sikertelen regisztráció",
+      );
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -180,9 +211,8 @@ export function LoginScreen({ mode, role: roleProp = "CUSTOMER" }: LoginScreenPr
                       }
 
                       navigateAfterAuth(user);
-                    } catch (err: any) {
-                      const message =
-                        err?.response?.data?.error || "Sikertelen Google bejelentkezés";
+                    } catch (err: unknown) {
+                      const message = getApiErrorMessage(err, "Sikertelen Google bejelentkezés");
                       toast.error(message);
                     } finally {
                       setIsGoogleLoading(false);

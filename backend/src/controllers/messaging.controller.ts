@@ -11,9 +11,7 @@ export async function getConversations(
   next: NextFunction,
 ) {
   try {
-    const conversations = await messagingService.getMyConversations(
-      req.user!.userId,
-    );
+    const conversations = await messagingService.getMyConversations(req.user!.userId);
     res.json({ success: true, data: conversations });
   } catch (error) {
     next(error);
@@ -48,21 +46,12 @@ export async function startConversation(
 /**
  * GET /api/messages/conversations/:id/messages
  */
-export async function getMessages(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getMessages(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
 
-    const result = await messagingService.getMessages(
-      req.user!.userId,
-      req.params.id,
-      page,
-      limit,
-    );
+    const result = await messagingService.getMessages(req.user!.userId, req.params.id, page, limit);
     res.json({ success: true, data: result });
   } catch (error) {
     next(error);
@@ -72,25 +61,15 @@ export async function getMessages(
 /**
  * POST /api/messages/conversations/:id/messages
  */
-export async function sendMessage(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function sendMessage(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const { content } = req.body;
     if (!content || typeof content !== "string" || content.trim().length === 0) {
-      res
-        .status(400)
-        .json({ success: false, error: "Message content is required" });
+      res.status(400).json({ success: false, error: "Message content is required" });
       return;
     }
 
-    const message = await messagingService.sendMessage(
-      req.user!.userId,
-      req.params.id,
-      content,
-    );
+    const message = await messagingService.sendMessage(req.user!.userId, req.params.id, content);
     res.status(201).json({ success: true, data: message });
   } catch (error) {
     next(error);
@@ -100,15 +79,9 @@ export async function sendMessage(
 /**
  * GET /api/messages/unread-count
  */
-export async function getUnreadCount(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getUnreadCount(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const count = await messagingService.getTotalUnreadCount(
-      req.user!.userId,
-    );
+    const count = await messagingService.getTotalUnreadCount(req.user!.userId);
     res.json({ success: true, data: { unreadCount: count } });
   } catch (error) {
     next(error);

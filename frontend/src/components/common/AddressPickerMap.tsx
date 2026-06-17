@@ -1,11 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  useMapEvents,
-  useMap,
-} from "react-leaflet";
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
@@ -41,11 +35,7 @@ interface AddressPickerMapProps {
 }
 
 // Sub-component: handle map click events
-function MapClickHandler({
-  onMapClick,
-}: {
-  onMapClick: (lat: number, lng: number) => void;
-}) {
+function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
   useMapEvents({
     click(e) {
       onMapClick(e.latlng.lat, e.latlng.lng);
@@ -76,14 +66,9 @@ export function AddressPickerMap({
   const [markerPos, setMarkerPos] = useState<[number, number] | null>(
     initialLat && initialLng ? [initialLat, initialLng] : null,
   );
-  const [center, setCenter] = useState<[number, number]>([
-    defaultLat,
-    defaultLng,
-  ]);
+  const [center, setCenter] = useState<[number, number]>([defaultLat, defaultLng]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<GeocodingSearchResult[]>(
-    [],
-  );
+  const [searchResults, setSearchResults] = useState<GeocodingSearchResult[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [locating, setLocating] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
@@ -100,10 +85,7 @@ export function AddressPickerMap({
   // Close search results on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        resultsRef.current &&
-        !resultsRef.current.contains(e.target as Node)
-      ) {
+      if (resultsRef.current && !resultsRef.current.contains(e.target as Node)) {
         setShowResults(false);
       }
     };
@@ -277,8 +259,7 @@ export function AddressPickerMap({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Kattints a térképre vagy keress rá egy címre a pontos helyzet
-        megadásához
+        Kattints a térképre vagy keress rá egy címre a pontos helyzet megadásához
       </p>
     </div>
   );

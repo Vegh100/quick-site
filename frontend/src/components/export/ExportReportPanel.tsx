@@ -1,16 +1,6 @@
 import { useState, useMemo } from "react";
-import {
-  useRevenueSummary,
-  useExportBookingsCsv,
-} from "../../hooks/useApi";
-import {
-  Download,
-  TrendingUp,
-  Calendar,
-  DollarSign,
-  BarChart3,
-  Loader2,
-} from "lucide-react";
+import { useRevenueSummary, useExportBookingsCsv } from "../../hooks/useApi";
+import { Download, TrendingUp, Calendar, DollarSign, BarChart3, Loader2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 
@@ -23,19 +13,18 @@ export function ExportReportPanel() {
   const [dateFrom, setDateFrom] = useState(
     new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10),
   );
-  const [dateTo, setDateTo] = useState(
-    now.toISOString().slice(0, 10),
-  );
+  const [dateTo, setDateTo] = useState(now.toISOString().slice(0, 10));
 
   const { data: summaryData, isLoading } = useRevenueSummary(dateFrom, dateTo);
   const exportCsv = useExportBookingsCsv();
 
   const summary = summaryData?.data;
+  const dailySummary = summary?.daily;
 
   const maxDailyRevenue = useMemo(() => {
-    if (!summary?.daily) return 1;
-    return Math.max(...summary.daily.map((d) => d.revenue), 1);
-  }, [summary?.daily]);
+    if (!dailySummary) return 1;
+    return Math.max(...dailySummary.map((d) => d.revenue), 1);
+  }, [dailySummary]);
 
   return (
     <div className="space-y-6">
@@ -106,21 +95,15 @@ export function ExportReportPanel() {
           {/* Revenue by Service */}
           {summary.byService.length > 0 && (
             <Card className="p-5">
-              <h3 className="font-semibold text-sm mb-4">
-                Bevétel szolgáltatásonként
-              </h3>
+              <h3 className="font-semibold text-sm mb-4">Bevétel szolgáltatásonként</h3>
               <div className="space-y-3">
                 {summary.byService.map((svc) => {
                   const pct =
-                    summary.totalRevenue > 0
-                      ? (svc.revenue / summary.totalRevenue) * 100
-                      : 0;
+                    summary.totalRevenue > 0 ? (svc.revenue / summary.totalRevenue) * 100 : 0;
                   return (
                     <div key={svc.serviceId}>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm font-medium">
-                          {svc.serviceName}
-                        </span>
+                        <span className="text-sm font-medium">{svc.serviceName}</span>
                         <span className="text-sm text-muted-foreground">
                           {formatCurrency(svc.revenue)} ({svc.count}×)
                         </span>
@@ -141,20 +124,12 @@ export function ExportReportPanel() {
           {/* Daily Revenue Mini Chart */}
           {summary.daily.length > 0 && (
             <Card className="p-5">
-              <h3 className="font-semibold text-sm mb-4">
-                Napi bevétel
-              </h3>
+              <h3 className="font-semibold text-sm mb-4">Napi bevétel</h3>
               <div className="flex items-end gap-[2px] h-24">
                 {summary.daily.map((day) => {
-                  const height =
-                    maxDailyRevenue > 0
-                      ? (day.revenue / maxDailyRevenue) * 100
-                      : 0;
+                  const height = maxDailyRevenue > 0 ? (day.revenue / maxDailyRevenue) * 100 : 0;
                   return (
-                    <div
-                      key={day.date}
-                      className="flex-1 group relative"
-                    >
+                    <div key={day.date} className="flex-1 group relative">
                       <div
                         className="bg-gradient-to-t from-primary/80 to-primary/40 rounded-t-sm transition-all hover:from-primary hover:to-primary/60 cursor-default"
                         style={{
@@ -188,9 +163,7 @@ export function ExportReportPanel() {
             </p>
           </div>
           <Button
-            onClick={() =>
-              exportCsv.mutate({ dateFrom, dateTo })
-            }
+            onClick={() => exportCsv.mutate({ dateFrom, dateTo })}
             disabled={exportCsv.isPending}
             className="gap-2"
           >

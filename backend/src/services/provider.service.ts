@@ -615,6 +615,7 @@ function toMatrixEntry(service: {
   durationMin: number;
   isActive: boolean;
   pricingUnit: string;
+  description: string | null;
 }) {
   return {
     serviceId: service.id,
@@ -623,6 +624,7 @@ function toMatrixEntry(service: {
     durationMin: service.durationMin,
     isActive: service.isActive,
     pricingUnit: service.pricingUnit,
+    description: service.description,
   };
 }
 
@@ -698,20 +700,24 @@ export async function upsertServiceMatrix(userId: string, data: ServiceMatrixInp
         select: { id: true },
       });
 
+      const isActive = entry.isActive !== undefined ? entry.isActive : entry.priceAmount > 0;
+      const effectiveDuration =
+        entry.durationMin > 0 ? entry.durationMin : definition.defaultDurationMin;
+
       const serviceData = {
         serviceTypeId: serviceType.id,
         name: definition.name,
-        description: definition.description,
+        description: entry.description !== undefined ? entry.description : definition.description,
         priceAmount: new Prisma.Decimal(entry.priceAmount),
         priceType: definition.pricingUnit === "PER_SQM" ? "PER_SERVICE" : "FIXED",
-        durationMin: entry.durationMin,
-        slotIntervalMin: Math.min(Math.max(entry.durationMin, 15), 480),
+        durationMin: effectiveDuration,
+        slotIntervalMin: Math.min(Math.max(effectiveDuration, 15), 480),
         templateKey: definition.templateKey,
         serviceKey: definition.serviceKey,
         variantKey: definition.variantKey,
         pricingUnit: definition.pricingUnit,
         isMatrixManaged: true,
-        isActive: entry.isActive ?? true,
+        isActive,
         sortOrder: definition.sortOrder,
       } satisfies Prisma.ServiceUncheckedUpdateInput;
 
@@ -799,6 +805,8 @@ export async function setAvailability(userId: string, data: SetAvailabilityInput
           startTime: slot.startTime,
           endTime: slot.endTime,
           isEnabled: slot.isEnabled,
+          breakStart: slot.breakStart ?? null,
+          breakEnd: slot.breakEnd ?? null,
         },
         create: {
           providerId: provider.id,
@@ -807,6 +815,8 @@ export async function setAvailability(userId: string, data: SetAvailabilityInput
           startTime: slot.startTime,
           endTime: slot.endTime,
           isEnabled: slot.isEnabled,
+          breakStart: slot.breakStart ?? null,
+          breakEnd: slot.breakEnd ?? null,
         },
       }),
     ),
@@ -824,11 +834,20 @@ export async function setAvailability(userId: string, data: SetAvailabilityInput
         });
       }
       // Day enabled but time window may have changed → delete slots outside window
+      const breakFilter =
+        slot.breakStart && slot.breakEnd
+          ? [{ startTime: { lt: slot.breakEnd }, endTime: { gt: slot.breakStart } }]
+          : [];
+
       return prisma.serviceSlot.deleteMany({
         where: {
           memberId,
           dayOfWeek: slot.dayOfWeek,
-          OR: [{ startTime: { lt: slot.startTime } }, { endTime: { gt: slot.endTime } }],
+          OR: [
+            { startTime: { lt: slot.startTime } },
+            { endTime: { gt: slot.endTime } },
+            ...breakFilter,
+          ],
         },
       });
     }),
@@ -858,7 +877,11 @@ export async function updatePricingSettings(userId: string, data: UpdatePricingS
 // ============================================================================
 
 export async function setServiceSlots(userId: string, data: SetServiceSlotsInput) {
-  const { provider } = await getProviderForUser(userId);
+  const { provider, memberRole, member: requesterMember } = await getProviderForUser(userId);
+
+  if (memberRole !== "OWNER" && requesterMember?.id !== data.memberId) {
+    throw new ForbiddenError("You can only set your own service slots");
+  }
 
   // Verify service belongs to this provider
   const service = await prisma.service.findFirst({
@@ -868,7 +891,7 @@ export async function setServiceSlots(userId: string, data: SetServiceSlotsInput
 
   // Verify member belongs to this provider
   const member = await prisma.providerMember.findFirst({
-    where: { id: data.memberId, providerId: provider.id },
+    where: { id: data.memberId, providerId: provider.id, status: "ACTIVE" },
   });
   if (!member) throw new NotFoundError("Member");
 
@@ -896,7 +919,7 @@ export async function setServiceSlots(userId: string, data: SetServiceSlotsInput
 }
 
 export async function getServiceSlots(userId: string, serviceId: string, memberId?: string) {
-  const { provider } = await getProviderForUser(userId);
+  const { provider, memberRole, member } = await getProviderForUser(userId);
 
   // Verify service belongs to this provider
   const service = await prisma.service.findFirst({
@@ -904,8 +927,13 @@ export async function getServiceSlots(userId: string, serviceId: string, memberI
   });
   if (!service) throw new NotFoundError("Service");
 
+  const effectiveMemberId = memberRole === "OWNER" ? memberId : member?.id;
+  if (memberRole !== "OWNER" && memberId && memberId !== member?.id) {
+    throw new ForbiddenError("You can only view your own service slots");
+  }
+
   return prisma.serviceSlot.findMany({
-    where: { serviceId, ...(memberId ? { memberId } : {}) },
+    where: { serviceId, ...(effectiveMemberId ? { memberId: effectiveMemberId } : {}) },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
   });
 }

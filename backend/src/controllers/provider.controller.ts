@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import * as providerService from "../services/provider.service.js";
 import { AuthenticatedRequest } from "../types/index.js";
-import { getFileUrl } from "../lib/upload.js";
+import { uploadToR2 } from "../lib/upload.js";
 import { uploadConfig } from "../config/upload.config.js";
 
 // ============================================================================
@@ -120,7 +120,7 @@ export async function uploadServiceImage(
       return;
     }
 
-    const imageUrl = getFileUrl(uploadConfig.subdirs.services, req.file.filename);
+    const imageUrl = await uploadToR2(req.file, uploadConfig.subdirs.services);
     const service = await providerService.updateService(req.user!.userId, req.params.serviceId, {
       imageUrl,
     });

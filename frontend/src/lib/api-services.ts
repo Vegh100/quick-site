@@ -199,6 +199,8 @@ export const providerApi = {
       startTime: string;
       endTime: string;
       isEnabled: boolean;
+      breakStart?: string | null;
+      breakEnd?: string | null;
     }[],
   ) =>
     api
@@ -411,6 +413,8 @@ export const memberApi = {
       startTime: string;
       endTime: string;
       isEnabled: boolean;
+      breakStart?: string | null;
+      breakEnd?: string | null;
     }[],
   ) =>
     api

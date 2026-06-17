@@ -4,11 +4,7 @@ import { AuthenticatedRequest } from "../types/index.js";
 import { ForbiddenError, UnauthorizedError } from "../lib/errors.js";
 
 export function requireRole(...roles: UserRole[]) {
-  return (
-    req: AuthenticatedRequest,
-    _res: Response,
-    next: NextFunction,
-  ): void => {
+  return (req: AuthenticatedRequest, _res: Response, next: NextFunction): void => {
     if (!req.user) {
       return next(new UnauthorizedError());
     }
@@ -21,11 +17,7 @@ export function requireRole(...roles: UserRole[]) {
   };
 }
 
-export function requireAdmin(
-  req: AuthenticatedRequest,
-  _res: Response,
-  next: NextFunction,
-): void {
+export function requireAdmin(req: AuthenticatedRequest, _res: Response, next: NextFunction): void {
   if (!req.user) {
     return next(new UnauthorizedError());
   }

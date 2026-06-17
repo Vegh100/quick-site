@@ -30,7 +30,13 @@ router.get("/search", validate(providerSearchSchema, "query"), providerControlle
 // ============================================================================
 
 // Create provider profile (onboarding)
-router.post("/", authenticate, validate(createProviderSchema), providerController.createProvider);
+router.post(
+  "/",
+  authenticate,
+  requireRole("PROVIDER"),
+  validate(createProviderSchema),
+  providerController.createProvider,
+);
 
 // Get own provider profile (both PROVIDER owner and EMPLOYEE)
 router.get(

@@ -229,7 +229,9 @@ export function SettingsPanel() {
                     </div>
                     <div className="flex items-center gap-4">
                       <span>€29.00</span>
-                      <Button variant="ghost" size="sm">Download</Button>
+                      <Button variant="ghost" size="sm">
+                        Download
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -267,9 +269,7 @@ export function SettingsPanel() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4>Two-Factor Authentication</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Add an extra layer of security
-                    </p>
+                    <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
                   </div>
                   <Button variant="outline">Enable</Button>
                 </div>

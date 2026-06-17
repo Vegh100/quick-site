@@ -15,7 +15,7 @@ import {
   exportApi,
   businessHoursApi,
 } from "../lib/api-services";
-import type { CreateBookingInput, Address } from "../lib/types";
+import type { CreateBookingInput, Address, ApiResponse, Favorite } from "../lib/types";
 
 // ============================================================================
 // CATEGORIES
@@ -387,14 +387,67 @@ export function useToggleFavorite() {
 
   const addMutation = useMutation({
     mutationFn: favoriteApi.add,
-    onSuccess: () => {
+    onMutate: async (providerId: string) => {
+      await qc.cancelQueries({ queryKey: ["favorites"] });
+      const previousFavorites = qc.getQueryData<ApiResponse<Favorite[]>>(["favorites"]);
+
+      qc.setQueryData<ApiResponse<Favorite[]>>(["favorites"], (current) => {
+        const existing = current?.data ?? [];
+        if (existing.some((favorite) => favorite.providerId === providerId)) return current;
+
+        return {
+          success: true,
+          data: [
+            {
+              id: `optimistic-${providerId}`,
+              userId: "optimistic",
+              providerId,
+            },
+            ...existing,
+          ],
+        };
+      });
+
+      return { previousFavorites };
+    },
+    onError: (_error, _providerId, context) => {
+      qc.setQueryData(["favorites"], context?.previousFavorites);
+    },
+    onSuccess: (response, providerId) => {
+      qc.setQueryData<ApiResponse<Favorite[]>>(["favorites"], (current) => {
+        const existing = current?.data ?? [];
+        const favorite = response.data;
+        return {
+          success: true,
+          data: [favorite, ...existing.filter((item) => item.providerId !== providerId)],
+        };
+      });
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["favorites"] });
     },
   });
 
   const removeMutation = useMutation({
     mutationFn: favoriteApi.remove,
-    onSuccess: () => {
+    onMutate: async (providerId: string) => {
+      await qc.cancelQueries({ queryKey: ["favorites"] });
+      const previousFavorites = qc.getQueryData<ApiResponse<Favorite[]>>(["favorites"]);
+
+      qc.setQueryData<ApiResponse<Favorite[]>>(["favorites"], (current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          data: current.data.filter((favorite) => favorite.providerId !== providerId),
+        };
+      });
+
+      return { previousFavorites };
+    },
+    onError: (_error, _providerId, context) => {
+      qc.setQueryData(["favorites"], context?.previousFavorites);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["favorites"] });
     },
   });

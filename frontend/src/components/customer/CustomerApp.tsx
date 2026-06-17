@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
 import {
   useProviderSearch,
   useCategories,
@@ -17,7 +16,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { Textarea } from "../ui/textarea";
 import { Label } from "../ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
@@ -39,7 +38,6 @@ import {
   User,
 } from "lucide-react";
 import { CustomerSettingsPanel } from "../settings/CustomerSettingsPanel";
-import { BookingModal } from "../booking/BookingModal";
 import { ProviderDetailPage } from "./ProviderDetailPage";
 import { BookingDetailPage } from "./BookingDetailPage";
 import { MessagingPage } from "../messaging/MessagingPage";
@@ -79,6 +77,34 @@ const TAB_TO_URL: Record<string, string> = {
   messages: "uzenetek",
 };
 
+function serviceCategory(service: Service) {
+  return service.serviceType?.category;
+}
+
+function getVisibleServices(provider: Provider, categorySlug: string) {
+  const services = provider.services || [];
+  if (!categorySlug) return services;
+
+  const filtered = services.filter((service) => serviceCategory(service)?.slug === categorySlug);
+  return filtered.length > 0 ? filtered : services;
+}
+
+function getLowestPricedService(services: Service[]) {
+  return services.reduce<Service | null>((lowest, service) => {
+    if (!lowest) return service;
+    return Number(service.priceAmount) < Number(lowest.priceAmount) ? service : lowest;
+  }, null);
+}
+
+function getProviderCategories(services: Service[]) {
+  const categories = new Map<string, NonNullable<ReturnType<typeof serviceCategory>>>();
+  for (const service of services) {
+    const category = serviceCategory(service);
+    if (category) categories.set(category.slug, category);
+  }
+  return [...categories.values()];
+}
+
 export function CustomerApp() {
   const {
     tab: urlTab,
@@ -86,12 +112,12 @@ export function CustomerApp() {
     bookingId: urlBookingId,
   } = useParams<{ tab?: string; providerId?: string; bookingId?: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const { user, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Detail views are now URL-driven
   const detailProviderId = urlProviderId || null;
   const detailServiceId = searchParams.get("service") || null;
+  const detailCategorySlug = searchParams.get("kategoria") || null;
   const detailBookingId = urlBookingId || null;
 
   const activeTab = urlTab ? TAB_FROM_URL[urlTab] || "discover" : "discover";
@@ -104,19 +130,19 @@ export function CustomerApp() {
   };
 
   const initialCategory = searchParams.get("kategoria") || "";
+  const initialSearch = searchParams.get("kereses") || "";
+  const initialCity = searchParams.get("varos") || "";
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
-  const [searchInput, setSearchInput] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [cityInput, setCityInput] = useState(initialCity);
+  const [cityQuery, setCityQuery] = useState(initialCity);
   const [showFilters, setShowFilters] = useState(false);
-  const [bookingProvider, setBookingProvider] = useState<Provider | null>(null);
   const [bookingTab, setBookingTab] = useState("upcoming");
   const [page, setPage] = useState(1);
 
-  // Filter state
   const [maxPrice, setMaxPrice] = useState<number | undefined>(undefined);
   const [minRating, setMinRating] = useState<number | undefined>(undefined);
-  const [sortBy, setSortBy] = useState<string | undefined>(undefined);
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
   // Review dialog
   const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
@@ -128,10 +154,11 @@ export function CustomerApp() {
   const { data: providersData, isLoading: loadingProviders } = useProviderSearch({
     categorySlug: selectedCategory || undefined,
     search: searchQuery || undefined,
+    city: cityQuery || undefined,
     maxPrice,
     minRating,
-    sortBy,
-    sortOrder,
+    sortBy: "rating",
+    sortOrder: "desc",
     page,
     limit: 12,
   });
@@ -153,18 +180,31 @@ export function CustomerApp() {
   const apiCategories = categoriesData?.data || [];
   const providers = providersData?.data?.providers || [];
   const providersMeta = providersData?.data?.meta;
-  const serviceItems = providers.flatMap((provider: Provider) =>
-    (provider.services || []).map((service: Service) => ({
-      service,
-      provider,
-    })),
-  );
   const bookings = bookingsData?.data?.bookings || [];
   const favorites = favoritesData?.data || [];
   const favoriteIds = new Set(favorites.map((f) => f.providerId));
 
+  useEffect(() => {
+    if (activeTab !== "discover" || detailProviderId || detailBookingId) return;
+
+    const next = new URLSearchParams();
+    if (selectedCategory) next.set("kategoria", selectedCategory);
+    if (searchQuery) next.set("kereses", searchQuery);
+    if (cityQuery) next.set("varos", cityQuery);
+    setSearchParams(next, { replace: true });
+  }, [
+    activeTab,
+    cityQuery,
+    detailBookingId,
+    detailProviderId,
+    searchQuery,
+    selectedCategory,
+    setSearchParams,
+  ]);
+
   const handleSearch = () => {
     setSearchQuery(searchInput);
+    setCityQuery(cityInput);
     setPage(1);
   };
 
@@ -208,10 +248,13 @@ export function CustomerApp() {
   };
 
   const clearFilters = () => {
+    setSelectedCategory("");
+    setSearchInput("");
+    setSearchQuery("");
+    setCityInput("");
+    setCityQuery("");
     setMaxPrice(undefined);
     setMinRating(undefined);
-    setSortBy(undefined);
-    setSortOrder("desc");
     setPage(1);
   };
 
@@ -299,6 +342,7 @@ export function CustomerApp() {
             <ProviderDetailPage
               providerId={detailProviderId}
               initialServiceId={detailServiceId}
+              initialCategorySlug={detailCategorySlug}
               onBack={() => navigate(-1)}
               onBookingCreated={(bookingId) => {
                 navigate(`/ugyfel/foglalas/${bookingId}`, { replace: true });
@@ -311,14 +355,24 @@ export function CustomerApp() {
             {activeTab === "discover" && (
               <div className="space-y-6">
                 {/* Search Bar */}
-                <div className="flex gap-3">
-                  <div className="flex-1 relative">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto_auto]">
+                  <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                     <Input
                       placeholder="Szolgáltatás vagy szolgáltató keresése..."
                       className="pl-10"
                       value={searchInput}
                       onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                    />
+                  </div>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input
+                      placeholder="Város..."
+                      className="pl-10"
+                      value={cityInput}
+                      onChange={(e) => setCityInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                     />
                   </div>
@@ -339,9 +393,9 @@ export function CustomerApp() {
                 {/* Filters Panel */}
                 {showFilters && (
                   <Card className="p-6">
-                    <div className="grid md:grid-cols-4 gap-6">
+                    <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                       <div>
-                        <h3 className="mb-3">Max. ár (RON/óra)</h3>
+                        <h3 className="mb-3">Max. ár</h3>
                         <div className="space-y-2">
                           {[
                             { label: "Bármennyi", value: undefined },
@@ -398,52 +452,6 @@ export function CustomerApp() {
                         </div>
                       </div>
 
-                      <div>
-                        <h3 className="mb-3">Rendezés</h3>
-                        <div className="space-y-2">
-                          {[
-                            {
-                              label: "Értékelés szerint",
-                              sortBy: "rating",
-                              sortOrder: "desc" as const,
-                            },
-                            {
-                              label: "Ár (növekvő)",
-                              sortBy: "price",
-                              sortOrder: "asc" as const,
-                            },
-                            {
-                              label: "Ár (csökkenő)",
-                              sortBy: "price",
-                              sortOrder: "desc" as const,
-                            },
-                            {
-                              label: "Legújabb",
-                              sortBy: "newest",
-                              sortOrder: "desc" as const,
-                            },
-                          ].map((opt) => (
-                            <label
-                              key={opt.label}
-                              className="flex items-center gap-2 cursor-pointer"
-                            >
-                              <input
-                                type="radio"
-                                name="sortBy"
-                                className="h-4 w-4"
-                                checked={sortBy === opt.sortBy && sortOrder === opt.sortOrder}
-                                onChange={() => {
-                                  setSortBy(opt.sortBy);
-                                  setSortOrder(opt.sortOrder);
-                                  setPage(1);
-                                }}
-                              />
-                              <span className="text-sm">{opt.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-
                       <div className="flex items-end">
                         <Button variant="outline" onClick={clearFilters}>
                           Szűrők törlése
@@ -459,7 +467,10 @@ export function CustomerApp() {
                   <div className="flex gap-3 overflow-x-auto pb-2">
                     <Button
                       variant={selectedCategory === "" ? "default" : "outline"}
-                      onClick={() => setSelectedCategory("")}
+                      onClick={() => {
+                        setSelectedCategory("");
+                        setPage(1);
+                      }}
                       className="flex-shrink-0"
                     >
                       ✨ Összes
@@ -468,7 +479,10 @@ export function CustomerApp() {
                       <Button
                         key={category.id}
                         variant={selectedCategory === category.slug ? "default" : "outline"}
-                        onClick={() => setSelectedCategory(category.slug)}
+                        onClick={() => {
+                          setSelectedCategory(category.slug);
+                          setPage(1);
+                        }}
                         className="flex-shrink-0"
                       >
                         {category.icon && <span className="mr-2">{category.icon}</span>}
@@ -484,7 +498,7 @@ export function CustomerApp() {
                     <h3>
                       {loadingProviders
                         ? "Keresés..."
-                        : `${serviceItems.length} szolgáltatás található`}
+                        : `${providers.length} szolgáltató található`}
                     </h3>
                   </div>
 
@@ -492,7 +506,7 @@ export function CustomerApp() {
                     <div className="flex justify-center py-12">
                       <Loader2 className="h-8 w-8 animate-spin text-primary" />
                     </div>
-                  ) : serviceItems.length === 0 ? (
+                  ) : providers.length === 0 ? (
                     <Card className="p-8 text-center">
                       <p className="text-muted-foreground">
                         Nincs találat. Próbálj más keresési feltételeket!
@@ -500,108 +514,160 @@ export function CustomerApp() {
                     </Card>
                   ) : (
                     <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {serviceItems.map(({ service, provider }) => (
-                        <Card
-                          key={`${provider.id}-${service.id}`}
-                          className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                          onClick={() => {
-                            navigate(`/ugyfel/szolgaltato/${provider.id}?service=${service.id}`);
-                          }}
-                        >
-                          {service.imageUrl && (
-                            <div className="w-full h-24 overflow-hidden">
-                              <img
-                                src={service.imageUrl}
-                                alt={service.name}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          )}
-                          <div className="p-5 space-y-3">
-                            {/* Category badge + favorite */}
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0">
-                                {service.serviceType?.category && (
-                                  <Badge variant="secondary" className="mb-2 text-xs">
-                                    {service.serviceType.category.icon && (
-                                      <span className="mr-1">
-                                        {service.serviceType.category.icon}
-                                      </span>
-                                    )}
-                                    {service.serviceType.category.name}
-                                  </Badge>
-                                )}
-                                <h3 className="text-lg font-semibold leading-tight">
-                                  {service.name}
-                                </h3>
-                                {service.description && (
-                                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                    {service.description}
-                                  </p>
-                                )}
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 -mt-1 flex-shrink-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleFavorite(provider.id);
-                                }}
-                              >
-                                <Heart
-                                  className={`h-4 w-4 ${favoriteIds.has(provider.id) ? "fill-red-500 text-red-500" : ""}`}
+                      {providers.map((provider) => {
+                        const visibleServices = getVisibleServices(provider, selectedCategory);
+                        const categoriesForProvider = getProviderCategories(visibleServices);
+                        const primaryService = visibleServices[0];
+                        const lowestPricedService = getLowestPricedService(visibleServices);
+                        const coverImage = provider.coverImageUrl || primaryService?.imageUrl;
+
+                        return (
+                          <Card
+                            key={provider.id}
+                            className="overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                            onClick={() =>
+                              navigate(
+                                `/ugyfel/szolgaltato/${provider.id}${
+                                  selectedCategory ? `?kategoria=${selectedCategory}` : ""
+                                }`,
+                              )
+                            }
+                          >
+                            {coverImage && (
+                              <div className="w-full h-28 overflow-hidden">
+                                <img
+                                  src={coverImage}
+                                  alt={provider.businessName}
+                                  className="w-full h-full object-cover"
                                 />
-                              </Button>
-                            </div>
-
-                            {/* Price - prominent */}
-                            <div className="flex items-baseline gap-1.5">
-                              <span className="text-xl font-bold text-primary">
-                                {formatServicePrice(service)}
-                              </span>
-                            </div>
-
-                            {/* Rating + Duration */}
-                            <div className="flex items-center gap-4 text-sm">
-                              <div className="flex items-center gap-1">
-                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                <span className="font-medium">
-                                  {Number(provider.rating).toFixed(1)}
-                                </span>
-                                <span className="text-muted-foreground">
-                                  ({provider.reviewCount})
-                                </span>
                               </div>
-                              <div className="flex items-center gap-1 text-muted-foreground">
-                                <Clock className="h-4 w-4" />
-                                {service.durationMin} perc
+                            )}
+                            <div className="p-5 space-y-4">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="flex-1 min-w-0">
+                                  {categoriesForProvider.length > 0 && (
+                                    <div className="mb-2 flex flex-wrap gap-1.5">
+                                      {categoriesForProvider.slice(0, 2).map((category) => (
+                                        <Badge
+                                          key={category.slug}
+                                          variant="secondary"
+                                          className="text-xs"
+                                        >
+                                          {category.icon && (
+                                            <span className="mr-1">{category.icon}</span>
+                                          )}
+                                          {category.name}
+                                        </Badge>
+                                      ))}
+                                      {categoriesForProvider.length > 2 && (
+                                        <Badge variant="outline" className="text-xs">
+                                          +{categoriesForProvider.length - 2}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
+                                  <h3 className="text-lg font-semibold leading-tight">
+                                    {provider.businessName}
+                                  </h3>
+                                  {(provider.city || provider.serviceArea) && (
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                      <MapPin className="h-3 w-3 flex-shrink-0" />
+                                      {provider.city || provider.serviceArea}
+                                    </p>
+                                  )}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 -mt-1 flex-shrink-0"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleFavorite(provider.id);
+                                  }}
+                                >
+                                  <Heart
+                                    className={`h-4 w-4 ${favoriteIds.has(provider.id) ? "fill-red-500 text-red-500" : ""}`}
+                                  />
+                                </Button>
                               </div>
-                            </div>
 
-                            {/* Provider info - secondary */}
-                            <div className="flex items-center gap-2 pt-2 border-t">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-muted-foreground truncate">
-                                  {provider.businessName}
+                              {(provider.description || primaryService?.description) && (
+                                <p className="text-sm text-muted-foreground line-clamp-2">
+                                  {provider.description || primaryService?.description}
                                 </p>
-                                {(provider.city || provider.serviceArea) && (
-                                  <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                    <MapPin className="h-3 w-3 flex-shrink-0" />
-                                    {provider.city || provider.serviceArea}
-                                  </p>
-                                )}
-                              </div>
-                              {provider.isVerified && (
-                                <Badge className="bg-green-500 text-xs flex-shrink-0">
-                                  <CheckCircle2 className="h-3 w-3 mr-1" />
-                                  Hitelesített
-                                </Badge>
                               )}
+
+                              {visibleServices.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {visibleServices.slice(0, 3).map((service) => (
+                                    <Badge key={service.id} variant="secondary" className="text-xs">
+                                      {service.name}
+                                    </Badge>
+                                  ))}
+                                  {visibleServices.length > 3 && (
+                                    <Badge variant="outline" className="text-xs">
+                                      +{visibleServices.length - 3} további
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+
+                              <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div className="rounded-md bg-muted px-3 py-2">
+                                  <div className="flex items-center gap-1.5 font-medium">
+                                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                    {Number(provider.rating).toFixed(1)}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {provider.reviewCount} értékelés
+                                  </p>
+                                </div>
+                                <div className="rounded-md bg-muted px-3 py-2">
+                                  <div className="flex items-center gap-1.5 font-medium">
+                                    <Calendar className="h-4 w-4" />
+                                    {visibleServices.length}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">szolgáltatás</p>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-3 border-t pt-4">
+                                <div>
+                                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                                    Induló ár
+                                  </p>
+                                  <p className="text-xl font-bold text-primary">
+                                    {lowestPricedService
+                                      ? formatServicePrice(lowestPricedService)
+                                      : "—"}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {provider.isVerified && (
+                                    <Badge className="bg-green-500 text-xs flex-shrink-0">
+                                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                                      Hitelesített
+                                    </Badge>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigate(
+                                        `/ugyfel/szolgaltato/${provider.id}${
+                                          selectedCategory ? `?kategoria=${selectedCategory}` : ""
+                                        }`,
+                                      );
+                                    }}
+                                  >
+                                    Szolgáltatások
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </Card>
-                      ))}
+                          </Card>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -870,11 +936,6 @@ export function CustomerApp() {
           </>
         )}
       </main>
-
-      {/* Booking Modal */}
-      {bookingProvider && (
-        <BookingModal provider={bookingProvider} onClose={() => setBookingProvider(null)} />
-      )}
 
       {/* Review Dialog */}
       <Dialog open={!!reviewBooking} onOpenChange={(open) => !open && setReviewBooking(null)}>

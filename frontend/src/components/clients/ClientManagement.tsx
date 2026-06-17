@@ -5,16 +5,7 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Avatar, AvatarFallback } from "../ui/avatar";
-import {
-  Search,
-  Mail,
-  Phone,
-  Calendar,
-  DollarSign,
-  Star,
-  Users,
-  Loader2,
-} from "lucide-react";
+import { Search, Mail, Phone, Calendar, DollarSign, Star, Users, Loader2 } from "lucide-react";
 
 interface ClientManagementProps {
   memberId?: string;
@@ -22,12 +13,7 @@ interface ClientManagementProps {
 
 export function ClientManagement({ memberId }: ClientManagementProps = {}) {
   const [searchQuery, setSearchQuery] = useState("");
-  const { data: clientsData, isLoading } = useProviderClients(
-    1,
-    50,
-    true,
-    memberId,
-  );
+  const { data: clientsData, isLoading } = useProviderClients(1, 50, true, memberId);
 
   const clients = clientsData?.data?.clients || [];
   const filteredClients = clients.filter((client) => {
@@ -121,9 +107,7 @@ export function ClientManagement({ memberId }: ClientManagementProps = {}) {
                           <Calendar className="h-4 w-4 text-muted-foreground" />
                           <span>
                             Utolsó:{" "}
-                            {new Date(
-                              lastBooking.scheduledDate,
-                            ).toLocaleDateString("hu-HU")}
+                            {new Date(lastBooking.scheduledDate).toLocaleDateString("hu-HU")}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 text-sm">

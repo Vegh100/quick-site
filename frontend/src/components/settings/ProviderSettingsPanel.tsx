@@ -3,40 +3,23 @@ import { Card } from "../ui/card";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
-import { Switch } from "../ui/switch";
-import { Separator } from "../ui/separator";
 import { Textarea } from "../ui/textarea";
-import { Bell, Shield, Briefcase, DollarSign, Loader2, Pencil, Clock, Camera } from "lucide-react";
+import { Bell, Shield, Briefcase, DollarSign, Loader2, Pencil, Camera } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import { useAuth } from "../../contexts/AuthContext";
-import {
-  useMyProvider,
-  useUpdateProvider,
-  useNotificationPrefs,
-  useUpdateNotificationPrefs,
-  useUpdatePricingSettings,
-  useSetAvailability,
-  useUploadAvatar,
-} from "../../hooks/useApi";
+import { useMyProvider, useUpdateProvider, useUploadAvatar } from "../../hooks/useApi";
 import { authApi } from "../../lib/api-services";
 import { toast } from "sonner";
-
-const DAYS_HU = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"];
-const DAY_MAP = [1, 2, 3, 4, 5, 6, 0]; // index → dayOfWeek (Mon=1..Sat=6,Sun=0)
 
 export function ProviderSettingsPanel() {
   const { user, refreshUser } = useAuth();
   const { data: providerData } = useMyProvider();
   const updateProvider = useUpdateProvider();
-  const { data: notifPrefsData } = useNotificationPrefs();
-  const updateNotifPrefs = useUpdateNotificationPrefs();
-  const updatePricing = useUpdatePricingSettings();
-  const setAvailabilityMut = useSetAvailability();
   const uploadAvatarMut = useUploadAvatar();
 
   const provider = providerData?.data;
 
-  // Find the current user's member record to access per-member availability
+  // Find the current user's member record to determine settings access.
   const currentMember = provider?.members?.find((m) => m.userId === user?.id);
 
   const [businessName, setBusinessName] = useState("");
@@ -53,16 +36,6 @@ export function ProviderSettingsPanel() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Availability
-  const [availSlots, setAvailSlots] = useState(
-    DAYS_HU.map((_, i) => ({
-      dayOfWeek: DAY_MAP[i],
-      startTime: "08:00",
-      endTime: "17:00",
-      isEnabled: i < 5,
-    })),
-  );
-
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (provider) {
@@ -75,31 +48,8 @@ export function ProviderSettingsPanel() {
       setCounty(provider.county || "");
       setCity(provider.city || "");
       setAddress(provider.address || "");
-
-      // Load availability from the current member
-      const memberAvail = currentMember?.availability;
-      if (memberAvail && memberAvail.length > 0) {
-        const loaded = DAYS_HU.map((_, i) => {
-          const dow = DAY_MAP[i];
-          const existing = memberAvail.find((a) => a.dayOfWeek === dow);
-          return existing
-            ? {
-                dayOfWeek: dow,
-                startTime: existing.startTime,
-                endTime: existing.endTime,
-                isEnabled: existing.isEnabled,
-              }
-            : {
-                dayOfWeek: dow,
-                startTime: "08:00",
-                endTime: "17:00",
-                isEnabled: false,
-              };
-        });
-        setAvailSlots(loaded);
-      }
     }
-  }, [provider, currentMember]);
+  }, [provider]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleSaveBusiness = async () => {
@@ -149,30 +99,13 @@ export function ProviderSettingsPanel() {
     }
   };
 
-  const handleSaveAvailability = async () => {
-    if (!currentMember) {
-      toast.error("Nem található tag rekord");
-      return;
-    }
-    try {
-      await setAvailabilityMut.mutateAsync({
-        memberId: currentMember.id,
-        availability: availSlots,
-      });
-      toast.success("Időpontok mentve!");
-    } catch {
-      toast.error("Hiba az időpontok mentésekor");
-    }
-  };
-
-  const notifPrefs = notifPrefsData?.data;
   const isOwner = currentMember?.role === "OWNER";
 
   return (
     <div className="max-w-4xl mx-auto">
       <Tabs
         key={isOwner ? "owner" : "employee"}
-        defaultValue={isOwner ? "business" : "availability"}
+        defaultValue={isOwner ? "business" : "notifications"}
         className="space-y-6"
       >
         <TabsList className="flex w-full">
@@ -182,10 +115,6 @@ export function ProviderSettingsPanel() {
               <span className="hidden sm:inline">Üzlet</span>
             </TabsTrigger>
           )}
-          <TabsTrigger value="availability">
-            <Clock className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Időpont</span>
-          </TabsTrigger>
           {isOwner && (
             <TabsTrigger value="pricing">
               <DollarSign className="h-4 w-4 mr-1" />
@@ -336,128 +265,19 @@ export function ProviderSettingsPanel() {
           </TabsContent>
         )}
 
-        {/* Availability */}
-        <TabsContent value="availability">
-          <Card className="p-6 space-y-6">
-            <h3>Elérhetőségi időpontok</h3>
-            <p className="text-sm text-muted-foreground">
-              Állítsd be, mikor vagy elérhető foglalásokra
-            </p>
-
-            <div className="space-y-3">
-              {DAYS_HU.map((dayName, index) => {
-                const slot = availSlots[index];
-                return (
-                  <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
-                    <label className="flex items-center gap-2 w-28">
-                      <input
-                        type="checkbox"
-                        checked={slot.isEnabled}
-                        onChange={(e) => {
-                          const updated = [...availSlots];
-                          updated[index] = {
-                            ...updated[index],
-                            isEnabled: e.target.checked,
-                          };
-                          setAvailSlots(updated);
-                        }}
-                        className="h-4 w-4"
-                      />
-                      <span className="text-sm font-medium">{dayName}</span>
-                    </label>
-                    {slot.isEnabled ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="time"
-                          value={slot.startTime}
-                          onChange={(e) => {
-                            const updated = [...availSlots];
-                            updated[index] = {
-                              ...updated[index],
-                              startTime: e.target.value,
-                            };
-                            setAvailSlots(updated);
-                          }}
-                          className="w-32"
-                        />
-                        <span className="text-muted-foreground">-</span>
-                        <Input
-                          type="time"
-                          value={slot.endTime}
-                          onChange={(e) => {
-                            const updated = [...availSlots];
-                            updated[index] = {
-                              ...updated[index],
-                              endTime: e.target.value,
-                            };
-                            setAvailSlots(updated);
-                          }}
-                          className="w-32"
-                        />
-                      </div>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Zárva</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="flex justify-end">
-              <Button onClick={handleSaveAvailability} disabled={setAvailabilityMut.isPending}>
-                {setAvailabilityMut.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                Időpontok mentése
-              </Button>
-            </div>
-          </Card>
-        </TabsContent>
-
         {/* Pricing - Owner only */}
         {isOwner && (
           <TabsContent value="pricing">
-            <Card className="p-6 space-y-6">
-              <div>
-                <h3 className="mb-4">Árazási beállítások</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4>Dinamikus árazás</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Árak igazítása a kereslet alapján
-                      </p>
-                    </div>
-                    <Switch
-                      checked={provider?.dynamicPricing ?? false}
-                      onCheckedChange={(val) => updatePricing.mutate({ dynamicPricing: val })}
-                    />
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4>Hétvégi felár</h4>
-                      <p className="text-sm text-muted-foreground">
-                        20% felár hétvégi foglalásokra
-                      </p>
-                    </div>
-                    <Switch
-                      checked={provider?.weekendPremium ?? false}
-                      onCheckedChange={(val) => updatePricing.mutate({ weekendPremium: val })}
-                    />
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4>Automatikus elfogadás</h4>
-                      <p className="text-sm text-muted-foreground">
-                        Foglalások automatikus elfogadása
-                      </p>
-                    </div>
-                    <Switch
-                      checked={provider?.autoAccept ?? false}
-                      onCheckedChange={(val) => updatePricing.mutate({ autoAccept: val })}
-                    />
-                  </div>
+            <Card className="p-8">
+              <div className="mx-auto flex max-w-sm flex-col items-center text-center">
+                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <DollarSign className="h-6 w-6" />
                 </div>
+                <h3 className="mb-2">Árazási beállítások</h3>
+                <p className="text-lg font-semibold">Coming soon...</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Ez a rész hamarosan elérhető lesz.
+                </p>
               </div>
             </Card>
           </TabsContent>
@@ -465,60 +285,16 @@ export function ProviderSettingsPanel() {
 
         {/* Notifications */}
         <TabsContent value="notifications">
-          <Card className="p-6 space-y-6">
-            <div>
-              <h3 className="mb-4">Értesítési beállítások</h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4>Új foglalás értesítés</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Azonnali értesítés új foglaláskor
-                    </p>
-                  </div>
-                  <Switch
-                    checked={notifPrefs?.emailBookings ?? true}
-                    onCheckedChange={(val) => updateNotifPrefs.mutate({ emailBookings: val })}
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4>SMS foglalás értesítés</h4>
-                    <p className="text-sm text-muted-foreground">SMS értesítés új foglaláskor</p>
-                  </div>
-                  <Switch
-                    checked={notifPrefs?.smsBookings ?? true}
-                    onCheckedChange={(val) => updateNotifPrefs.mutate({ smsBookings: val })}
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4>SMS emlékeztetők</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Emlékeztető 1 órával a találkozó előtt
-                    </p>
-                  </div>
-                  <Switch
-                    checked={notifPrefs?.smsReminders ?? true}
-                    onCheckedChange={(val) => updateNotifPrefs.mutate({ smsReminders: val })}
-                  />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4>Marketing értesítések</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Tippek és legjobb gyakorlatok a Qvick-től
-                    </p>
-                  </div>
-                  <Switch
-                    checked={notifPrefs?.emailPromotions ?? false}
-                    onCheckedChange={(val) => updateNotifPrefs.mutate({ emailPromotions: val })}
-                  />
-                </div>
+          <Card className="p-8">
+            <div className="mx-auto flex max-w-sm flex-col items-center text-center">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Bell className="h-6 w-6" />
               </div>
+              <h3 className="mb-2">Értesítési beállítások</h3>
+              <p className="text-lg font-semibold">Coming soon...</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Ez a rész hamarosan elérhető lesz.
+              </p>
             </div>
           </Card>
         </TabsContent>

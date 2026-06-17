@@ -10,12 +10,7 @@
  *   export const geocodingService = new GoogleGeocodingService(API_KEY);
  */
 
-export type {
-  AddressDetails,
-  GeocodingSearchResult,
-  GeocodingService,
-  MapProvider,
-} from "./types";
+export type { AddressDetails, GeocodingSearchResult, GeocodingService, MapProvider } from "./types";
 
 import { NominatimGeocodingService } from "./nominatim";
 

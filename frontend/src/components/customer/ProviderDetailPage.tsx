@@ -44,6 +44,7 @@ const AddressPickerMap = lazy(() =>
 interface ProviderDetailPageProps {
   providerId: string;
   initialServiceId?: string | null;
+  initialCategorySlug?: string | null;
   onBack: () => void;
   onBookingCreated?: (bookingId: string) => void;
 }
@@ -53,6 +54,7 @@ const DAY_NAMES = ["Va", "Hé", "Ke", "Sze", "Csü", "Pé", "Szo"];
 export function ProviderDetailPage({
   providerId,
   initialServiceId,
+  initialCategorySlug,
   onBack,
   onBookingCreated,
 }: ProviderDetailPageProps) {
@@ -155,8 +157,14 @@ export function ProviderDetailPage({
     if (featuredServiceId) {
       return services.find((s) => s.id === featuredServiceId) || services[0];
     }
+    if (initialCategorySlug) {
+      return (
+        services.find((service) => service.serviceType?.category?.slug === initialCategorySlug) ||
+        services[0]
+      );
+    }
     return services[0];
-  }, [services, featuredServiceId]);
+  }, [services, featuredServiceId, initialCategorySlug]);
 
   const otherServices = useMemo(() => {
     if (!featuredService) return services;

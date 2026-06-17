@@ -1,16 +1,7 @@
 import { useState } from "react";
 import { useMyReferral, useRedeemReferral } from "../../hooks/useApi";
 import { useAuth } from "../../contexts/AuthContext";
-import {
-  Gift,
-  Copy,
-  Check,
-  Users,
-  Share2,
-  Loader2,
-  Sparkles,
-  ArrowRight,
-} from "lucide-react";
+import { Gift, Copy, Check, Users, Share2, Loader2, Sparkles, ArrowRight } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
@@ -54,9 +45,7 @@ export function ReferralSection() {
         setRedeemCode("");
       },
       onError: (err: any) => {
-        const msg =
-          err?.response?.data?.error ||
-          "Érvénytelen vagy már felhasznált meghívó kód.";
+        const msg = err?.response?.data?.error || "Érvénytelen vagy már felhasznált meghívó kód.";
         setRedeemError(msg);
       },
     });
@@ -84,8 +73,8 @@ export function ReferralSection() {
             <h2 className="text-xl font-bold">Hívd meg barátaidat!</h2>
           </div>
           <p className="text-white/80 text-sm max-w-md leading-relaxed mb-6">
-            Oszd meg a meghívó kódodat és mindketten előnyökre tehettek szert.
-            Minél többen csatlakoznak, annál jobb!
+            Oszd meg a meghívó kódodat és mindketten előnyökre tehettek szert. Minél többen
+            csatlakoznak, annál jobb!
           </p>
 
           {/* Referral Code */}
@@ -142,40 +131,37 @@ export function ReferralSection() {
       )}
 
       {/* Recent redeemed */}
-      {referral?.stats.recentRedeemed &&
-        referral.stats.recentRedeemed.length > 0 && (
-          <div className="rounded-2xl border bg-card p-6">
-            <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              Legutóbbi csatlakozások
-            </h3>
-            <div className="space-y-3">
-              {referral.stats.recentRedeemed.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-muted/50 transition-colors"
-                >
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-400 to-rose-400 flex items-center justify-center text-white text-xs font-bold">
-                    {item.receiver?.firstName?.[0] || "?"}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {[item.receiver?.firstName, item.receiver?.lastName]
-                        .filter(Boolean)
-                        .join(" ") || "Felhasználó"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.redeemedAt
-                        ? new Date(item.redeemedAt).toLocaleDateString("hu-HU")
-                        : ""}
-                    </p>
-                  </div>
-                  <Check className="h-4 w-4 text-emerald-500" />
+      {referral?.stats.recentRedeemed && referral.stats.recentRedeemed.length > 0 && (
+        <div className="rounded-2xl border bg-card p-6">
+          <h3 className="font-semibold text-sm mb-4 flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            Legutóbbi csatlakozások
+          </h3>
+          <div className="space-y-3">
+            {referral.stats.recentRedeemed.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-muted/50 transition-colors"
+              >
+                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-400 to-rose-400 flex items-center justify-center text-white text-xs font-bold">
+                  {item.receiver?.firstName?.[0] || "?"}
                 </div>
-              ))}
-            </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {[item.receiver?.firstName, item.receiver?.lastName]
+                      .filter(Boolean)
+                      .join(" ") || "Felhasználó"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.redeemedAt ? new Date(item.redeemedAt).toLocaleDateString("hu-HU") : ""}
+                  </p>
+                </div>
+                <Check className="h-4 w-4 text-emerald-500" />
+              </div>
+            ))}
           </div>
-        )}
+        </div>
+      )}
 
       {/* Redeem a code */}
       <div className="rounded-2xl border bg-card p-6">
@@ -211,13 +197,9 @@ export function ReferralSection() {
             Beváltás
           </Button>
         </div>
-        {redeemError && (
-          <p className="text-xs text-destructive mt-2">{redeemError}</p>
-        )}
+        {redeemError && <p className="text-xs text-destructive mt-2">{redeemError}</p>}
         {redeemSuccess && (
-          <p className="text-xs text-emerald-600 mt-2">
-            ✅ Meghívó kód sikeresen beváltva!
-          </p>
+          <p className="text-xs text-emerald-600 mt-2">✅ Meghívó kód sikeresen beváltva!</p>
         )}
       </div>
     </div>

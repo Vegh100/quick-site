@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
@@ -15,7 +15,6 @@ import {
   useMemberDetail,
   useAssignServiceToMember,
   useRemoveServiceFromMember,
-  useSetMemberAvailability,
   useMyProvider,
   useUpdateService,
   useServiceTypes,
@@ -63,9 +62,6 @@ const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Aktív",
   DEACTIVATED: "Deaktiválva",
 };
-
-const DAYS_HU = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"];
-const DAY_MAP = [1, 2, 3, 4, 5, 6, 0]; // index → dayOfWeek (Mon=1..Sat=6,Sun=0)
 
 interface TeamManagementProps {
   provider: Provider;
@@ -116,7 +112,6 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
   const { data: providerData } = useMyProvider();
   const assignService = useAssignServiceToMember();
   const removeService = useRemoveServiceFromMember();
-  const setMemberAvailability = useSetMemberAvailability();
   const updateServiceMut = useUpdateService();
   const { data: serviceTypesData } = useServiceTypes();
 
@@ -135,42 +130,6 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
   );
   const [editSvcServiceTypeId, setEditSvcServiceTypeId] = useState("");
   const [showSlotPicker, setShowSlotPicker] = useState<string | null>(null);
-
-  // Availability editing state
-  const [availSlots, setAvailSlots] = useState(
-    DAYS_HU.map((_, i) => ({
-      dayOfWeek: DAY_MAP[i],
-      startTime: "08:00",
-      endTime: "17:00",
-      isEnabled: i < 5,
-    })),
-  );
-  const [availDirty, setAvailDirty] = useState(false);
-
-  // Load member availability into local state
-  useEffect(() => {
-    if (detail?.availability && detail.availability.length > 0) {
-      const loaded = DAYS_HU.map((_, i) => {
-        const dow = DAY_MAP[i];
-        const existing = detail.availability?.find((a) => a.dayOfWeek === dow);
-        return existing
-          ? {
-              dayOfWeek: dow,
-              startTime: existing.startTime,
-              endTime: existing.endTime,
-              isEnabled: existing.isEnabled,
-            }
-          : {
-              dayOfWeek: dow,
-              startTime: "08:00",
-              endTime: "17:00",
-              isEnabled: false,
-            };
-      });
-      setAvailSlots(loaded);
-      setAvailDirty(false);
-    }
-  }, [detail?.availability]);
 
   if (isLoading || !detail) {
     return (
@@ -261,19 +220,6 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
     }
   };
 
-  const handleSaveAvailability = async () => {
-    try {
-      await setMemberAvailability.mutateAsync({
-        memberId,
-        availability: availSlots,
-      });
-      toast.success("Időpontok mentve!");
-      setAvailDirty(false);
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || "Hiba az időpontok mentésekor");
-    }
-  };
-
   const stats = detail.bookingStats;
 
   return (
@@ -339,7 +285,7 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
 
       {/* Tabbed detail */}
       <Tabs defaultValue="bookings" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="bookings">
             <Calendar className="h-4 w-4 mr-1" />
             Foglalások
@@ -347,10 +293,6 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
           <TabsTrigger value="services">
             <Briefcase className="h-4 w-4 mr-1" />
             Szolgáltatások
-          </TabsTrigger>
-          <TabsTrigger value="availability">
-            <Clock className="h-4 w-4 mr-1" />
-            Időpontok
           </TabsTrigger>
         </TabsList>
 
@@ -450,13 +392,13 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
                 {detail.memberServices?.map((ms) => (
                   <div key={ms.id} className="border rounded-lg overflow-hidden">
                     <Card className="p-3 border-0 shadow-none">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                             <Briefcase className="h-4 w-4 text-primary" />
                           </div>
-                          <div>
-                            <p className="text-sm font-medium">
+                          <div className="min-w-0">
+                            <p className="break-words text-sm font-medium">
                               {ms.service?.name || "Szolgáltatás"}
                             </p>
                             {ms.service && (
@@ -466,7 +408,7 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
                             )}
                           </div>
                         </div>
-                        <div className="flex gap-1">
+                        <div className="flex shrink-0 gap-1 sm:justify-end">
                           {ms.service && (
                             <>
                               <Button
@@ -569,7 +511,7 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
                               rows={2}
                             />
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid gap-3 sm:grid-cols-2">
                             <div>
                               <Label className="text-xs">Ár (RON)</Label>
                               <Input
@@ -621,7 +563,11 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
                     {/* Slot picker */}
                     {ms.service && showSlotPicker === ms.serviceId && (
                       <div className="px-4 pb-4 border-t">
-                        <ServiceSlotPicker service={ms.service} memberId={detail.id} />
+                        <ServiceSlotPicker
+                          service={ms.service}
+                          memberId={detail.id}
+                          memberAvailability={detail.availability}
+                        />
                       </div>
                     )}
                   </div>
@@ -638,13 +584,13 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
               <div className="space-y-2">
                 {unassignedServices.map((svc: Service) => (
                   <Card key={svc.id} className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted">
                           <Briefcase className="h-4 w-4 text-muted-foreground" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium">{svc.name}</p>
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-medium">{svc.name}</p>
                           <p className="text-xs text-muted-foreground">
                             {formatServicePrice(svc)} · {svc.durationMin} perc
                           </p>
@@ -653,6 +599,7 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
                       <Button
                         variant="outline"
                         size="sm"
+                        className="shrink-0 sm:self-center"
                         onClick={() => handleAssignService(svc.id)}
                         disabled={assignService.isPending}
                       >
@@ -666,81 +613,6 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
             </div>
           )}
         </TabsContent>
-
-        {/* AVAILABILITY TAB */}
-        <TabsContent value="availability" className="space-y-4">
-          <div className="space-y-3">
-            {DAYS_HU.map((dayName, index) => {
-              const slot = availSlots[index];
-              return (
-                <div key={index} className="flex items-center gap-3 p-3 border rounded-lg">
-                  <label className="flex items-center gap-2 w-28">
-                    <input
-                      type="checkbox"
-                      checked={slot.isEnabled}
-                      onChange={(e) => {
-                        const updated = [...availSlots];
-                        updated[index] = {
-                          ...updated[index],
-                          isEnabled: e.target.checked,
-                        };
-                        setAvailSlots(updated);
-                        setAvailDirty(true);
-                      }}
-                      className="h-4 w-4"
-                    />
-                    <span className="text-sm font-medium">{dayName}</span>
-                  </label>
-                  {slot.isEnabled && (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="time"
-                        value={slot.startTime}
-                        onChange={(e) => {
-                          const updated = [...availSlots];
-                          updated[index] = {
-                            ...updated[index],
-                            startTime: e.target.value,
-                          };
-                          setAvailSlots(updated);
-                          setAvailDirty(true);
-                        }}
-                        className="w-32"
-                      />
-                      <span className="text-muted-foreground">-</span>
-                      <Input
-                        type="time"
-                        value={slot.endTime}
-                        onChange={(e) => {
-                          const updated = [...availSlots];
-                          updated[index] = {
-                            ...updated[index],
-                            endTime: e.target.value,
-                          };
-                          setAvailSlots(updated);
-                          setAvailDirty(true);
-                        }}
-                        className="w-32"
-                      />
-                    </div>
-                  )}
-                  {!slot.isEnabled && <span className="text-sm text-muted-foreground">Zárva</span>}
-                </div>
-              );
-            })}
-          </div>
-
-          {availDirty && (
-            <div className="flex justify-end">
-              <Button onClick={handleSaveAvailability} disabled={setMemberAvailability.isPending}>
-                {setMemberAvailability.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
-                Időpontok mentése
-              </Button>
-            </div>
-          )}
-        </TabsContent>
       </Tabs>
     </div>
   );
@@ -750,7 +622,7 @@ function MemberDetailPanel({ memberId, onBack }: { memberId: string; onBack: () 
 // MAIN TEAM MANAGEMENT COMPONENT
 // ============================================================================
 
-export function TeamManagement({ provider }: TeamManagementProps) {
+export function TeamManagement({ provider: _provider }: TeamManagementProps) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteDisplayName, setInviteDisplayName] = useState("");
@@ -894,12 +766,6 @@ export function TeamManagement({ provider }: TeamManagementProps) {
                         {member.memberServices.length} szolg.
                       </span>
                     )}
-                    {member.availability && member.availability.length > 0 && (
-                      <span className="text-xs text-muted-foreground hidden sm:inline">
-                        {member.availability.filter((a) => a.isEnabled).length} nap
-                      </span>
-                    )}
-
                     <Badge className={ROLE_COLORS[member.role]}>
                       {member.role === "OWNER" && <ShieldCheck className="mr-1 h-3 w-3" />}
                       {ROLE_LABELS[member.role]}

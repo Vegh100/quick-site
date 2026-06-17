@@ -137,6 +137,7 @@ export interface ServiceMatrixEntry {
   durationMin: number;
   isActive: boolean;
   pricingUnit: "FIXED" | "PER_SQM" | string;
+  description?: string | null;
 }
 
 export interface ServiceMatrixInput {
@@ -145,6 +146,7 @@ export interface ServiceMatrixInput {
     priceAmount: number;
     durationMin: number;
     isActive?: boolean;
+    description?: string;
   }[];
 }
 
@@ -162,6 +164,8 @@ export interface Availability {
   startTime: string;
   endTime: string;
   isEnabled: boolean;
+  breakStart?: string | null;
+  breakEnd?: string | null;
 }
 
 export interface ServiceSlot {
@@ -299,6 +303,7 @@ export interface Booking {
     lastName: string | null;
     avatarUrl: string | null;
     email?: string;
+    phone?: string | null;
   };
   provider?: Provider;
   service?: Service;

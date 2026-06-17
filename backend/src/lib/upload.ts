@@ -1,39 +1,64 @@
 import multer from "multer";
 import path from "path";
-import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { uploadConfig } from "../config/upload.config.js";
+import { env } from "../config/env.config.js";
 import { ValidationError } from "./errors.js";
 
-// Ensure upload directories exist
-function ensureDir(dir: string): void {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+// ============================================================================
+// R2 CLIENT (S3-compatible)
+// ============================================================================
+
+type R2Sdk = {
+  S3Client: new (args: {
+    region: string;
+    endpoint: string;
+    credentials: { accessKeyId: string; secretAccessKey: string };
+  }) => { send: (command: unknown) => Promise<unknown> };
+  PutObjectCommand: new (args: Record<string, unknown>) => unknown;
+  DeleteObjectCommand: new (args: Record<string, unknown>) => unknown;
+};
+
+let r2SdkPromise: Promise<R2Sdk> | null = null;
+let r2ClientPromise: Promise<{ send: (command: unknown) => Promise<unknown> }> | null = null;
+
+async function getR2Sdk(): Promise<R2Sdk> {
+  if (!r2SdkPromise) {
+    r2SdkPromise = import("@aws-sdk/client-s3") as Promise<R2Sdk>;
+  }
+
+  try {
+    return await r2SdkPromise;
+  } catch {
+    throw new ValidationError(
+      "R2 upload package is missing. Install @aws-sdk/client-s3 in backend dependencies.",
+    );
   }
 }
 
-// Initialize all upload subdirectories
-Object.values(uploadConfig.subdirs).forEach((subdir) => {
-  ensureDir(path.join(uploadConfig.baseDir, subdir));
-});
+async function getR2Client(): Promise<{ send: (command: unknown) => Promise<unknown> }> {
+  if (!r2ClientPromise) {
+    r2ClientPromise = (async () => {
+      const { S3Client } = await getR2Sdk();
 
-// Create multer storage for a specific subdirectory
-function createStorage(subdir: string): multer.StorageEngine {
-  return multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      const dir = path.join(uploadConfig.baseDir, subdir);
-      ensureDir(dir);
-      cb(null, dir);
-    },
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      const uniqueName = `${uuidv4()}${ext}`;
-      cb(null, uniqueName);
-    },
-  });
+      return new S3Client({
+        region: "auto",
+        endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        credentials: {
+          accessKeyId: env.R2_ACCESS_KEY_ID,
+          secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+        },
+      });
+    })();
+  }
+
+  return r2ClientPromise;
 }
 
-// File filter for images
+// ============================================================================
+// FILE FILTERS
+// ============================================================================
+
 function imageFilter(
   _req: Express.Request,
   file: Express.Multer.File,
@@ -50,7 +75,6 @@ function imageFilter(
   }
 }
 
-// File filter for documents
 function documentFilter(
   _req: Express.Request,
   file: Express.Multer.File,
@@ -67,46 +91,80 @@ function documentFilter(
   }
 }
 
-// Pre-configured upload instances
+// ============================================================================
+// MULTER INSTANCES (memory storage — buffer is streamed to R2 in controllers)
+// ============================================================================
+
+const memoryStorage = multer.memoryStorage();
+
 export const uploadAvatar = multer({
-  storage: createStorage(uploadConfig.subdirs.avatars),
+  storage: memoryStorage,
   limits: { fileSize: uploadConfig.maxFileSize },
   fileFilter: imageFilter,
 }).single("avatar");
 
 export const uploadLogo = multer({
-  storage: createStorage(uploadConfig.subdirs.logos),
+  storage: memoryStorage,
   limits: { fileSize: uploadConfig.maxFileSize },
   fileFilter: imageFilter,
 }).single("logo");
 
 export const uploadDocument = multer({
-  storage: createStorage(uploadConfig.subdirs.documents),
+  storage: memoryStorage,
   limits: { fileSize: uploadConfig.maxFileSize * 2 }, // 10MB for documents
   fileFilter: documentFilter,
 }).single("document");
 
 export const uploadServiceImage = multer({
-  storage: createStorage(uploadConfig.subdirs.services),
+  storage: memoryStorage,
   limits: { fileSize: uploadConfig.maxFileSize },
   fileFilter: imageFilter,
 }).single("image");
 
 export const uploadPortfolioImage = multer({
-  storage: createStorage(uploadConfig.subdirs.portfolio),
+  storage: memoryStorage,
   limits: { fileSize: uploadConfig.maxFileSize },
   fileFilter: imageFilter,
 }).single("image");
 
-// Helper: get public URL from file path
-export function getFileUrl(subdir: string, filename: string): string {
-  return `${uploadConfig.urlPrefix}/${subdir}/${filename}`;
+// ============================================================================
+// R2 HELPERS
+// ============================================================================
+
+/**
+ * Upload a multer memory-buffered file to R2.
+ * Returns the public URL of the uploaded object.
+ */
+export async function uploadToR2(file: Express.Multer.File, subdir: string): Promise<string> {
+  const { PutObjectCommand } = await getR2Sdk();
+  const r2 = await getR2Client();
+  const ext = path.extname(file.originalname).toLowerCase();
+  const key = `${subdir}/${uuidv4()}${ext}`;
+
+  await r2.send(
+    new PutObjectCommand({
+      Bucket: env.R2_BUCKET_NAME,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+      CacheControl: "public, max-age=31536000, immutable",
+    }),
+  );
+
+  return `${env.R2_PUBLIC_URL}/${key}`;
 }
 
-// Helper: delete a file
-export function deleteFile(filePath: string): void {
-  const fullPath = path.join(uploadConfig.baseDir, filePath);
-  if (fs.existsSync(fullPath)) {
-    fs.unlinkSync(fullPath);
-  }
+/**
+ * Delete an object from R2 by its full public URL.
+ */
+export async function deleteFromR2(publicUrl: string): Promise<void> {
+  const { DeleteObjectCommand } = await getR2Sdk();
+  const r2 = await getR2Client();
+  const key = publicUrl.replace(`${env.R2_PUBLIC_URL}/`, "");
+  await r2.send(
+    new DeleteObjectCommand({
+      Bucket: env.R2_BUCKET_NAME,
+      Key: key,
+    }),
+  );
 }

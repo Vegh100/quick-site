@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "motion/react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
@@ -5,7 +6,17 @@ import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { Badge } from "../ui/badge";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
-import { MapPin, Search, ArrowRight, TrendingUp, Sparkles, Star, Loader2 } from "lucide-react";
+import {
+  MapPin,
+  Search,
+  ArrowRight,
+  TrendingUp,
+  Sparkles,
+  Star,
+  Loader2,
+  LayoutDashboard,
+  LogOut,
+} from "lucide-react";
 import { useCategories } from "../../hooks/useApi";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -43,16 +54,26 @@ const benefits = [
 
 export function WelcomeScreen() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const { data: categoriesData, isLoading: loadingCategories } = useCategories();
+  const [locationInput, setLocationInput] = useState("");
   const apiCategories = categoriesData?.data || [];
 
   const goToCustomerApp = (category?: string) => {
-    if (isAuthenticated) {
-      navigate(category ? `/ugyfel?kategoria=${category}` : "/ugyfel");
-    } else {
-      navigate(category ? `/szolgaltatasok?kategoria=${category}` : "/szolgaltatasok");
-    }
+    const params = new URLSearchParams();
+    const city = locationInput.trim();
+    if (category) params.set("kategoria", category);
+    if (city) params.set("varos", city);
+
+    const canUseCustomerApp = isAuthenticated && user?.role === "CUSTOMER";
+    const basePath = canUseCustomerApp ? "/ugyfel" : "/szolgaltatasok";
+    const query = params.toString();
+    navigate(query ? `${basePath}?${query}` : basePath);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/", { replace: true });
   };
 
   return (
@@ -67,17 +88,39 @@ export function WelcomeScreen() {
             <span className="font-semibold">Qvick</span>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" onClick={() => navigate("/regisztracio/szolgaltato")}>
-              Vállalkozásoknak
-            </Button>
-            <Button variant="ghost" onClick={() => navigate("/bejelentkezes")}>
-              Bejelentkezés
-            </Button>
-            <Button variant="outline" onClick={() => navigate("/regisztracio/ugyfel")}>
-              Regisztráció
-            </Button>
-          </div>
+          {isAuthenticated ? (
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  navigate(
+                    user?.role === "PROVIDER" || user?.role === "EMPLOYEE"
+                      ? "/szolgaltato"
+                      : "/ugyfel",
+                  )
+                }
+              >
+                <LayoutDashboard className="h-4 w-4 mr-2" />
+                Irányítópult
+              </Button>
+              <Button variant="ghost" onClick={handleLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Kilépés
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" onClick={() => navigate("/regisztracio/szolgaltato")}>
+                Vállalkozásoknak
+              </Button>
+              <Button variant="ghost" onClick={() => navigate("/bejelentkezes")}>
+                Bejelentkezés
+              </Button>
+              <Button variant="outline" onClick={() => navigate("/regisztracio/ugyfel")}>
+                Regisztráció
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -119,6 +162,9 @@ export function WelcomeScreen() {
                     <Input
                       placeholder="Add meg a tartózkodási helyed..."
                       className="border-0 focus-visible:ring-0 text-base"
+                      value={locationInput}
+                      onChange={(event) => setLocationInput(event.target.value)}
+                      onKeyDown={(event) => event.key === "Enter" && goToCustomerApp()}
                     />
                   </div>
                   <Button size="lg" className="rounded-xl px-8" onClick={() => goToCustomerApp()}>
@@ -161,7 +207,7 @@ export function WelcomeScreen() {
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="mb-3">Népszerű szolgáltatások</h2>
+            <h2 className="text-2xl font-bold mb-3">Népszerű szolgáltatások</h2>
             <p className="text-muted-foreground">Mit keresel ma?</p>
           </motion.div>
 
@@ -204,7 +250,7 @@ export function WelcomeScreen() {
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="mb-3">Miért a Qvick?</h2>
+            <h2 className="text-2xl font-bold mb-3">Miért a Qvick?</h2>
             <p className="text-muted-foreground">
               A legegyszerűbb módja a helyi szolgáltatások foglalásának
             </p>
@@ -229,7 +275,7 @@ export function WelcomeScreen() {
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-primary/20 to-transparent" />
                     </div>
-                    <h3 className="mb-2">{benefit.title}</h3>
+                    <h3 className="text-lg font-semibold mb-2">{benefit.title}</h3>
                     <p className="text-muted-foreground">{benefit.description}</p>
                   </Card>
                 </motion.div>
@@ -249,7 +295,7 @@ export function WelcomeScreen() {
             transition={{ duration: 0.6 }}
             className="text-center mb-12"
           >
-            <h2 className="mb-3">Kezdj el a Qvick-kel</h2>
+            <h2 className="text-2xl font-bold mb-3">Kezdj el a Qvick-kel</h2>
             <p className="text-muted-foreground">
               Válaszd ki, hogyan szeretnéd használni a platformot
             </p>
@@ -274,7 +320,7 @@ export function WelcomeScreen() {
                     <div className="absolute inset-0 bg-gradient-to-t from-primary/30 to-transparent" />
                   </div>
 
-                  <h2 className="mb-3">Szolgáltatást keresek</h2>
+                  <h2 className="text-xl font-bold mb-3">Szolgáltatást keresek</h2>
                   <p className="text-muted-foreground mb-6 flex-1">
                     Találd meg és foglald le a legjobb helyi szolgáltatókat lakástakarításhoz és
                     autókozmetikához.
@@ -323,7 +369,7 @@ export function WelcomeScreen() {
                     <div className="absolute inset-0 bg-gradient-to-t from-accent/30 to-transparent" />
                   </div>
 
-                  <h2 className="mb-3">Szolgáltató vagyok</h2>
+                  <h2 className="text-xl font-bold mb-3">Szolgáltató vagyok</h2>
                   <p className="text-muted-foreground mb-6 flex-1">
                     Növeld a vállalkozásodat – kapcsolódj ügyfelekhez, akiknek szükségük van a
                     szolgáltatásaidra

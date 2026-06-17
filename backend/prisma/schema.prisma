@@ -366,6 +366,8 @@ model Availability {
   startTime   String         @map("start_time") @db.VarChar(5)
   endTime     String         @map("end_time") @db.VarChar(5)
   isEnabled   Boolean        @default(true) @map("is_enabled")
+  breakStart  String?        @map("break_start") @db.VarChar(5)
+  breakEnd    String?        @map("break_end") @db.VarChar(5)
 
   member      ProviderMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
 

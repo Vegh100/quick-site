@@ -23,16 +23,10 @@ export function QuestionnaireForm({ step, onNext, onBack }: QuestionnaireFormPro
         {step === 3 && <PreviewStep />}
 
         <div className="flex justify-between mt-8 pt-6 border-t">
-          <Button
-            variant="outline"
-            onClick={onBack}
-            disabled={step === 0}
-          >
+          <Button variant="outline" onClick={onBack} disabled={step === 0}>
             Back
           </Button>
-          <Button onClick={onNext}>
-            {step === 3 ? "Activate Free Trial" : "Continue"}
-          </Button>
+          <Button onClick={onNext}>{step === 3 ? "Activate Free Trial" : "Continue"}</Button>
         </div>
       </Card>
     </div>
@@ -57,9 +51,7 @@ function ProfileStep() {
           <Button variant="outline" size="sm">
             Upload Logo
           </Button>
-          <p className="text-xs text-muted-foreground mt-2">
-            JPG, PNG or GIF. Max 2MB.
-          </p>
+          <p className="text-xs text-muted-foreground mt-2">JPG, PNG or GIF. Max 2MB.</p>
         </div>
       </div>
 
@@ -134,7 +126,9 @@ function AvailabilityStep() {
         {days.map((day) => (
           <div key={day} className="flex items-center gap-4 p-3 border rounded-lg">
             <input type="checkbox" id={day} className="h-4 w-4" defaultChecked={day !== "Sunday"} />
-            <Label htmlFor={day} className="flex-1 cursor-pointer">{day}</Label>
+            <Label htmlFor={day} className="flex-1 cursor-pointer">
+              {day}
+            </Label>
             <div className="flex gap-2">
               <Input type="time" defaultValue="09:00" className="w-32" />
               <span className="flex items-center">to</span>
@@ -188,7 +182,9 @@ function ServicesStep() {
             </div>
           </div>
         ))}
-        <Button variant="outline" className="w-full">+ Add Another Service</Button>
+        <Button variant="outline" className="w-full">
+          + Add Another Service
+        </Button>
       </div>
     </div>
   );

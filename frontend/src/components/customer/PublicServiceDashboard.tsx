@@ -4,9 +4,10 @@ import {
   Briefcase,
   Calendar,
   Car,
-  Clock,
   Home,
+  LayoutDashboard,
   Loader2,
+  LogOut,
   MapPin,
   Search,
   Star,
@@ -21,27 +22,12 @@ import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
+import { toast } from "sonner";
 
-const FALLBACK_CATEGORIES: Category[] = [
-  {
-    id: "house-cleaning",
-    name: "House Cleaning",
-    slug: "house-cleaning",
-    icon: "🏠",
-    description: "Home cleaning",
-    isActive: true,
-    sortOrder: 1,
-  },
-  {
-    id: "car-detailing",
-    name: "Car Detailing",
-    slug: "car-detailing",
-    icon: "🚗",
-    description: "Car detailing",
-    isActive: true,
-    sortOrder: 2,
-  },
-];
+const CATEGORY_LABELS: Record<string, string> = {
+  "house-cleaning": "Lakástakarítás",
+  "car-detailing": "Autókozmetika",
+};
 
 const categoryIcons: Record<string, typeof Home> = {
   "house-cleaning": Home,
@@ -52,43 +38,62 @@ function serviceCategory(service: Service) {
   return service.serviceType?.category;
 }
 
-function getCategoryLabel(service: Service) {
-  return serviceCategory(service)?.name || "Szolgáltatás";
+function getCategoryDisplayName(category?: Pick<Category, "slug" | "name">) {
+  if (!category) return "Szolgáltatás";
+  return CATEGORY_LABELS[category.slug] || category.name;
+}
+
+function getVisibleServices(provider: Provider, categorySlug: string) {
+  const services = provider.services || [];
+  if (!categorySlug) return services;
+
+  const filtered = services.filter((service) => serviceCategory(service)?.slug === categorySlug);
+  return filtered.length > 0 ? filtered : services;
+}
+
+function getProviderCategories(services: Service[]) {
+  const categories = new Map<string, NonNullable<ReturnType<typeof serviceCategory>>>();
+  for (const service of services) {
+    const category = serviceCategory(service);
+    if (category) categories.set(category.slug, category);
+  }
+  return [...categories.values()];
+}
+
+function getLowestPricedService(services: Service[]) {
+  return services.reduce<Service | null>((lowest, service) => {
+    if (!lowest) return service;
+    return Number(service.priceAmount) < Number(lowest.priceAmount) ? service : lowest;
+  }, null);
 }
 
 export function PublicServiceDashboard() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get("kategoria") || "");
   const [searchInput, setSearchInput] = useState(searchParams.get("kereses") || "");
+  const [cityInput, setCityInput] = useState(searchParams.get("varos") || "");
   const [search, setSearch] = useState(searchInput);
+  const [city, setCity] = useState(cityInput);
 
   const { data: categoriesData, isLoading: loadingCategories } = useCategories();
   const { data: providersData, isLoading: loadingProviders } = useProviderSearch({
     categorySlug: selectedCategory || undefined,
     search: search || undefined,
+    city: city || undefined,
     limit: 24,
     sortBy: "rating",
     sortOrder: "desc",
   });
 
   const categories = useMemo(() => {
-    const apiCategories = categoriesData?.data || [];
-    return apiCategories.length > 0 ? apiCategories : FALLBACK_CATEGORIES;
+    return categoriesData?.data || [];
   }, [categoriesData?.data]);
 
   const providers = useMemo(
     () => providersData?.data?.providers || [],
     [providersData?.data?.providers],
-  );
-
-  const serviceAds = useMemo(
-    () =>
-      providers.flatMap((provider: Provider) =>
-        (provider.services || []).map((service) => ({ provider, service })),
-      ),
-    [providers],
   );
 
   useEffect(() => {
@@ -97,19 +102,30 @@ export function PublicServiceDashboard() {
   }, [searchInput]);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setCity(cityInput), 300);
+    return () => window.clearTimeout(timer);
+  }, [cityInput]);
+
+  useEffect(() => {
     const next = new URLSearchParams();
     if (selectedCategory) next.set("kategoria", selectedCategory);
     if (search) next.set("kereses", search);
+    if (city) next.set("varos", city);
     setSearchParams(next, { replace: true });
-  }, [search, selectedCategory, setSearchParams]);
+  }, [city, search, selectedCategory, setSearchParams]);
 
-  const goToBooking = (providerId: string, serviceId: string) => {
+  const openProvider = (providerId: string) => {
+    const targetSearch = selectedCategory ? `?kategoria=${selectedCategory}` : "";
     const target = {
       pathname: `/ugyfel/szolgaltato/${providerId}`,
-      search: `?service=${serviceId}`,
+      search: targetSearch,
     };
 
     if (isAuthenticated) {
+      if (user?.role !== "CUSTOMER") {
+        toast.info("A szolgáltatói részletekhez ügyfél fiókkal kell belépni.");
+        return;
+      }
       navigate(`${target.pathname}${target.search}`);
       return;
     }
@@ -121,6 +137,9 @@ export function PublicServiceDashboard() {
       },
     });
   };
+
+  const dashboardPath =
+    user?.role === "PROVIDER" || user?.role === "EMPLOYEE" ? "/szolgaltato" : "/ugyfel";
 
   const showLoading = loadingCategories || loadingProviders;
 
@@ -135,55 +154,100 @@ export function PublicServiceDashboard() {
             <span className="font-semibold text-lg">Qvick</span>
           </button>
 
-          <div className="flex flex-1 sm:flex-none items-center justify-end gap-2 min-w-full sm:min-w-0">
-            <Button
-              variant="outline"
-              className="h-9 bg-white px-3"
-              onClick={() => navigate("/bejelentkezes")}
-            >
-              Belépés
-            </Button>
-            <Button
-              variant="outline"
-              className="h-9 bg-white px-3"
-              onClick={() => navigate("/regisztracio/ugyfel")}
-            >
-              <UserPlus className="h-4 w-4" />
-              <span className="hidden md:inline">Ügyfél </span>Regisztráció
-            </Button>
-            <Button className="h-9 px-3" onClick={() => navigate("/regisztracio/szolgaltato")}>
-              <Briefcase className="h-4 w-4" />
-              <span className="hidden md:inline">Vállalkozásoknak</span>
-              <span className="md:hidden">Vállalkozás</span>
-            </Button>
-          </div>
+          {isAuthenticated ? (
+            <div className="flex flex-1 sm:flex-none items-center justify-end gap-2 min-w-full sm:min-w-0">
+              <Button className="h-9 px-3" onClick={() => navigate(dashboardPath)}>
+                <LayoutDashboard className="h-4 w-4" />
+                <span>Irányítópult</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 bg-white px-3"
+                onClick={async () => {
+                  await logout();
+                  navigate("/", { replace: true });
+                }}
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Kilépés</span>
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-1 sm:flex-none items-center justify-end gap-2 min-w-full sm:min-w-0">
+              <Button
+                variant="outline"
+                className="h-9 bg-white px-3"
+                onClick={() => navigate("/bejelentkezes")}
+              >
+                Belépés
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 bg-white px-3"
+                onClick={() => navigate("/regisztracio/ugyfel")}
+              >
+                <UserPlus className="h-4 w-4" />
+                <span className="hidden md:inline">Ügyfél </span>Regisztráció
+              </Button>
+              <Button className="h-9 px-3" onClick={() => navigate("/regisztracio/szolgaltato")}>
+                <Briefcase className="h-4 w-4" />
+                <span className="hidden md:inline">Vállalkozásoknak</span>
+                <span className="md:hidden">Vállalkozás</span>
+              </Button>
+            </div>
+          )}
         </div>
       </header>
+
+      {/* Hero Section */}
+      <section className="bg-gradient-to-br from-primary/5 via-[#f7f7f5] to-[#f7f7f5] border-b">
+        <div className="container mx-auto px-4 py-12 md:py-16 text-center">
+          <Badge className="mb-5 bg-tertiary text-tertiary-foreground border-transparent hover:bg-tertiary">
+            Lakástakarítás és autókozmetika
+          </Badge>
+          <h1 className="text-4xl md:text-5xl font-bold leading-tight mb-4">
+            Találd meg a legjobb <span className="text-primary">helyi szolgáltatókat</span>
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
+            Böngészd a megbízható helyi vállalkozásokat, nézd meg az árakat és az értékeléseket.
+            Foglaláshoz ingyenes regisztráció szükséges.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+              <span>4.9/5 átlagos értékelés</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <MapPin className="h-4 w-4 text-primary" />
+              <span>Helyi szolgáltatók</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Calendar className="h-4 w-4 text-primary" />
+              <span>Azonnali foglalás regisztráció után</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <main className="container mx-auto px-4 py-6 md:py-8 space-y-6">
         <section className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-4 items-stretch">
           <div className="relative overflow-hidden rounded-lg border bg-white p-5 md:p-6 shadow-sm">
             <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-[#2aa7a5]" />
             <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-4 md:items-end">
-              <div className="space-y-2">
-                <Badge className="bg-tertiary text-tertiary-foreground border-transparent hover:bg-tertiary">
-                  Lakástakarítás és autókozmetika
-                </Badge>
-                <h1 className="text-3xl md:text-4xl font-semibold leading-tight">
-                  Szolgáltatások böngészése
-                </h1>
-                <p className="text-muted-foreground">
-                  Nézd meg az árakat és a hirdetéseket. Foglaláshoz majd belépés szükséges.
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold">Keresés és szűrés</h2>
+                <p className="text-sm text-muted-foreground">
+                  Válassz szolgáltatót, majd a profilján szolgáltatást.
                 </p>
               </div>
 
               <div className="rounded-md border bg-[#fff8ef] p-3 text-sm">
-                <p className="font-semibold text-foreground">{serviceAds.length}</p>
-                <p className="text-muted-foreground">látható hirdetés</p>
+                <p className="font-semibold text-foreground">{providers.length}</p>
+                <p className="text-muted-foreground">látható szolgáltató</p>
               </div>
             </div>
 
-            <div className="mt-5 grid md:grid-cols-[minmax(0,1fr)_120px] gap-3">
+            <div className="mt-5 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_120px]">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
                 <Input
@@ -193,7 +257,22 @@ export function PublicServiceDashboard() {
                   className="h-11 pl-10 bg-white"
                 />
               </div>
-              <Button className="h-11" onClick={() => setSearch(searchInput)}>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary" />
+                <Input
+                  value={cityInput}
+                  onChange={(event) => setCityInput(event.target.value)}
+                  placeholder="Város..."
+                  className="h-11 pl-10 bg-white"
+                />
+              </div>
+              <Button
+                className="h-11"
+                onClick={() => {
+                  setSearch(searchInput);
+                  setCity(cityInput);
+                }}
+              >
                 Keresés
               </Button>
             </div>
@@ -202,7 +281,7 @@ export function PublicServiceDashboard() {
               <div className="rounded-md border bg-[#f0fdf4] p-3">
                 <div className="flex items-center gap-2">
                   <Home className="h-5 w-5 text-green-700" />
-                  <p className="font-medium text-green-950">House Cleaning</p>
+                  <p className="font-medium text-green-950">Lakástakarítás</p>
                 </div>
                 <p className="mt-1 text-sm text-green-800">
                   Lakások, nagyobb házak, alap- és mélytakarítás.
@@ -211,7 +290,7 @@ export function PublicServiceDashboard() {
               <div className="rounded-md border bg-[#eef6ff] p-3">
                 <div className="flex items-center gap-2">
                   <Car className="h-5 w-5 text-blue-700" />
-                  <p className="font-medium text-blue-950">Car Detailing</p>
+                  <p className="font-medium text-blue-950">Autókozmetika</p>
                 </div>
                 <p className="mt-1 text-sm text-blue-800">
                   Külső mosás, belső tisztítás, mély belső takarítás.
@@ -224,7 +303,7 @@ export function PublicServiceDashboard() {
             <div className="mb-3 flex items-center justify-between gap-2">
               <p className="text-sm font-semibold">Szolgáltatás</p>
               <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">
-                2 típus
+                {categories.length} típus
               </span>
             </div>
             <div className="space-y-2">
@@ -238,7 +317,7 @@ export function PublicServiceDashboard() {
                 }`}
               >
                 <span className="font-medium">Összes</span>
-                <span className="text-sm opacity-80">{serviceAds.length}</span>
+                <span className="text-sm opacity-80">{providers.length}</span>
               </button>
 
               {categories.map((category) => {
@@ -257,7 +336,7 @@ export function PublicServiceDashboard() {
                     }`}
                   >
                     <Icon className="h-5 w-5 shrink-0" />
-                    <span className="font-medium">{category.name}</span>
+                    <span className="font-medium">{getCategoryDisplayName(category)}</span>
                   </button>
                 );
               })}
@@ -268,9 +347,9 @@ export function PublicServiceDashboard() {
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold">Hirdetések</h2>
+              <h2 className="text-2xl font-semibold">Szolgáltatók</h2>
               <p className="text-sm text-muted-foreground">
-                Ár, időtartam, értékelés és helyszín egy helyen.
+                Egy cég egyszer jelenik meg, a szolgáltatásokat a profilján választhatod ki.
               </p>
             </div>
           </div>
@@ -279,55 +358,89 @@ export function PublicServiceDashboard() {
             <div className="flex justify-center py-16">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : serviceAds.length === 0 ? (
+          ) : providers.length === 0 ? (
             <Card className="p-8 text-center bg-white border-dashed">
-              <p className="text-muted-foreground">Ehhez a kereséshez még nincs hirdetés.</p>
+              <p className="text-muted-foreground">Ehhez a kereséshez még nincs szolgáltató.</p>
             </Card>
           ) : (
             <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {serviceAds.map(({ provider, service }) => {
-                const category = serviceCategory(service);
-                const CategoryIcon = categoryIcons[category?.slug || ""] || Home;
+              {providers.map((provider) => {
+                const visibleServices = getVisibleServices(provider, selectedCategory);
+                const categoriesForProvider = getProviderCategories(visibleServices);
+                const primaryCategory = categoriesForProvider[0];
+                const CategoryIcon = categoryIcons[primaryCategory?.slug || ""] || Home;
+                const primaryService = visibleServices[0];
+                const lowestPricedService = getLowestPricedService(visibleServices);
+                const coverImage = provider.coverImageUrl || primaryService?.imageUrl;
 
                 return (
                   <Card
-                    key={`${provider.id}-${service.id}`}
-                    className="overflow-hidden bg-white border shadow-sm hover:border-primary/40 hover:shadow-md transition-all"
+                    key={provider.id}
+                    className="overflow-hidden bg-white border shadow-sm hover:border-primary/40 hover:shadow-md transition-all cursor-pointer"
+                    onClick={() => openProvider(provider.id)}
                   >
                     <div className="h-36 relative overflow-hidden bg-[#fff8ef]">
-                      {service.imageUrl || provider.coverImageUrl ? (
+                      {coverImage ? (
                         <ImageWithFallback
-                          src={service.imageUrl || provider.coverImageUrl || ""}
-                          alt={service.name}
+                          src={coverImage}
+                          alt={provider.businessName}
                           className="h-full w-full object-cover"
                         />
                       ) : (
                         <div
                           className={`h-full w-full flex items-center justify-center ${
-                            category?.slug === "car-detailing" ? "bg-[#eef6ff]" : "bg-[#f0fdf4]"
+                            primaryCategory?.slug === "car-detailing"
+                              ? "bg-[#eef6ff]"
+                              : "bg-[#f0fdf4]"
                           }`}
                         >
                           <CategoryIcon className="h-14 w-14 text-primary/70" />
                         </div>
                       )}
-                      <Badge className="absolute left-3 top-3 bg-white text-foreground border shadow-sm hover:bg-white">
-                        {category?.icon && <span className="mr-1">{category.icon}</span>}
-                        {getCategoryLabel(service)}
-                      </Badge>
+                      {primaryCategory && (
+                        <Badge className="absolute left-3 top-3 bg-white text-foreground border shadow-sm hover:bg-white">
+                          {primaryCategory.icon && (
+                            <span className="mr-1">{primaryCategory.icon}</span>
+                          )}
+                          {getCategoryDisplayName(primaryCategory)}
+                          {categoriesForProvider.length > 1 && (
+                            <span className="ml-1 text-muted-foreground">
+                              +{categoriesForProvider.length - 1}
+                            </span>
+                          )}
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="p-4 space-y-4">
                       <div className="space-y-1">
-                        <h3 className="text-lg font-semibold leading-snug">{service.name}</h3>
-                        <p className="text-sm font-medium text-muted-foreground">
+                        <h3 className="text-lg font-semibold leading-snug">
                           {provider.businessName}
+                        </h3>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          {visibleServices.length} hirdetett szolgáltatás
                         </p>
                       </div>
 
-                      {service.description && (
+                      {(provider.description || primaryService?.description) && (
                         <p className="min-h-10 text-sm text-muted-foreground line-clamp-2">
-                          {service.description}
+                          {provider.description || primaryService?.description}
                         </p>
+                      )}
+
+                      {visibleServices.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {visibleServices.slice(0, 3).map((service) => (
+                            <Badge key={service.id} variant="secondary" className="text-xs">
+                              {service.name}
+                            </Badge>
+                          ))}
+                          {visibleServices.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{visibleServices.length - 3} további
+                            </Badge>
+                          )}
+                        </div>
                       )}
 
                       <div className="grid grid-cols-2 gap-2 text-sm">
@@ -342,10 +455,10 @@ export function PublicServiceDashboard() {
                         </div>
                         <div className="rounded-md bg-muted px-3 py-2">
                           <div className="flex items-center gap-1.5 font-medium">
-                            <Clock className="h-4 w-4" />
-                            {service.durationMin} perc
+                            <Briefcase className="h-4 w-4" />
+                            {visibleServices.length}
                           </div>
-                          <p className="text-xs text-muted-foreground">becsült idő</p>
+                          <p className="text-xs text-muted-foreground">szolgáltatás</p>
                         </div>
                         <div className="col-span-2 rounded-md bg-muted px-3 py-2">
                           <div className="flex items-center gap-1.5 font-medium min-w-0">
@@ -359,17 +472,22 @@ export function PublicServiceDashboard() {
 
                       <div className="flex items-center justify-between gap-3 border-t pt-4">
                         <div>
-                          <p className="text-xs font-medium uppercase text-muted-foreground">Ár</p>
+                          <p className="text-xs font-medium uppercase text-muted-foreground">
+                            Induló ár
+                          </p>
                           <p className="text-2xl font-bold text-primary">
-                            {formatServicePrice(service)}
+                            {lowestPricedService ? formatServicePrice(lowestPricedService) : "—"}
                           </p>
                         </div>
                         <Button
                           className="h-11 shrink-0"
-                          onClick={() => goToBooking(provider.id, service.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openProvider(provider.id);
+                          }}
                         >
                           <Calendar className="h-4 w-4" />
-                          Foglalás
+                          Részletek
                         </Button>
                       </div>
                     </div>
