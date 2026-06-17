@@ -19,6 +19,11 @@ const envSchema = z.object({
   JWT_SECRET: z.string().optional(),
   JWT_EXPIRES_IN: z.string().default("7d"),
   COOKIE_SECRET: z.string().optional(),
+  COOKIE_SAME_SITE: z.enum(["strict", "lax", "none"]).optional(),
+  COOKIE_SECURE: z
+    .string()
+    .transform((v) => v === "true")
+    .optional(),
 
   // Google OAuth
   GOOGLE_CLIENT_ID: z.string().default(""),

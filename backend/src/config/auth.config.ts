@@ -1,6 +1,8 @@
 import { env } from "./env.config.js";
 
 const isDev = env.NODE_ENV !== "production";
+const cookieSameSite = env.COOKIE_SAME_SITE ?? (!isDev ? "strict" : "lax");
+const cookieSecure = env.COOKIE_SECURE ?? (!isDev || cookieSameSite === "none");
 
 export const authConfig = {
   jwt: {
@@ -25,8 +27,8 @@ export const authConfig = {
           })()),
     options: {
       httpOnly: true,
-      secure: !isDev,
-      sameSite: (!isDev ? "strict" : "lax") as "strict" | "lax" | "none",
+      secure: cookieSecure,
+      sameSite: cookieSameSite,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       path: "/",
     },
