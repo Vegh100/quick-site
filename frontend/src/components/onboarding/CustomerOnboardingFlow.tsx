@@ -5,7 +5,7 @@ import { Card } from "../ui/card";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { ProgressIndicator } from "./ProgressIndicator";
-import { MapPin, User, Bell, CheckCircle2 } from "lucide-react";
+import { MapPin, User, CheckCircle2 } from "lucide-react";
 import { motion } from "motion/react";
 import { toast } from "sonner";
 import { useAuth } from "../../contexts/AuthContext";
@@ -22,10 +22,7 @@ const steps = [
   { id: "complete", label: "Kész" },
 ];
 
-export function CustomerOnboardingFlow({
-  onComplete,
-  onBack,
-}: CustomerOnboardingFlowProps) {
+export function CustomerOnboardingFlow({ onComplete, onBack }: CustomerOnboardingFlowProps) {
   const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
@@ -77,7 +74,11 @@ export function CustomerOnboardingFlow({
       setCurrentStep(currentStep + 1);
     } else {
       toast.success("Üdvözlünk a Qvick-ben!");
-      onComplete ? onComplete() : navigate("/ugyfel", { replace: true });
+      if (onComplete) {
+        onComplete();
+      } else {
+        navigate("/ugyfel", { replace: true });
+      }
     }
   };
 
@@ -85,11 +86,15 @@ export function CustomerOnboardingFlow({
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     } else {
-      onBack ? onBack() : navigate("/");
+      if (onBack) {
+        onBack();
+      } else {
+        navigate("/");
+      }
     }
   };
 
-  const updateFormData = (field: string, value: any) => {
+  const updateFormData = (field: keyof typeof formData, value: string) => {
     setFormData({ ...formData, [field]: value });
   };
 
@@ -119,9 +124,7 @@ export function CustomerOnboardingFlow({
                   <Input
                     id="firstName"
                     value={formData.firstName}
-                    onChange={(e) =>
-                      updateFormData("firstName", e.target.value)
-                    }
+                    onChange={(e) => updateFormData("firstName", e.target.value)}
                   />
                 </div>
                 <div>
@@ -224,8 +227,8 @@ export function CustomerOnboardingFlow({
             <div>
               <h2 className="mb-3">Minden kész!</h2>
               <p className="text-muted-foreground max-w-md mx-auto">
-                A fiókod készen áll. Kezdj el felfedezni és foglalni
-                szolgáltatásokat megbízható helyi szolgáltatóktól.
+                A fiókod készen áll. Kezdj el felfedezni és foglalni szolgáltatásokat megbízható
+                helyi szolgáltatóktól.
               </p>
             </div>
 

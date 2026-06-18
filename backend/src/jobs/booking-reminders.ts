@@ -1,5 +1,7 @@
 import prisma from "../lib/prisma.js";
 import { sendBookingReminderEmail } from "../services/email.service.js";
+import { logger } from "../lib/logger.js";
+import { formatDateHu } from "../lib/locale.js";
 
 // ============================================================================
 // BOOKING REMINDER JOB
@@ -51,23 +53,15 @@ export async function sendBookingReminders(): Promise<void> {
 
     if (unreminded.length === 0) return;
 
-    console.log(
-      `Sending ${unreminded.length} booking reminder(s) for tomorrow...`,
-    );
-
-    const HUNGARIAN_MONTHS = [
-      "január", "február", "március", "április", "május", "június",
-      "július", "augusztus", "szeptember", "október", "november", "december",
-    ];
+    logger.info({ count: unreminded.length }, "Sending booking reminders for tomorrow");
 
     for (const booking of unreminded) {
       const customerName =
-        [booking.customer.firstName, booking.customer.lastName]
-          .filter(Boolean)
-          .join(" ") || "Ügyfél";
+        [booking.customer.firstName, booking.customer.lastName].filter(Boolean).join(" ") ||
+        "Ügyfél";
 
       const scheduledDate = new Date(booking.scheduledDate);
-      const formattedDate = `${scheduledDate.getFullYear()}. ${HUNGARIAN_MONTHS[scheduledDate.getMonth()]} ${scheduledDate.getDate()}.`;
+      const formattedDate = formatDateHu(scheduledDate);
 
       const totalAmount = `${parseFloat(booking.totalAmount.toString()).toLocaleString("hu-HU")} ${booking.currency}`;
 
@@ -95,7 +89,7 @@ export async function sendBookingReminders(): Promise<void> {
       }
     }
   } catch (error) {
-    console.error("Booking reminder job error:", (error as Error).message);
+    logger.error({ err: error }, "Booking reminder job error");
   }
 }
 
@@ -111,7 +105,7 @@ export function startBookingReminderJob(): void {
 
   // Then run every hour
   reminderTimer = setInterval(sendBookingReminders, REMINDER_INTERVAL_MS);
-  console.log("Booking reminder job started (runs every hour)");
+  logger.info("Booking reminder job started (runs every hour)");
 }
 
 /**
@@ -121,6 +115,6 @@ export function stopBookingReminderJob(): void {
   if (reminderTimer) {
     clearInterval(reminderTimer);
     reminderTimer = null;
-    console.log("Booking reminder job stopped");
+    logger.info("Booking reminder job stopped");
   }
 }

@@ -32,6 +32,4 @@ export const updateNotificationPrefsSchema = z.object({
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type AddAddressInput = z.infer<typeof addAddressSchema>;
 export type UpdateAddressInput = z.infer<typeof updateAddressSchema>;
-export type UpdateNotificationPrefsInput = z.infer<
-  typeof updateNotificationPrefsSchema
->;
+export type UpdateNotificationPrefsInput = z.infer<typeof updateNotificationPrefsSchema>;

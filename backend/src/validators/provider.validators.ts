@@ -1,5 +1,65 @@
 import { z } from "zod";
 
+const timeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Format: HH:MM");
+
+function minutesFromTime(time: string): number {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+const availabilitySlotSchema = z
+  .object({
+    dayOfWeek: z.number().int().min(0).max(6),
+    startTime: timeSchema,
+    endTime: timeSchema,
+    isEnabled: z.boolean().default(true),
+    breakStart: timeSchema.optional().nullable(),
+    breakEnd: timeSchema.optional().nullable(),
+  })
+  .superRefine((slot, ctx) => {
+    if (!slot.isEnabled) return;
+
+    const start = minutesFromTime(slot.startTime);
+    const end = minutesFromTime(slot.endTime);
+    if (start >= end) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Start time must be before end time",
+        path: ["endTime"],
+      });
+    }
+
+    const hasBreakStart = !!slot.breakStart;
+    const hasBreakEnd = !!slot.breakEnd;
+    if (hasBreakStart !== hasBreakEnd) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Break start and end must be provided together",
+        path: hasBreakStart ? ["breakEnd"] : ["breakStart"],
+      });
+      return;
+    }
+
+    if (slot.breakStart && slot.breakEnd) {
+      const breakStart = minutesFromTime(slot.breakStart);
+      const breakEnd = minutesFromTime(slot.breakEnd);
+      if (breakStart >= breakEnd) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Break start must be before break end",
+          path: ["breakEnd"],
+        });
+      }
+      if (breakStart < start || breakEnd > end) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Break must be within working hours",
+          path: ["breakStart"],
+        });
+      }
+    }
+  });
+
 export const createProviderSchema = z.object({
   businessName: z.string().min(2).max(255),
   description: z.string().max(2000).optional(),
@@ -31,14 +91,7 @@ export const updateServiceSchema = addServiceSchema.partial();
 
 export const setAvailabilitySchema = z.object({
   memberId: z.string().uuid(),
-  availability: z.array(
-    z.object({
-      dayOfWeek: z.number().int().min(0).max(6),
-      startTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
-      endTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
-      isEnabled: z.boolean().default(true),
-    }),
-  ),
+  availability: z.array(availabilitySlotSchema),
 });
 
 export const setServiceSlotsSchema = z.object({
@@ -47,8 +100,8 @@ export const setServiceSlotsSchema = z.object({
   slots: z.array(
     z.object({
       dayOfWeek: z.number().int().min(0).max(6),
-      startTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
-      endTime: z.string().regex(/^\d{2}:\d{2}$/, "Format: HH:MM"),
+      startTime: timeSchema,
+      endTime: timeSchema,
     }),
   ),
 });
@@ -58,6 +111,20 @@ export const updatePricingSettingsSchema = z.object({
   weekendPremium: z.boolean().optional(),
   weekendPremiumPercent: z.number().int().min(0).max(100).optional(),
   autoAccept: z.boolean().optional(),
+});
+
+export const serviceMatrixSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        templateKey: z.string().min(1).max(120),
+        priceAmount: z.number().min(0),
+        durationMin: z.number().int().min(0).max(480, "Duration must be 480 minutes or less"),
+        isActive: z.boolean().optional(),
+        description: z.string().max(1000).optional(),
+      }),
+    )
+    .max(20, "Too many matrix entries"),
 });
 
 export const providerSearchSchema = z.object({
@@ -71,9 +138,7 @@ export const providerSearchSchema = z.object({
   isVerified: z.coerce.boolean().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(50).default(12),
-  sortBy: z
-    .enum(["rating", "price", "reviewCount", "createdAt", "newest"])
-    .default("rating"),
+  sortBy: z.enum(["rating", "price", "reviewCount", "createdAt", "newest"]).default("rating"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 
@@ -83,7 +148,6 @@ export type AddServiceInput = z.infer<typeof addServiceSchema>;
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 export type SetAvailabilityInput = z.infer<typeof setAvailabilitySchema>;
 export type SetServiceSlotsInput = z.infer<typeof setServiceSlotsSchema>;
-export type UpdatePricingSettingsInput = z.infer<
-  typeof updatePricingSettingsSchema
->;
+export type UpdatePricingSettingsInput = z.infer<typeof updatePricingSettingsSchema>;
+export type ServiceMatrixInput = z.infer<typeof serviceMatrixSchema>;
 export type ProviderSearchInput = z.infer<typeof providerSearchSchema>;

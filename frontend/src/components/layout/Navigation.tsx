@@ -31,7 +31,7 @@ export function Navigation({ activeTab = "dashboard", onTabChange }: NavigationP
                   "flex items-center gap-2 px-4 py-3 border-b-2 transition-colors whitespace-nowrap",
                   isActive
                     ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border",
                 )}
               >
                 <Icon className="h-4 w-4" />

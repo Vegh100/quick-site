@@ -9,15 +9,10 @@ import { NotFoundError, ForbiddenError } from "../lib/errors.js";
  * Get or create a conversation between two users.
  * Always stores user1Id < user2Id (sorted) to ensure uniqueness.
  */
-export async function getOrCreateConversation(
-  currentUserId: string,
-  otherUserId: string,
-) {
+export async function getOrCreateConversation(currentUserId: string, otherUserId: string) {
   // Sort IDs to ensure consistent ordering
   const [user1Id, user2Id] =
-    currentUserId < otherUserId
-      ? [currentUserId, otherUserId]
-      : [otherUserId, currentUserId];
+    currentUserId < otherUserId ? [currentUserId, otherUserId] : [otherUserId, currentUserId];
 
   let conversation = await prisma.conversation.findUnique({
     where: { user1Id_user2Id: { user1Id, user2Id } },
@@ -100,12 +95,7 @@ export async function getMyConversations(userId: string) {
 // GET MESSAGES
 // ============================================================================
 
-export async function getMessages(
-  userId: string,
-  conversationId: string,
-  page = 1,
-  limit = 50,
-) {
+export async function getMessages(userId: string, conversationId: string, page = 1, limit = 50) {
   // Verify user is part of conversation
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -163,11 +153,7 @@ export async function getMessages(
 // SEND MESSAGE
 // ============================================================================
 
-export async function sendMessage(
-  userId: string,
-  conversationId: string,
-  content: string,
-) {
+export async function sendMessage(userId: string, conversationId: string, content: string) {
   // Verify user is part of conversation
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
@@ -200,8 +186,7 @@ export async function sendMessage(
   await prisma.conversation.update({
     where: { id: conversationId },
     data: {
-      lastMessage:
-        content.length > 500 ? content.substring(0, 497) + "..." : content,
+      lastMessage: content.length > 500 ? content.substring(0, 497) + "..." : content,
       lastMessageAt: new Date(),
     },
   });

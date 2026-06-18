@@ -17,25 +17,13 @@ router.use(authenticate);
 
 // Profile
 router.get("/profile", userController.getProfile);
-router.patch(
-  "/profile",
-  validate(updateProfileSchema),
-  userController.updateProfile,
-);
+router.patch("/profile", validate(updateProfileSchema), userController.updateProfile);
 router.post("/profile/avatar", uploadAvatar, userController.uploadAvatar);
 
 // Addresses
 router.get("/addresses", userController.getAddresses);
-router.post(
-  "/addresses",
-  validate(addAddressSchema),
-  userController.addAddress,
-);
-router.patch(
-  "/addresses/:addressId",
-  validate(updateAddressSchema),
-  userController.updateAddress,
-);
+router.post("/addresses", validate(addAddressSchema), userController.addAddress);
+router.patch("/addresses/:addressId", validate(updateAddressSchema), userController.updateAddress);
 router.delete("/addresses/:addressId", userController.deleteAddress);
 
 // Notification preferences

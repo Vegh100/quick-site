@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  type ReactNode,
-} from "react";
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { googleLogout } from "@react-oauth/google";
 import { authApi } from "../lib/api-services";
@@ -30,13 +23,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check session on mount
+  // Check session on mount (with timeout to prevent infinite loading)
   useEffect(() => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+
     authApi
       .me()
       .then((res) => setUser(res.data.user))
       .catch(() => setUser(null))
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        clearTimeout(timeout);
+        setIsLoading(false);
+      });
+
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
   // Listen for forced logouts (401)
@@ -62,14 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.data.user;
   }, []);
 
-  const googleAuth = useCallback(
-    async (credential: string, role?: UserRole) => {
-      const res = await authApi.googleAuth(credential, role);
-      setUser(res.data.user);
-      return { user: res.data.user, isNewUser: !!res.data.isNewUser };
-    },
-    [],
-  );
+  const googleAuth = useCallback(async (credential: string, role?: UserRole) => {
+    const res = await authApi.googleAuth(credential, role);
+    setUser(res.data.user);
+    return { user: res.data.user, isNewUser: !!res.data.isNewUser };
+  }, []);
 
   const logout = useCallback(async () => {
     await authApi.logout().catch(() => {});

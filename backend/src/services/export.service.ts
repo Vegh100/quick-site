@@ -86,6 +86,15 @@ export async function exportBookingsCsv(
     CANCELLED: "Lemondva",
   };
 
+  // Escape cells to prevent CSV injection (formula characters)
+  function escapeCsvCell(value: string): string {
+    const escaped = value.replace(/"/g, '""').replace(/[\r\n]+/g, " ");
+    if (/^[=+\-@\t\r]/.test(escaped)) {
+      return "'" + escaped;
+    }
+    return escaped;
+  }
+
   const rows = bookings.map((b) => {
     const memberName = b.assignedMember
       ? b.assignedMember.displayName ||
@@ -95,16 +104,16 @@ export async function exportBookingsCsv(
     return [
       new Date(b.scheduledDate).toLocaleDateString("hu-HU"),
       b.scheduledTime,
-      b.service.name,
-      `${b.customer.firstName || ""} ${b.customer.lastName || ""}`.trim(),
-      b.customer.email || "",
-      b.customer.phone || "",
-      memberName,
+      escapeCsvCell(b.service.name),
+      escapeCsvCell(`${b.customer.firstName || ""} ${b.customer.lastName || ""}`.trim()),
+      escapeCsvCell(b.customer.email || ""),
+      escapeCsvCell(b.customer.phone || ""),
+      escapeCsvCell(memberName),
       statusMap[b.status] || b.status,
       b.totalAmount.toString(),
       b.currency,
       b.durationMin.toString(),
-      b.notes?.replace(/"/g, '""').replace(/[\r\n]+/g, ' ') || "",
+      escapeCsvCell(b.notes || ""),
     ];
   });
 
@@ -123,11 +132,7 @@ export async function exportBookingsCsv(
 // REVENUE SUMMARY REPORT
 // ============================================================================
 
-export async function getRevenueSummary(
-  userId: string,
-  dateFrom: string,
-  dateTo: string,
-) {
+export async function getRevenueSummary(userId: string, dateFrom: string, dateTo: string) {
   const { provider } = await getProviderForUser(userId);
 
   const from = new Date(dateFrom);
@@ -174,10 +179,7 @@ export async function getRevenueSummary(
   }
 
   // Totals
-  const totalRevenue = dailyBookings.reduce(
-    (sum, b) => sum + Number(b.totalAmount),
-    0,
-  );
+  const totalRevenue = dailyBookings.reduce((sum, b) => sum + Number(b.totalAmount), 0);
   const totalCompleted = dailyBookings.length;
 
   return {

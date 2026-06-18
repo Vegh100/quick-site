@@ -3,25 +3,25 @@ import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Label } from "../ui/label";
 import { Input } from "../ui/input";
-import { Loader2, Save, ChevronDown, ChevronUp, Plus } from "lucide-react";
+import { Loader2, Save, ChevronDown, ChevronUp, Plus, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useServiceSlots, useSetServiceSlots } from "../../hooks/useApi";
 import type { Service } from "../../lib/types";
 
+interface AvailabilitySlot {
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isEnabled: boolean;
+}
+
 interface ServiceSlotPickerProps {
   service: Service;
   memberId: string;
+  memberAvailability?: AvailabilitySlot[];
 }
 
-const DAYS_HU = [
-  "Hétfő",
-  "Kedd",
-  "Szerda",
-  "Csütörtök",
-  "Péntek",
-  "Szombat",
-  "Vasárnap",
-];
+const DAYS_HU = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"];
 
 // Map display index (0=Mon) → dayOfWeek (1=Mon..6=Sat, 0=Sun)
 const DAY_MAP = [1, 2, 3, 4, 5, 6, 0];
@@ -46,11 +46,7 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(newH).padStart(2, "0")}:${String(newM).padStart(2, "0")}`;
 }
 
-function generateSlots(
-  rangeStart: string,
-  rangeEnd: string,
-  durationMin: number,
-): SlotEntry[] {
+function generateSlots(rangeStart: string, rangeEnd: string, durationMin: number): SlotEntry[] {
   const slots: SlotEntry[] = [];
   const [sh, sm] = rangeStart.split(":").map(Number);
   const [eh, em] = rangeEnd.split(":").map(Number);
@@ -74,6 +70,7 @@ function generateSlots(
 export function ServiceSlotPicker({
   service,
   memberId,
+  memberAvailability,
 }: ServiceSlotPickerProps) {
   const { data: slotsData, isLoading } = useServiceSlots(service.id, memberId);
   const setSlotsMut = useSetServiceSlots();
@@ -106,10 +103,9 @@ export function ServiceSlotPicker({
             toast.error("Ez az időpont már létezik");
             return d;
           }
-          const newSlots = [
-            ...d.slots,
-            { startTime: customTime, endTime },
-          ].sort((a, b) => a.startTime.localeCompare(b.startTime));
+          const newSlots = [...d.slots, { startTime: customTime, endTime }].sort((a, b) =>
+            a.startTime.localeCompare(b.startTime),
+          );
           return { ...d, slots: newSlots };
         }),
       );
@@ -123,33 +119,37 @@ export function ServiceSlotPicker({
     if (!slotsData?.data) return;
     const serverSlots = slotsData.data;
 
-    setDays((prev) =>
-      prev.map((day, idx) => {
-        const dow = DAY_MAP[idx];
-        const daySlots = serverSlots
-          .filter((s) => s.dayOfWeek === dow)
-          .map((s) => ({
-            startTime: s.startTime,
-            endTime: s.endTime,
-          }))
-          .sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const timeout = window.setTimeout(() => {
+      setDays((prev) =>
+        prev.map((day, idx) => {
+          const dow = DAY_MAP[idx];
+          const daySlots = serverSlots
+            .filter((s) => s.dayOfWeek === dow)
+            .map((s) => ({
+              startTime: s.startTime,
+              endTime: s.endTime,
+            }))
+            .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-        if (daySlots.length === 0) {
-          return { ...day, isEnabled: false, slots: [] };
-        }
+          if (daySlots.length === 0) {
+            return { ...day, isEnabled: false, slots: [] };
+          }
 
-        // Derive range from existing slots
-        const rangeStart = daySlots[0].startTime;
-        const rangeEnd = daySlots[daySlots.length - 1].endTime;
+          // Derive range from existing slots
+          const rangeStart = daySlots[0].startTime;
+          const rangeEnd = daySlots[daySlots.length - 1].endTime;
 
-        return {
-          isEnabled: true,
-          rangeStart,
-          rangeEnd,
-          slots: daySlots,
-        };
-      }),
-    );
+          return {
+            isEnabled: true,
+            rangeStart,
+            rangeEnd,
+            slots: daySlots,
+          };
+        }),
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [slotsData]);
 
   // When a day is enabled, generate all slots within the range
@@ -178,11 +178,7 @@ export function ServiceSlotPicker({
           if (i !== idx) return d;
           const updated = { ...d, [field]: value };
           // Regenerate all slots with new range (all enabled by default)
-          updated.slots = generateSlots(
-            updated.rangeStart,
-            updated.rangeEnd,
-            durationMin,
-          );
+          updated.slots = generateSlots(updated.rangeStart, updated.rangeEnd, durationMin);
           return updated;
         }),
       );
@@ -263,8 +259,7 @@ export function ServiceSlotPicker({
         <div>
           <h4 className="font-semibold">{service.name} — Időpontok</h4>
           <p className="text-xs text-muted-foreground">
-            Kb. {durationMin} perc / alkalom · Kattints az időpontokra a
-            ki/bekapcsoláshoz
+            Kb. {durationMin} perc / alkalom · Kattints az időpontokra a ki/bekapcsoláshoz
           </p>
         </div>
         <Button size="sm" onClick={handleSave} disabled={setSlotsMut.isPending}>
@@ -281,19 +276,20 @@ export function ServiceSlotPicker({
         {DAYS_HU.map((dayName, idx) => {
           const day = days[idx];
           const isExpanded = expandedDay === idx;
+          const dow = DAY_MAP[idx];
+          const avail = memberAvailability?.find((a) => a.dayOfWeek === dow);
+          const availDisabled = !avail || !avail.isEnabled;
+          const slotsOutsideAvail =
+            !availDisabled &&
+            day.isEnabled &&
+            day.slots.some((s) => s.startTime < avail.startTime || s.endTime > avail.endTime);
           // Generate all possible slots within the range (for rendering toggles)
-          const allPossible = generateSlots(
-            day.rangeStart,
-            day.rangeEnd,
-            durationMin,
-          );
+          const allPossible = generateSlots(day.rangeStart, day.rangeEnd, durationMin);
 
           // Pre-compute: merge grid + custom slots, track active set
           const gridTimes = new Set(allPossible.map((s) => s.startTime));
           const activeSet = new Set(day.slots.map((s) => s.startTime));
-          const customSlots = day.slots.filter(
-            (s) => !gridTimes.has(s.startTime),
-          );
+          const customSlots = day.slots.filter((s) => !gridTimes.has(s.startTime));
           const mergedSlots = [...allPossible, ...customSlots].sort((a, b) =>
             a.startTime.localeCompare(b.startTime),
           );
@@ -305,29 +301,33 @@ export function ServiceSlotPicker({
                 className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors"
                 onClick={() => setExpandedDay(isExpanded ? null : idx)}
               >
-                <label
-                  className="flex items-center gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <label className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <input
                     type="checkbox"
-                    checked={day.isEnabled}
+                    checked={day.isEnabled && !availDisabled}
                     onChange={() => handleToggleDay(idx)}
-                    className="h-4 w-4 rounded"
+                    disabled={availDisabled}
+                    className="h-4 w-4 rounded disabled:opacity-50"
                   />
                 </label>
-                <span className="text-sm font-medium w-24">{dayName}</span>
-                {day.isEnabled ? (
-                  <span className="text-xs text-muted-foreground flex-1">
-                    {day.slots.length} időpont ({day.rangeStart} -{" "}
-                    {day.rangeEnd})
+                <span className="w-20 shrink-0 text-sm font-medium sm:w-24">{dayName}</span>
+                {availDisabled ? (
+                  <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                    Zárva (munkaidő kikapcsolva)
+                  </span>
+                ) : day.isEnabled ? (
+                  <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                    {day.slots.length} időpont ({day.rangeStart} - {day.rangeEnd})
+                    {slotsOutsideAvail && (
+                      <span className="ml-0 block text-amber-600 sm:ml-2 sm:inline">
+                        ⚠ Időpontok kívül esnek
+                      </span>
+                    )}
                   </span>
                 ) : (
-                  <span className="text-xs text-muted-foreground flex-1">
-                    Zárva
-                  </span>
+                  <span className="min-w-0 flex-1 text-xs text-muted-foreground">Zárva</span>
                 )}
-                {day.isEnabled &&
+                {(day.isEnabled || availDisabled) &&
                   (isExpanded ? (
                     <ChevronUp className="h-4 w-4 text-muted-foreground" />
                   ) : (
@@ -336,123 +336,131 @@ export function ServiceSlotPicker({
               </div>
 
               {/* Expanded: range inputs + slot grid */}
-              {day.isEnabled && isExpanded && (
+              {(day.isEnabled || availDisabled) && isExpanded && (
                 <div className="px-3 pb-3 space-y-3 border-t bg-muted/20">
-                  {/* Time range */}
-                  <div className="flex items-center gap-2 pt-3">
-                    <Label className="text-xs whitespace-nowrap">
-                      Munkaidő:
-                    </Label>
-                    <Input
-                      type="time"
-                      value={day.rangeStart}
-                      onChange={(e) =>
-                        handleRangeChange(idx, "rangeStart", e.target.value)
-                      }
-                      className="w-28 h-8 text-xs"
-                    />
-                    <span className="text-muted-foreground text-xs">—</span>
-                    <Input
-                      type="time"
-                      value={day.rangeEnd}
-                      onChange={(e) =>
-                        handleRangeChange(idx, "rangeEnd", e.target.value)
-                      }
-                      className="w-28 h-8 text-xs"
-                    />
-                  </div>
+                  {availDisabled ? (
+                    <div className="flex items-center gap-2 mt-3 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      <span>
+                        A munkaidő ezen a napon ki van kapcsolva. Az itt beállított időpontok nem
+                        lesznek láthatóak az ügyfelek számára. Először kapcsold be a napot az
+                        „Szolgáltatások / Munkaidő" fülön.
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      {slotsOutsideAvail && (
+                        <div className="flex items-center gap-2 mt-3 p-2 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          <span>
+                            Egyes időpontok a munkaidőn kívül esnek ({avail.startTime}–
+                            {avail.endTime}). Ezeket az ügyfelek nem fogják látni.
+                          </span>
+                        </div>
+                      )}
+                      {/* Time range */}
+                      <div className="grid gap-2 pt-3 sm:grid-cols-[auto_minmax(0,7rem)_auto_minmax(0,7rem)] sm:items-center">
+                        <Label className="text-xs whitespace-nowrap">Munkaidő:</Label>
+                        <Input
+                          type="time"
+                          value={day.rangeStart}
+                          onChange={(e) => handleRangeChange(idx, "rangeStart", e.target.value)}
+                          className="h-8 w-full text-xs"
+                        />
+                        <span className="hidden text-muted-foreground text-xs sm:block">—</span>
+                        <Input
+                          type="time"
+                          value={day.rangeEnd}
+                          onChange={(e) => handleRangeChange(idx, "rangeEnd", e.target.value)}
+                          className="h-8 w-full text-xs"
+                        />
+                      </div>
 
-                  {/* Slot grid */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {mergedSlots.map((slot) => {
-                      const isActive = activeSet.has(slot.startTime);
-                      return (
-                        <button
-                          key={slot.startTime}
-                          type="button"
-                          onClick={() => handleToggleSlot(idx, slot.startTime)}
-                          className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border ${
-                            isActive
-                              ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                              : "bg-background text-muted-foreground border-border hover:border-primary/50"
-                          }`}
+                      {/* Slot grid */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {mergedSlots.map((slot) => {
+                          const isActive = activeSet.has(slot.startTime);
+                          return (
+                            <button
+                              key={slot.startTime}
+                              type="button"
+                              onClick={() => handleToggleSlot(idx, slot.startTime)}
+                              className={`px-2.5 py-1.5 rounded-md text-xs font-medium transition-all border ${
+                                isActive
+                                  ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                  : "bg-background text-muted-foreground border-border hover:border-primary/50"
+                              }`}
+                            >
+                              {slot.startTime}–{slot.endTime}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Custom time slot input */}
+                      <div className="grid gap-2 sm:grid-cols-[auto_minmax(0,7rem)_minmax(0,1fr)_auto] sm:items-center">
+                        <Label className="text-xs whitespace-nowrap">Egyéni időpont:</Label>
+                        <Input
+                          type="time"
+                          value={customTime}
+                          onChange={(e) => setCustomTime(e.target.value)}
+                          className="h-8 w-full text-xs"
+                          step="300"
+                        />
+                        <span className="min-w-0 text-xs text-muted-foreground">
+                          →{" "}
+                          {customTime
+                            ? `${customTime}–${addMinutes(customTime, durationMin)}`
+                            : "—"}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs sm:justify-self-end"
+                          onClick={() => handleAddCustomSlot(idx)}
+                          disabled={!customTime}
                         >
-                          {slot.startTime}–{slot.endTime}
-                        </button>
-                      );
-                    })}
-                  </div>
+                          <Plus className="h-3 w-3 mr-1" />
+                          Hozzáadás
+                        </Button>
+                      </div>
 
-                  {/* Custom time slot input */}
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs whitespace-nowrap">
-                      Egyéni időpont:
-                    </Label>
-                    <Input
-                      type="time"
-                      value={customTime}
-                      onChange={(e) => setCustomTime(e.target.value)}
-                      className="w-28 h-8 text-xs"
-                      step="300"
-                    />
-                    <span className="text-xs text-muted-foreground">
-                      →{" "}
-                      {customTime
-                        ? `${customTime}–${addMinutes(customTime, durationMin)}`
-                        : "—"}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-7"
-                      onClick={() => handleAddCustomSlot(idx)}
-                      disabled={!customTime}
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Hozzáadás
-                    </Button>
-                  </div>
-
-                  {/* Quick actions */}
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-7"
-                      onClick={() =>
-                        setDays((prev) =>
-                          prev.map((d, i) =>
-                            i === idx
-                              ? {
-                                  ...d,
-                                  slots: generateSlots(
-                                    d.rangeStart,
-                                    d.rangeEnd,
-                                    durationMin,
-                                  ),
-                                }
-                              : d,
-                          ),
-                        )
-                      }
-                    >
-                      Mind bekapcsolása
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-xs h-7"
-                      onClick={() =>
-                        setDays((prev) =>
-                          prev.map((d, i) =>
-                            i === idx ? { ...d, slots: [] } : d,
-                          ),
-                        )
-                      }
-                    >
-                      Mind kikapcsolása
-                    </Button>
-                  </div>
+                      {/* Quick actions */}
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() =>
+                            setDays((prev) =>
+                              prev.map((d, i) =>
+                                i === idx
+                                  ? {
+                                      ...d,
+                                      slots: generateSlots(d.rangeStart, d.rangeEnd, durationMin),
+                                    }
+                                  : d,
+                              ),
+                            )
+                          }
+                        >
+                          Mind bekapcsolása
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-7"
+                          onClick={() =>
+                            setDays((prev) =>
+                              prev.map((d, i) => (i === idx ? { ...d, slots: [] } : d)),
+                            )
+                          }
+                        >
+                          Mind kikapcsolása
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

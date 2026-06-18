@@ -13,6 +13,7 @@ import {
   setServiceSlotsSchema,
   updatePricingSettingsSchema,
   providerSearchSchema,
+  serviceMatrixSchema,
 } from "../validators/provider.validators.js";
 
 const router = Router();
@@ -22,11 +23,7 @@ const router = Router();
 // ============================================================================
 
 // Search / Discovery
-router.get(
-  "/search",
-  validate(providerSearchSchema, "query"),
-  providerController.searchProviders,
-);
+router.get("/search", validate(providerSearchSchema, "query"), providerController.searchProviders);
 
 // ============================================================================
 // AUTHENTICATED PROVIDER ROUTES
@@ -36,6 +33,7 @@ router.get(
 router.post(
   "/",
   authenticate,
+  requireRole("PROVIDER"),
   validate(createProviderSchema),
   providerController.createProvider,
 );
@@ -64,6 +62,21 @@ router.post(
   requireRole("PROVIDER", "EMPLOYEE"),
   validate(addServiceSchema),
   providerController.addService,
+);
+
+router.get(
+  "/me/service-matrix",
+  authenticate,
+  requireRole("PROVIDER", "EMPLOYEE"),
+  providerController.getServiceMatrix,
+);
+
+router.put(
+  "/me/service-matrix",
+  authenticate,
+  requireRole("PROVIDER", "EMPLOYEE"),
+  validate(serviceMatrixSchema),
+  providerController.upsertServiceMatrix,
 );
 
 router.patch(

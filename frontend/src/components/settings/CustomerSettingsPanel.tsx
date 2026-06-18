@@ -75,16 +75,18 @@ export function CustomerSettingsPanel() {
   const [addrIsDefault, setAddrIsDefault] = useState(false);
 
   // Expanded address cards
-  const [expandedAddressId, setExpandedAddressId] = useState<string | null>(
-    null,
-  );
+  const [expandedAddressId, setExpandedAddressId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+
+    const timeout = window.setTimeout(() => {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
       setPhone(user.phone || "");
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [user]);
 
   const handleSaveProfile = async () => {
@@ -223,10 +225,7 @@ export function CustomerSettingsPanel() {
     <div className="max-w-4xl mx-auto">
       <Tabs defaultValue="account" className="space-y-6">
         <TabsList className="flex w-full">
-          <TabsTrigger
-            value="account"
-            className="flex flex-1 items-center justify-center gap-2"
-          >
+          <TabsTrigger value="account" className="flex flex-1 items-center justify-center gap-2">
             <User className="h-4 w-4" />
             <span>Fiók</span>
           </TabsTrigger>
@@ -239,18 +238,12 @@ export function CustomerSettingsPanel() {
             <span>Értesítések</span>
           </TabsTrigger>
 
-          <TabsTrigger
-            value="addresses"
-            className="flex flex-1 items-center justify-center gap-2"
-          >
+          <TabsTrigger value="addresses" className="flex flex-1 items-center justify-center gap-2">
             <MapPin className="h-4 w-4" />
             <span>Címek</span>
           </TabsTrigger>
 
-          <TabsTrigger
-            value="security"
-            className="flex flex-1 items-center justify-center gap-2"
-          >
+          <TabsTrigger value="security" className="flex flex-1 items-center justify-center gap-2">
             <Shield className="h-4 w-4" />
             <span>Biztonság</span>
           </TabsTrigger>
@@ -266,11 +259,7 @@ export function CustomerSettingsPanel() {
                 <div className="relative">
                   <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center overflow-hidden">
                     {user?.avatarUrl ? (
-                      <img
-                        src={user.avatarUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                      <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <Camera className="h-8 w-8 text-muted-foreground" />
                     )}
@@ -287,9 +276,7 @@ export function CustomerSettingsPanel() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">Profilkép</p>
-                  <p className="text-xs text-muted-foreground">
-                    JPG, PNG max 5MB
-                  </p>
+                  <p className="text-xs text-muted-foreground">JPG, PNG max 5MB</p>
                 </div>
               </div>
 
@@ -314,32 +301,18 @@ export function CustomerSettingsPanel() {
                 </div>
                 <div>
                   <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={user?.email || ""}
-                    disabled
-                  />
+                  <Input id="email" type="email" value={user?.email || ""} disabled />
                 </div>
                 <div>
                   <Label htmlFor="phone">Telefon</Label>
-                  <Input
-                    id="phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
+                  <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 </div>
               </div>
             </div>
 
             <div className="flex justify-end">
-              <Button
-                onClick={handleSaveProfile}
-                disabled={updateProfile.isPending}
-              >
-                {updateProfile.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : null}
+              <Button onClick={handleSaveProfile} disabled={updateProfile.isPending}>
+                {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Mentés
               </Button>
             </div>
@@ -361,54 +334,40 @@ export function CustomerSettingsPanel() {
                   </div>
                   <Switch
                     checked={notifPrefs?.emailBookings ?? true}
-                    onCheckedChange={(val) =>
-                      updateNotifPrefs.mutate({ emailBookings: val })
-                    }
+                    onCheckedChange={(val) => updateNotifPrefs.mutate({ emailBookings: val })}
                   />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
                     <h4>Email üzenetek</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Szolgáltatóktól érkező üzenetek
-                    </p>
+                    <p className="text-sm text-muted-foreground">Szolgáltatóktól érkező üzenetek</p>
                   </div>
                   <Switch
                     checked={notifPrefs?.emailMessages ?? true}
-                    onCheckedChange={(val) =>
-                      updateNotifPrefs.mutate({ emailMessages: val })
-                    }
+                    onCheckedChange={(val) => updateNotifPrefs.mutate({ emailMessages: val })}
                   />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
                     <h4>SMS emlékeztetők</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Emlékeztető a találkozó előtt
-                    </p>
+                    <p className="text-sm text-muted-foreground">Emlékeztető a találkozó előtt</p>
                   </div>
                   <Switch
                     checked={notifPrefs?.smsReminders ?? true}
-                    onCheckedChange={(val) =>
-                      updateNotifPrefs.mutate({ smsReminders: val })
-                    }
+                    onCheckedChange={(val) => updateNotifPrefs.mutate({ smsReminders: val })}
                   />
                 </div>
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div>
                     <h4>Marketing értesítések</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Kedvezmények és ajánlatok
-                    </p>
+                    <p className="text-sm text-muted-foreground">Kedvezmények és ajánlatok</p>
                   </div>
                   <Switch
                     checked={notifPrefs?.emailPromotions ?? false}
-                    onCheckedChange={(val) =>
-                      updateNotifPrefs.mutate({ emailPromotions: val })
-                    }
+                    onCheckedChange={(val) => updateNotifPrefs.mutate({ emailPromotions: val })}
                   />
                 </div>
               </div>
@@ -445,9 +404,7 @@ export function CustomerSettingsPanel() {
               {showAddressForm && (
                 <Card className="p-4 border-2 border-primary/20 space-y-4 mb-4">
                   <h4 className="font-medium">
-                    {editingAddressId
-                      ? "Cím szerkesztése"
-                      : "Új cím hozzáadása"}
+                    {editingAddressId ? "Cím szerkesztése" : "Új cím hozzáadása"}
                   </h4>
 
                   {/* Label presets */}
@@ -485,8 +442,7 @@ export function CustomerSettingsPanel() {
                       <div className="text-center py-6 border rounded-lg bg-muted/50">
                         <MapPin className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
                         <p className="text-sm text-muted-foreground">
-                          A térkép nem tölthető be. Add meg a címet kézzel az
-                          alábbi mezőkben.
+                          A térkép nem tölthető be. Add meg a címet kézzel az alábbi mezőkben.
                         </p>
                       </div>
                     }
@@ -551,9 +507,7 @@ export function CustomerSettingsPanel() {
                     </Button>
                     <Button
                       onClick={handleSaveAddress}
-                      disabled={
-                        addAddress.isPending || updateAddressMut.isPending
-                      }
+                      disabled={addAddress.isPending || updateAddressMut.isPending}
                     >
                       {(addAddress.isPending || updateAddressMut.isPending) && (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -568,9 +522,7 @@ export function CustomerSettingsPanel() {
               {addresses.length === 0 && !showAddressForm ? (
                 <div className="text-center py-8">
                   <MapPin className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-muted-foreground text-sm">
-                    Nincs mentett cím
-                  </p>
+                  <p className="text-muted-foreground text-sm">Nincs mentett cím</p>
                   <p className="text-muted-foreground text-xs mt-1 mb-4">
                     Adj hozzá címeket a gyorsabb foglaláshoz
                   </p>
@@ -599,16 +551,12 @@ export function CustomerSettingsPanel() {
                           <div
                             className="flex-1 cursor-pointer"
                             onClick={() =>
-                              setExpandedAddressId(
-                                expandedAddressId === addr.id ? null : addr.id,
-                              )
+                              setExpandedAddressId(expandedAddressId === addr.id ? null : addr.id)
                             }
                           >
                             <div className="flex items-center gap-2 mb-1">
                               <MapPin className="h-4 w-4 text-primary shrink-0" />
-                              <h4 className="font-medium">
-                                {addr.label || "Cím"}
-                              </h4>
+                              <h4 className="font-medium">{addr.label || "Cím"}</h4>
                               {addr.isDefault && (
                                 <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
                                   Alapértelmezett
@@ -697,9 +645,7 @@ export function CustomerSettingsPanel() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="confirmPassword">
-                        Jelszó megerősítése
-                      </Label>
+                      <Label htmlFor="confirmPassword">Jelszó megerősítése</Label>
                       <Input
                         id="confirmPassword"
                         type="password"

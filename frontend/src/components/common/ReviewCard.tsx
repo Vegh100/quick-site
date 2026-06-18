@@ -63,13 +63,9 @@ export function ReviewCard({
           <div className="flex items-start justify-between">
             <div>
               <h4 className="font-semibold text-sm">{customer}</h4>
-              {service && (
-                <p className="text-xs text-muted-foreground">{service}</p>
-              )}
+              {service && <p className="text-xs text-muted-foreground">{service}</p>}
             </div>
-            <span className="text-xs text-muted-foreground shrink-0 ml-2">
-              {date}
-            </span>
+            <span className="text-xs text-muted-foreground shrink-0 ml-2">{date}</span>
           </div>
 
           {/* Stars */}
@@ -78,9 +74,7 @@ export function ReviewCard({
               <Star
                 key={i}
                 className={`h-4 w-4 ${
-                  i < rating
-                    ? "fill-yellow-400 text-yellow-400"
-                    : "text-muted-foreground/30"
+                  i < rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"
                 }`}
               />
             ))}
@@ -88,9 +82,7 @@ export function ReviewCard({
 
           {/* Comment */}
           {comment && (
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              &bdquo;{comment}&rdquo;
-            </p>
+            <p className="text-sm text-muted-foreground leading-relaxed">&bdquo;{comment}&rdquo;</p>
           )}
 
           {/* Provider Response (if exists) */}
@@ -98,9 +90,7 @@ export function ReviewCard({
             <div className="mt-3 pt-3 border-t border-border/50">
               <div className="flex items-center gap-1.5 mb-1.5">
                 <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                <span className="text-xs font-semibold text-primary">
-                  Szolgáltató válasza
-                </span>
+                <span className="text-xs font-semibold text-primary">Szolgáltató válasza</span>
                 {providerRespondedAt && (
                   <span className="text-[10px] text-muted-foreground ml-1">
                     {new Date(providerRespondedAt).toLocaleDateString("hu-HU")}

@@ -47,8 +47,8 @@ export function InviteAcceptPage() {
           </div>
           <h2 className="text-xl font-semibold">Érvénytelen meghívó</h2>
           <p className="text-muted-foreground">
-            Ez a meghívó link érvénytelen vagy már felhasználták. Kérd meg a
-            céged tulajdonosát, hogy küldjön egy új meghívót.
+            Ez a meghívó link érvénytelen vagy már felhasználták. Kérd meg a céged tulajdonosát,
+            hogy küldjön egy új meghívót.
           </p>
           <Button variant="outline" onClick={() => navigate("/")}>
             Vissza a főoldalra
@@ -89,9 +89,7 @@ export function InviteAcceptPage() {
       toast.success("Sikeres regisztráció! Üdvözlünk a csapatban!");
       navigate("/szolgaltato", { replace: true });
     } catch (err: any) {
-      toast.error(
-        err?.response?.data?.error || "Hiba történt a regisztráció során",
-      );
+      toast.error(err?.response?.data?.error || "Hiba történt a regisztráció során");
     } finally {
       setIsSubmitting(false);
     }
@@ -114,12 +112,9 @@ export function InviteAcceptPage() {
             </div>
           )}
           <div>
-            <h2 className="text-xl font-semibold">
-              Csatlakozás: {invite.provider.businessName}
-            </h2>
+            <h2 className="text-xl font-semibold">Csatlakozás: {invite.provider.businessName}</h2>
             <p className="text-muted-foreground text-sm mt-1">
-              Meghívtak, hogy csatlakozz alkalmazottként. Hozd létre a fiókodat
-              a csatlakozáshoz.
+              Meghívtak, hogy csatlakozz alkalmazottként. Hozd létre a fiókodat a csatlakozáshoz.
             </p>
           </div>
         </div>

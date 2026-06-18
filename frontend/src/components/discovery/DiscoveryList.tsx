@@ -1,17 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "../ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { ServiceCard } from "../common/ServiceCard";
 import { Search, Loader2 } from "lucide-react";
 import { useProviderSearch } from "../../hooks/useApi";
 import { useCategories } from "../../hooks/useApi";
+import { formatServicePrice } from "../../lib/pricing";
 
 export function DiscoveryList() {
   const navigate = useNavigate();
@@ -89,11 +84,7 @@ export function DiscoveryList() {
               provider.categories?.[0]?.category?.name ||
               firstService?.serviceType?.category?.name ||
               "Szolgáltatás";
-            const priceLabel = firstService
-              ? `${Number(firstService.priceAmount)} ${firstService.priceCurrency}${
-                  firstService.priceType === "PER_HOUR" ? "/óra" : ""
-                }`
-              : "—";
+            const priceLabel = firstService ? formatServicePrice(firstService) : "—";
             return (
               <ServiceCard
                 key={provider.id}

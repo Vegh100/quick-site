@@ -20,11 +20,7 @@ router.use(requireRole("PROVIDER"));
 router.get("/", memberController.listMembers);
 
 // Invite new member (generates invite token)
-router.post(
-  "/invite",
-  validate(inviteMemberSchema),
-  memberController.inviteMember,
-);
+router.post("/invite", validate(inviteMemberSchema), memberController.inviteMember);
 
 // Get pending invites for the current user
 router.get("/invites/pending", memberController.getPendingInvites);
@@ -33,21 +29,13 @@ router.get("/invites/pending", memberController.getPendingInvites);
 router.get("/:memberId/detail", memberController.getMemberDetail);
 
 // Update member (displayName)
-router.patch(
-  "/:memberId",
-  validate(updateMemberSchema),
-  memberController.updateMember,
-);
+router.patch("/:memberId", validate(updateMemberSchema), memberController.updateMember);
 
 // Deactivate member
 router.delete("/:memberId", memberController.deactivateMember);
 
 // Assign/remove service to/from member
-router.post(
-  "/:memberId/services",
-  validate(assignServiceSchema),
-  memberController.assignService,
-);
+router.post("/:memberId/services", validate(assignServiceSchema), memberController.assignService);
 router.delete("/:memberId/services/:serviceId", memberController.removeService);
 
 // Set member availability/schedule

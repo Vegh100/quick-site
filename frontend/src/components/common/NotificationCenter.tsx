@@ -122,7 +122,10 @@ export function NotificationCenter({ userType }: NotificationCenterProps) {
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           {unreadCount > 0 && (
-            <Badge className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center" variant="destructive">
+            <Badge
+              className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 flex items-center justify-center"
+              variant="destructive"
+            >
               {unreadCount}
             </Badge>
           )}
@@ -147,12 +150,16 @@ export function NotificationCenter({ userType }: NotificationCenterProps) {
                   }`}
                 >
                   <div className="flex gap-3">
-                    <div className={`p-2 rounded-lg h-fit ${
-                      notification.read ? "bg-muted" : "bg-primary/10"
-                    }`}>
-                      <Icon className={`h-4 w-4 ${
-                        notification.read ? "text-muted-foreground" : "text-primary"
-                      }`} />
+                    <div
+                      className={`p-2 rounded-lg h-fit ${
+                        notification.read ? "bg-muted" : "bg-primary/10"
+                      }`}
+                    >
+                      <Icon
+                        className={`h-4 w-4 ${
+                          notification.read ? "text-muted-foreground" : "text-primary"
+                        }`}
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2 mb-1">
@@ -161,12 +168,8 @@ export function NotificationCenter({ userType }: NotificationCenterProps) {
                           <div className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" />
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground mb-1">
-                        {notification.message}
-                      </p>
-                      <span className="text-xs text-muted-foreground">
-                        {notification.time}
-                      </span>
+                      <p className="text-sm text-muted-foreground mb-1">{notification.message}</p>
+                      <span className="text-xs text-muted-foreground">{notification.time}</span>
                     </div>
                   </div>
                 </div>

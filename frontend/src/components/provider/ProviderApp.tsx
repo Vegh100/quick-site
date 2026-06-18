@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useParams, useNavigate, useMatch } from "react-router-dom";
+import { useParams, useNavigate, useMatch, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   useMyProvider,
@@ -14,13 +13,8 @@ import {
 } from "../../hooks/useApi";
 import { HeaderWithSettings } from "../layout/HeaderWithSettings";
 import { Footer } from "../layout/Footer";
-import {
-  PersonalDashboard,
-  CompanyDashboard,
-} from "../dashboard/CompanyDashboard";
+import { PersonalDashboard, CompanyDashboard } from "../dashboard/CompanyDashboard";
 import { ReviewCard } from "../common/ReviewCard";
-import { PaywallModal } from "../pricing/PaywallModal";
-import { ReferralModal } from "../common/ReferralModal";
 import { ProviderSettingsPanel } from "../settings/ProviderSettingsPanel";
 import { EmployeeProfilePanel } from "../settings/EmployeeProfilePanel";
 import { ProviderOnboardingFlow } from "./ProviderOnboardingFlow";
@@ -30,18 +24,15 @@ import { CalendarView } from "../booking/CalendarView";
 import { MessagingPage } from "../messaging/MessagingPage";
 import { PortfolioManager } from "../portfolio/PortfolioGallery";
 import { ExportReportPanel } from "../export/ExportReportPanel";
+import { GigManager } from "../gigs/GigManager";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 import {
-  Plus,
-  Gift,
-  CreditCard,
   Calendar,
   Clock,
   Loader2,
-  Star,
   LogOut,
   ArrowLeft,
   User,
@@ -75,11 +66,25 @@ const STATUS_HU: Record<BookingStatus, string> = {
   CANCELLED: "Lemondva",
 };
 
+type ApiError = {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+};
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const apiError = error as ApiError;
+  return apiError.response?.data?.error || fallback;
+}
+
 // Provider navigation items
 const ownerNavItems = [
   { id: "dashboard", label: "Dashboard" },
   { id: "bookings", label: "Foglalásaim" },
   { id: "calendar", label: "Naptáram" },
+  { id: "gigs", label: "Szolgáltatások" },
   { id: "clients", label: "Ügyfeleim" },
   { id: "team", label: "Csapat" },
   { id: "messages", label: "Üzenetek", icon: MessageSquare },
@@ -99,6 +104,7 @@ const TAB_FROM_URL: Record<string, string> = {
   foglalasok: "bookings",
   naptar: "calendar",
   ugyfelek: "clients",
+  szolgaltatasok: "gigs",
   csapat: "team",
   beallitasok: "settings",
   profil: "profile",
@@ -110,6 +116,7 @@ const TAB_TO_URL: Record<string, string> = {
   bookings: "foglalasok",
   calendar: "naptar",
   clients: "ugyfelek",
+  gigs: "szolgaltatasok",
   team: "csapat",
   settings: "beallitasok",
   profile: "profil",
@@ -126,6 +133,7 @@ export function ProviderApp() {
   const bookingMatch = useMatch("/szolgaltato/foglalas/:bookingId");
   const detailBookingId = bookingId || bookingMatch?.params.bookingId;
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, logout } = useAuth();
   const isOwner = user?.role === "PROVIDER";
 
@@ -141,9 +149,6 @@ export function ProviderApp() {
       navigate(`/szolgaltato/${TAB_TO_URL[tab] || tab}`);
     }
   };
-
-  const [paywallModalOpen, setPaywallModalOpen] = useState(false);
-  const [referralModalOpen, setReferralModalOpen] = useState(false);
 
   // API calls
   const {
@@ -165,26 +170,21 @@ export function ProviderApp() {
   const personalReady = !isOwner || !isLoadingTeam;
 
   // Personal stats (filtered by owner's member ID for owners)
-  const { data: statsData } = useProviderStats(
-    !!provider && personalReady,
-    ownerMemberId,
-  );
+  const { data: statsData } = useProviderStats(!!provider && personalReady, ownerMemberId);
   // Company-wide stats (no memberId filter)
   const { data: companyStatsData } = useProviderStats(!!provider && isOwner);
-  const { data: bookingsData, isLoading: loadingBookings } =
-    useProviderBookings(
-      {
-        page: 1,
-        limit: 20,
-        ...(ownerMemberId ? { memberId: ownerMemberId } : {}),
-      },
-      !!provider && personalReady,
-    );
+  const { data: bookingsData, isLoading: loadingBookings } = useProviderBookings(
+    {
+      page: 1,
+      limit: 20,
+      ...(ownerMemberId ? { memberId: ownerMemberId } : {}),
+    },
+    !!provider && personalReady,
+  );
   const { data: reviewsData } = useProviderReviews(provider?.id);
   const respondToReview = useRespondToReview();
   const updateStatus = useUpdateBookingStatus();
-  const { data: singleBookingData, isLoading: loadingSingleBooking } =
-    useBooking(detailBookingId);
+  const { data: singleBookingData, isLoading: loadingSingleBooking } = useBooking(detailBookingId);
   const singleBooking = singleBookingData?.data;
 
   const stats = statsData?.data;
@@ -197,8 +197,7 @@ export function ProviderApp() {
       { id: bookingId, status },
       {
         onSuccess: () => toast.success("Foglalás állapota frissítve!"),
-        onError: (err: any) =>
-          toast.error(err?.response?.data?.error || "Hiba történt"),
+        onError: (err: unknown) => toast.error(getApiErrorMessage(err, "Hiba történt")),
       },
     );
   };
@@ -240,19 +239,12 @@ export function ProviderApp() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1>
-                  {isOwner ? "Üzleti beállítások" : "Szolgáltatás beállítások"}
-                </h1>
+                <h1>{isOwner ? "Üzleti beállítások" : "Beállítások"}</h1>
                 <p className="text-muted-foreground">
-                  {isOwner
-                    ? "Vállalkozásod kezelése"
-                    : "Szolgáltatások és időpontok kezelése"}
+                  {isOwner ? "Vállalkozásod kezelése" : "Időpontok és profil kezelése"}
                 </p>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => setActiveTab("dashboard")}
-              >
+              <Button variant="outline" onClick={() => setActiveTab("dashboard")}>
                 Vissza
               </Button>
             </div>
@@ -283,14 +275,9 @@ export function ProviderApp() {
             <div className="flex items-center justify-between">
               <div>
                 <h1>Profil beállítások</h1>
-                <p className="text-muted-foreground">
-                  Személyes adatok kezelése
-                </p>
+                <p className="text-muted-foreground">Személyes adatok kezelése</p>
               </div>
-              <Button
-                variant="outline"
-                onClick={() => setActiveTab("dashboard")}
-              >
+              <Button variant="outline" onClick={() => setActiveTab("dashboard")}>
                 Vissza
               </Button>
             </div>
@@ -348,32 +335,25 @@ export function ProviderApp() {
         </div>
       </nav>
 
-      <main className="flex-1 container mx-auto px-4 py-8">
+      <main id="main-content" className="flex-1 container mx-auto px-4 py-8">
         {/* Dashboard Tab */}
         {activeTab === "dashboard" && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1>Dashboard</h1>
-                <p className="text-muted-foreground">
-                  {provider?.businessName || "Vállalkozásod áttekintése"}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setReferralModalOpen(true)}
-                >
-                  <Gift className="mr-2 h-4 w-4" />
-                  Ajánlás
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setPaywallModalOpen(true)}
-                >
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Csomag
-                </Button>
+            {/* Welcome banner */}
+            <div className="relative overflow-hidden rounded-xl border bg-white shadow-sm">
+              <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-secondary to-[#2aa7a5]" />
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-6">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Üdvözöljük vissza</p>
+                  <h1 className="text-2xl font-bold leading-tight">
+                    {user?.firstName
+                      ? `${user.firstName}${user.lastName ? " " + user.lastName : ""}!`
+                      : provider?.businessName || "Dashboard"}
+                  </h1>
+                  {provider?.businessName && (
+                    <p className="text-muted-foreground text-sm">{provider.businessName}</p>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -388,7 +368,7 @@ export function ProviderApp() {
             {/* Recent Reviews */}
             {reviews.length > 0 && (
               <Card className="p-6">
-                <h3 className="mb-4">Legutóbbi értékelések</h3>
+                <h3 className="font-semibold text-base mb-4">Legutóbbi értékelések</h3>
                 <div className="space-y-4">
                   {reviews.slice(0, 3).map((review) => (
                     <ReviewCard
@@ -397,9 +377,7 @@ export function ProviderApp() {
                       customer={`${review.author?.firstName || ""} ${review.author?.lastName || ""}`}
                       rating={review.rating}
                       comment={review.comment || ""}
-                      date={new Date(review.createdAt).toLocaleDateString(
-                        "hu-HU",
-                      )}
+                      date={new Date(review.createdAt).toLocaleDateString("hu-HU")}
                       service={review.booking?.service?.name || ""}
                       providerResponse={review.providerResponse}
                       providerRespondedAt={review.providerRespondedAt}
@@ -422,9 +400,7 @@ export function ProviderApp() {
             <div>
               <h1>{isOwner ? "Foglalásaim" : "Foglalások"}</h1>
               <p className="text-muted-foreground">
-                {isOwner
-                  ? "Saját foglalásaid kezelése"
-                  : "Kezelj és erősíts meg foglalásokat"}
+                {isOwner ? "Saját foglalásaid kezelése" : "Kezelj és erősíts meg foglalásokat"}
               </p>
             </div>
 
@@ -434,9 +410,7 @@ export function ProviderApp() {
               </div>
             ) : bookings.length === 0 ? (
               <Card className="p-8 text-center">
-                <p className="text-muted-foreground">
-                  Még nincsenek foglalások
-                </p>
+                <p className="text-muted-foreground">Még nincsenek foglalások</p>
               </Card>
             ) : (
               <div className="space-y-4">
@@ -444,9 +418,7 @@ export function ProviderApp() {
                   <Card
                     key={booking.id}
                     className="p-6 hover:shadow-md transition-shadow cursor-pointer"
-                    onClick={() =>
-                      navigate(`/szolgaltato/foglalas/${booking.id}`)
-                    }
+                    onClick={() => navigate(`/szolgaltato/foglalas/${booking.id}`)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex gap-4">
@@ -456,18 +428,13 @@ export function ProviderApp() {
                         <div>
                           <h3>{booking.service?.name || "Szolgáltatás"}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {booking.customer?.firstName}{" "}
-                            {booking.customer?.lastName}
-                            {booking.customer?.email
-                              ? ` · ${booking.customer.email}`
-                              : ""}
+                            {booking.customer?.firstName} {booking.customer?.lastName}
+                            {booking.customer?.email ? ` · ${booking.customer.email}` : ""}
                           </p>
                           <div className="flex gap-4 text-sm text-muted-foreground mt-1">
                             <div className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {new Date(
-                                booking.scheduledDate,
-                              ).toLocaleDateString("hu-HU")}
+                              {new Date(booking.scheduledDate).toLocaleDateString("hu-HU")}
                             </div>
                             <div className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
@@ -497,12 +464,7 @@ export function ProviderApp() {
         {activeTab === "booking-detail" && detailBookingId && (
           <div className="space-y-6">
             <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate(-1)}
-                className="gap-1.5"
-              >
+              <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="gap-1.5">
                 <ArrowLeft className="h-4 w-4" />
                 Vissza
               </Button>
@@ -514,9 +476,7 @@ export function ProviderApp() {
               </div>
             ) : !singleBooking ? (
               <Card className="p-8 text-center">
-                <p className="text-muted-foreground">
-                  A foglalás nem található
-                </p>
+                <p className="text-muted-foreground">A foglalás nem található</p>
               </Card>
             ) : (
               <>
@@ -529,18 +489,11 @@ export function ProviderApp() {
                       </h1>
                       <p className="text-muted-foreground mt-1">
                         Foglalás azonosító:{" "}
-                        <span className="font-mono text-xs">
-                          {singleBooking.id.slice(0, 8)}...
-                        </span>
+                        <span className="font-mono text-xs">{singleBooking.id.slice(0, 8)}...</span>
                       </p>
                     </div>
-                    <Badge
-                      className={
-                        STATUS_COLORS[singleBooking.status as BookingStatus]
-                      }
-                    >
-                      {STATUS_HU[singleBooking.status as BookingStatus] ||
-                        singleBooking.status}
+                    <Badge className={STATUS_COLORS[singleBooking.status as BookingStatus]}>
+                      {STATUS_HU[singleBooking.status as BookingStatus] || singleBooking.status}
                     </Badge>
                   </div>
                 </Card>
@@ -557,9 +510,7 @@ export function ProviderApp() {
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Dátum</span>
                         <span className="font-medium">
-                          {new Date(
-                            singleBooking.scheduledDate,
-                          ).toLocaleDateString("hu-HU", {
+                          {new Date(singleBooking.scheduledDate).toLocaleDateString("hu-HU", {
                             year: "numeric",
                             month: "long",
                             day: "numeric",
@@ -569,52 +520,35 @@ export function ProviderApp() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Kezdés</span>
-                        <span className="font-medium">
-                          {singleBooking.scheduledTime}
-                        </span>
+                        <span className="font-medium">{singleBooking.scheduledTime}</span>
                       </div>
                       {singleBooking.scheduledEndTime && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Befejezés
-                          </span>
-                          <span className="font-medium">
-                            {singleBooking.scheduledEndTime}
-                          </span>
+                          <span className="text-muted-foreground">Befejezés</span>
+                          <span className="font-medium">{singleBooking.scheduledEndTime}</span>
                         </div>
                       )}
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Időtartam</span>
-                        <span className="font-medium">
-                          {singleBooking.durationMin} perc
-                        </span>
+                        <span className="font-medium">{singleBooking.durationMin} perc</span>
                       </div>
                       <div className="flex justify-between border-t pt-3 mt-1">
-                        <span className="text-muted-foreground">
-                          Létrehozva
-                        </span>
+                        <span className="text-muted-foreground">Létrehozva</span>
                         <span className="font-medium">
-                          {new Date(singleBooking.createdAt).toLocaleDateString(
-                            "hu-HU",
-                            {
-                              year: "numeric",
-                              month: "short",
-                              day: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            },
-                          )}
+                          {new Date(singleBooking.createdAt).toLocaleDateString("hu-HU", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
                         </span>
                       </div>
                       {singleBooking.completedAt && (
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Befejezve
-                          </span>
+                          <span className="text-muted-foreground">Befejezve</span>
                           <span className="font-medium">
-                            {new Date(
-                              singleBooking.completedAt,
-                            ).toLocaleDateString("hu-HU", {
+                            {new Date(singleBooking.completedAt).toLocaleDateString("hu-HU", {
                               year: "numeric",
                               month: "short",
                               day: "numeric",
@@ -646,32 +580,29 @@ export function ProviderApp() {
                           <span className="text-muted-foreground flex items-center gap-1">
                             <Mail className="h-3 w-3" /> Email
                           </span>
-                          <span className="font-medium">
-                            {singleBooking.customer.email}
-                          </span>
+                          <span className="font-medium">{singleBooking.customer.email}</span>
                         </div>
                       )}
-                      {(singleBooking.customer as any)?.phone && (
+                      {singleBooking.customer?.phone && (
                         <div className="flex justify-between">
                           <span className="text-muted-foreground flex items-center gap-1">
                             <Phone className="h-3 w-3" /> Telefon
                           </span>
-                          <span className="font-medium">
-                            {(singleBooking.customer as any).phone}
-                          </span>
+                          <span className="font-medium">{singleBooking.customer.phone}</span>
                         </div>
                       )}
                     </div>
-                    {singleBooking.customer?.id &&
-                      singleBooking.status !== "CANCELLED" && (
-                        <div className="mt-4 pt-4 border-t">
-                          <MessageCustomerButton
-                            customerId={singleBooking.customer.id}
-                            customerName={`${singleBooking.customer?.firstName || ""} ${singleBooking.customer?.lastName || ""}`.trim()}
-                            onNavigate={() => setActiveTab("messages")}
-                          />
-                        </div>
-                      )}
+                    {singleBooking.customer?.id && singleBooking.status !== "CANCELLED" && (
+                      <div className="mt-4 pt-4 border-t">
+                        <MessageCustomerButton
+                          customerId={singleBooking.customer.id}
+                          customerName={`${singleBooking.customer?.firstName || ""} ${singleBooking.customer?.lastName || ""}`.trim()}
+                          onNavigate={(customerId) =>
+                            navigate(`/szolgaltato/uzenetek?userId=${customerId}`)
+                          }
+                        />
+                      </div>
+                    )}
                   </Card>
 
                   {/* Service & Price */}
@@ -682,18 +613,13 @@ export function ProviderApp() {
                     </h3>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">
-                          Szolgáltatás
-                        </span>
-                        <span className="font-medium">
-                          {singleBooking.service?.name || "—"}
-                        </span>
+                        <span className="text-muted-foreground">Szolgáltatás</span>
+                        <span className="font-medium">{singleBooking.service?.name || "—"}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Ár</span>
                         <span className="font-semibold text-lg">
-                          {Number(singleBooking.totalAmount)}{" "}
-                          {singleBooking.currency}
+                          {Number(singleBooking.totalAmount)} {singleBooking.currency}
                         </span>
                       </div>
                       {singleBooking.service?.description && (
@@ -742,83 +668,52 @@ export function ProviderApp() {
                 {/* Cancel reason */}
                 {singleBooking.cancelReason && (
                   <Card className="p-6 border-red-200 bg-red-50/50">
-                    <h3 className="font-semibold mb-2 text-red-700">
-                      Lemondás oka
-                    </h3>
-                    <p className="text-sm text-red-600">
-                      {singleBooking.cancelReason}
-                    </p>
+                    <h3 className="font-semibold mb-2 text-red-700">Lemondás oka</h3>
+                    <p className="text-sm text-red-600">{singleBooking.cancelReason}</p>
                   </Card>
                 )}
 
                 {/* Actions */}
-                {singleBooking.status !== "CANCELLED" &&
-                  singleBooking.status !== "COMPLETED" && (
-                    <Card className="p-6">
-                      <h3 className="font-semibold mb-4">Műveletek</h3>
-                      <div className="flex flex-wrap gap-3">
-                        {singleBooking.status === "PENDING" && (
-                          <>
-                            <Button
-                              onClick={() =>
-                                handleStatusUpdate(
-                                  singleBooking.id,
-                                  "CONFIRMED",
-                                )
-                              }
-                            >
-                              Elfogadás
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              onClick={() =>
-                                handleStatusUpdate(
-                                  singleBooking.id,
-                                  "CANCELLED",
-                                )
-                              }
-                            >
-                              Elutasítás
-                            </Button>
-                          </>
-                        )}
-                        {singleBooking.status === "CONFIRMED" && (
-                          <>
-                            <Button
-                              onClick={() =>
-                                handleStatusUpdate(
-                                  singleBooking.id,
-                                  "IN_PROGRESS",
-                                )
-                              }
-                            >
-                              Indítás
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              onClick={() =>
-                                handleStatusUpdate(
-                                  singleBooking.id,
-                                  "CANCELLED",
-                                )
-                              }
-                            >
-                              Lemondás
-                            </Button>
-                          </>
-                        )}
-                        {singleBooking.status === "IN_PROGRESS" && (
-                          <Button
-                            onClick={() =>
-                              handleStatusUpdate(singleBooking.id, "COMPLETED")
-                            }
-                          >
-                            Befejezés
+                {singleBooking.status !== "CANCELLED" && singleBooking.status !== "COMPLETED" && (
+                  <Card className="p-6">
+                    <h3 className="font-semibold mb-4">Műveletek</h3>
+                    <div className="flex flex-wrap gap-3">
+                      {singleBooking.status === "PENDING" && (
+                        <>
+                          <Button onClick={() => handleStatusUpdate(singleBooking.id, "CONFIRMED")}>
+                            Elfogadás
                           </Button>
-                        )}
-                      </div>
-                    </Card>
-                  )}
+                          <Button
+                            variant="destructive"
+                            onClick={() => handleStatusUpdate(singleBooking.id, "CANCELLED")}
+                          >
+                            Elutasítás
+                          </Button>
+                        </>
+                      )}
+                      {singleBooking.status === "CONFIRMED" && (
+                        <>
+                          <Button
+                            onClick={() => handleStatusUpdate(singleBooking.id, "IN_PROGRESS")}
+                          >
+                            Indítás
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => handleStatusUpdate(singleBooking.id, "CANCELLED")}
+                          >
+                            Lemondás
+                          </Button>
+                        </>
+                      )}
+                      {singleBooking.status === "IN_PROGRESS" && (
+                        <Button onClick={() => handleStatusUpdate(singleBooking.id, "COMPLETED")}>
+                          Befejezés
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                )}
               </>
             )}
           </div>
@@ -830,9 +725,7 @@ export function ProviderApp() {
             <div>
               <h1>{isOwner ? "Naptáram" : "Naptár"}</h1>
               <p className="text-muted-foreground">
-                {isOwner
-                  ? "Saját foglalásaid naptári nézete"
-                  : "Foglalásaid naptári nézete"}
+                {isOwner ? "Saját foglalásaid naptári nézete" : "Foglalásaid naptári nézete"}
               </p>
             </div>
             {personalReady ? (
@@ -845,14 +738,23 @@ export function ProviderApp() {
           </div>
         )}
 
+        {/* Gigs Tab */}
+        {activeTab === "gigs" && (
+          <div className="space-y-6">
+            <div>
+              <h1>Szolgáltatások</h1>
+              <p className="text-muted-foreground">Gig Manager</p>
+            </div>
+            <GigManager />
+          </div>
+        )}
+
         {/* Clients Tab */}
         {activeTab === "clients" && (
           <div className="space-y-6">
             <div>
               <h1>{isOwner ? "Ügyfeleim" : "Ügyfelek"}</h1>
-              <p className="text-muted-foreground">
-                Ügyfélkapcsolatok kezelése
-              </p>
+              <p className="text-muted-foreground">Ügyfélkapcsolatok kezelése</p>
             </div>
 
             <Tabs defaultValue="list">
@@ -874,9 +776,7 @@ export function ProviderApp() {
               <TabsContent value="reviews" className="mt-6">
                 {reviews.length === 0 ? (
                   <Card className="p-8 text-center">
-                    <p className="text-muted-foreground">
-                      Még nincsenek értékelések
-                    </p>
+                    <p className="text-muted-foreground">Még nincsenek értékelések</p>
                   </Card>
                 ) : (
                   <div className="space-y-4">
@@ -887,9 +787,7 @@ export function ProviderApp() {
                         customer={`${review.author?.firstName || ""} ${review.author?.lastName || ""}`}
                         rating={review.rating}
                         comment={review.comment || ""}
-                        date={new Date(review.createdAt).toLocaleDateString(
-                          "hu-HU",
-                        )}
+                        date={new Date(review.createdAt).toLocaleDateString("hu-HU")}
                         service={review.booking?.service?.name || ""}
                         providerResponse={review.providerResponse}
                         providerRespondedAt={review.providerRespondedAt}
@@ -912,9 +810,7 @@ export function ProviderApp() {
           <div className="space-y-6">
             <div>
               <h1>Csapat & Cég áttekintés</h1>
-              <p className="text-muted-foreground">
-                Céges összesítés és csapatkezelés
-              </p>
+              <p className="text-muted-foreground">Céges összesítés és csapatkezelés</p>
             </div>
 
             <Tabs defaultValue="overview">
@@ -943,9 +839,7 @@ export function ProviderApp() {
                               customer={`${review.author?.firstName || ""} ${review.author?.lastName || ""}`}
                               rating={review.rating}
                               comment={review.comment || ""}
-                              date={new Date(
-                                review.createdAt,
-                              ).toLocaleDateString("hu-HU")}
+                              date={new Date(review.createdAt).toLocaleDateString("hu-HU")}
                               service={review.booking?.service?.name || ""}
                               providerResponse={review.providerResponse}
                               providerRespondedAt={review.providerRespondedAt}
@@ -990,7 +884,9 @@ export function ProviderApp() {
         )}
 
         {/* Messages Tab */}
-        {activeTab === "messages" && <MessagingPage />}
+        {activeTab === "messages" && (
+          <MessagingPage initialUserId={searchParams.get("userId") ?? undefined} />
+        )}
 
         {/* Portfolio Tab */}
         {activeTab === "portfolio" && provider && (
@@ -1011,9 +907,7 @@ export function ProviderApp() {
             <div className="flex items-center justify-between">
               <div>
                 <h1>Riportok</h1>
-                <p className="text-muted-foreground">
-                  Bevételi statisztikák és exportálás
-                </p>
+                <p className="text-muted-foreground">Bevételi statisztikák és exportálás</p>
               </div>
             </div>
             <ExportReportPanel />
@@ -1023,15 +917,6 @@ export function ProviderApp() {
 
       <Footer />
 
-      {/* Modals */}
-      <PaywallModal
-        open={paywallModalOpen}
-        onOpenChange={setPaywallModalOpen}
-      />
-      <ReferralModal
-        open={referralModalOpen}
-        onOpenChange={setReferralModalOpen}
-      />
       <Toaster />
     </div>
   );
@@ -1048,7 +933,7 @@ function MessageCustomerButton({
 }: {
   customerId: string;
   customerName: string;
-  onNavigate: () => void;
+  onNavigate: (customerId: string) => void;
 }) {
   const startConversation = useStartConversation();
 
@@ -1059,7 +944,7 @@ function MessageCustomerButton({
       disabled={startConversation.isPending}
       onClick={() => {
         startConversation.mutate(customerId, {
-          onSuccess: () => onNavigate(),
+          onSuccess: () => onNavigate(customerId),
         });
       }}
     >
@@ -1077,15 +962,8 @@ function MessageCustomerButton({
 // COMPANY BOOKINGS LIST (all bookings, no member filter)
 // ============================================================================
 
-function CompanyBookingsList({
-  navigate,
-}: {
-  navigate: (path: string) => void;
-}) {
-  const { data: bookingsData, isLoading } = useProviderBookings(
-    { page: 1, limit: 50 },
-    true,
-  );
+function CompanyBookingsList({ navigate }: { navigate: (path: string) => void }) {
+  const { data: bookingsData, isLoading } = useProviderBookings({ page: 1, limit: 50 }, true);
   const bookings = bookingsData?.data?.bookings || [];
 
   if (isLoading) {
@@ -1128,9 +1006,7 @@ function CompanyBookingsList({
                 <div className="flex gap-4 text-sm text-muted-foreground mt-1">
                   <div className="flex items-center gap-1">
                     <Calendar className="h-3 w-3" />
-                    {new Date(booking.scheduledDate).toLocaleDateString(
-                      "hu-HU",
-                    )}
+                    {new Date(booking.scheduledDate).toLocaleDateString("hu-HU")}
                   </div>
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />

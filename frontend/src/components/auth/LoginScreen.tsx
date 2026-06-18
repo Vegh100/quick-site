@@ -1,22 +1,10 @@
 import { useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, type Location } from "react-router-dom";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../ui/card";
-import {
-  ArrowLeft,
-  Loader2,
-  Sparkles,
-  Briefcase,
-  User as UserIcon,
-} from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
+import { ArrowLeft, Loader2, Sparkles, Briefcase, User as UserIcon } from "lucide-react";
 import { toast } from "sonner";
 import { GoogleLogin, type CredentialResponse } from "@react-oauth/google";
 import { useAuth } from "../../contexts/AuthContext";
@@ -28,10 +16,25 @@ interface LoginScreenProps {
   role?: UserRole;
 }
 
-const ROLE_CONFIG: Record<
-  UserRole,
-  { icon: typeof UserIcon; title: string; subtitle: string }
-> = {
+type AuthLocationState = {
+  pendingRole?: UserRole;
+  from?: Pick<Location, "pathname" | "search">;
+};
+
+type ApiError = {
+  response?: {
+    data?: {
+      error?: string;
+    };
+  };
+};
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const apiError = error as ApiError;
+  return apiError.response?.data?.error || fallback;
+}
+
+const ROLE_CONFIG: Record<UserRole, { icon: typeof UserIcon; title: string; subtitle: string }> = {
   CUSTOMER: {
     icon: UserIcon,
     title: "Ügyfél regisztráció",
@@ -54,42 +57,56 @@ const ROLE_CONFIG: Record<
   },
 };
 
-export function LoginScreen({
-  mode,
-  role: roleProp = "CUSTOMER",
-}: LoginScreenProps) {
+export function LoginScreen({ mode, role: roleProp = "CUSTOMER" }: LoginScreenProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const pendingRole = (location.state as any)?.pendingRole;
+  const locationState = location.state as AuthLocationState | null;
+  const pendingRole = locationState?.pendingRole;
   const { login, register, googleAuth } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
+  const dashboardFor = (user: User) =>
+    user.role === "PROVIDER" || user.role === "EMPLOYEE" ? "/szolgaltato" : "/ugyfel";
+
+  const canAccessPath = (user: User, pathname: string) => {
+    const isProviderUser = user.role === "PROVIDER" || user.role === "EMPLOYEE";
+    if (pathname.startsWith("/szolgaltato")) return isProviderUser;
+    if (pathname.startsWith("/ugyfel")) return user.role === "CUSTOMER";
+    return true;
+  };
+
   const navigateAfterAuth = (user: User) => {
-    // If redirected here from a protected route, go back there
-    const from = (location.state as any)?.from?.pathname;
-    if (from && from !== "/") {
-      navigate(from, { replace: true });
+    const fromLocation = locationState?.from;
+    const from = fromLocation?.pathname || "";
+
+    if (from && from !== "/" && canAccessPath(user, from)) {
+      navigate(`${from}${fromLocation?.search || ""}`, { replace: true });
       return;
     }
-    // Otherwise go to the user's dashboard
-    if (user.role === "PROVIDER" || user.role === "EMPLOYEE") {
-      navigate("/szolgaltato", { replace: true });
-    } else {
-      navigate("/ugyfel", { replace: true });
+
+    if (mode === "register" && user.role === "CUSTOMER") {
+      navigate("/ugyfel/bemutatkozas", { replace: true });
+      return;
     }
+
+    navigate(dashboardFor(user), { replace: true });
   };
 
   const handleSwitchMode = () => {
     if (mode === "login") {
       // Switch to register — use pendingRole to determine which register page
-      const registerRole =
-        pendingRole === "PROVIDER" ? "szolgaltato" : "ugyfel";
-      navigate(`/regisztracio/${registerRole}`);
+      const registerRole = pendingRole === "PROVIDER" ? "szolgaltato" : "ugyfel";
+      navigate(`/regisztracio/${registerRole}`, {
+        state: {
+          pendingRole,
+          from: locationState?.from,
+        },
+      });
     } else {
       // Switch to login — pass the current role so login can switch back
       navigate("/bejelentkezes", {
-        state: { pendingRole: roleProp },
+        state: { pendingRole: roleProp, from: locationState?.from },
       });
     }
   };
@@ -122,12 +139,11 @@ export function LoginScreen({
         toast.success("Sikeres regisztráció!");
       }
       navigateAfterAuth(user);
-    } catch (err: any) {
-      const message =
-        err?.response?.data?.error ||
-        (mode === "login"
-          ? "Sikertelen bejelentkezés"
-          : "Sikertelen regisztráció");
+    } catch (err: unknown) {
+      const message = getApiErrorMessage(
+        err,
+        mode === "login" ? "Sikertelen bejelentkezés" : "Sikertelen regisztráció",
+      );
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -152,18 +168,14 @@ export function LoginScreen({
             </h1>
           </div>
           <p className="text-muted-foreground">
-            {mode === "login"
-              ? "Jelentkezz be a fiókodba"
-              : roleConfig.subtitle}
+            {mode === "login" ? "Jelentkezz be a fiókodba" : roleConfig.subtitle}
           </p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {mode === "register" && (
-                <RoleIcon className="h-5 w-5 text-primary" />
-              )}
+              {mode === "register" && <RoleIcon className="h-5 w-5 text-primary" />}
               {mode === "login" ? "Bejelentkezés" : roleConfig.title}
             </CardTitle>
             <CardDescription>
@@ -191,22 +203,16 @@ export function LoginScreen({
 
                       if (mode === "register" && !isNewUser) {
                         // User already had an account — inform them and redirect to their actual dashboard
-                        toast.info(
-                          "Már van fiókod ezzel az email címmel! Beléptettünk.",
-                        );
+                        toast.info("Már van fiókod ezzel az email címmel! Beléptettünk.");
                       } else {
                         toast.success(
-                          mode === "login"
-                            ? "Sikeres bejelentkezés!"
-                            : "Sikeres regisztráció!",
+                          mode === "login" ? "Sikeres bejelentkezés!" : "Sikeres regisztráció!",
                         );
                       }
 
                       navigateAfterAuth(user);
-                    } catch (err: any) {
-                      const message =
-                        err?.response?.data?.error ||
-                        "Sikertelen Google bejelentkezés";
+                    } catch (err: unknown) {
+                      const message = getApiErrorMessage(err, "Sikertelen Google bejelentkezés");
                       toast.error(message);
                     } finally {
                       setIsGoogleLoading(false);
@@ -233,9 +239,7 @@ export function LoginScreen({
                 <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">
-                  vagy email-lel
-                </span>
+                <span className="bg-card px-2 text-muted-foreground">vagy email-lel</span>
               </div>
             </div>
 
@@ -291,9 +295,7 @@ export function LoginScreen({
               </div>
 
               <Button type="submit" className="w-full" disabled={isSubmitting}>
-                {isSubmitting && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {mode === "login" ? "Bejelentkezés" : "Regisztráció"}
               </Button>
             </form>
@@ -302,22 +304,14 @@ export function LoginScreen({
               {mode === "login" ? (
                 <>
                   Nincs még fiókod?{" "}
-                  <Button
-                    variant="link"
-                    className="p-0 h-auto"
-                    onClick={handleSwitchMode}
-                  >
+                  <Button variant="link" className="p-0 h-auto" onClick={handleSwitchMode}>
                     Regisztráció
                   </Button>
                 </>
               ) : (
                 <>
                   Már van fiókod?{" "}
-                  <Button
-                    variant="link"
-                    className="p-0 h-auto"
-                    onClick={handleSwitchMode}
-                  >
+                  <Button variant="link" className="p-0 h-auto" onClick={handleSwitchMode}>
                     Bejelentkezés
                   </Button>
                 </>

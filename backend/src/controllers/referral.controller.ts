@@ -5,11 +5,7 @@ import * as referralService from "../services/referral.service.js";
 /**
  * GET /api/referrals/me — get my referral code + stats
  */
-export async function getMyReferral(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getMyReferral(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const result = await referralService.getMyReferral(req.user!.userId);
     res.json({ success: true, data: result });
@@ -21,11 +17,7 @@ export async function getMyReferral(
 /**
  * POST /api/referrals/redeem — redeem a referral code
  */
-export async function redeemReferral(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function redeemReferral(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const { code } = req.body;
     if (!code || typeof code !== "string") {

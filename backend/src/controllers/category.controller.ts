@@ -1,21 +1,22 @@
 import { Request, Response, NextFunction } from "express";
 import prisma from "../lib/prisma.js";
+import { cacheable } from "../lib/cache.js";
 
-export async function getCategories(
-  _req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+const SERVICE_DOMAIN_SLUGS = ["house-cleaning", "car-detailing"];
+
+export async function getCategories(_req: Request, res: Response, next: NextFunction) {
   try {
-    const categories = await prisma.category.findMany({
-      where: { isActive: true },
-      orderBy: { sortOrder: "asc" },
-      include: {
-        _count: {
-          select: { providers: true },
+    const categories = await cacheable("categories:all", 300, () =>
+      prisma.category.findMany({
+        where: { isActive: true, slug: { in: SERVICE_DOMAIN_SLUGS } },
+        orderBy: { sortOrder: "asc" },
+        include: {
+          _count: {
+            select: { providers: true },
+          },
         },
-      },
-    });
+      }),
+    );
 
     res.json({ success: true, data: categories });
   } catch (error) {
@@ -23,12 +24,13 @@ export async function getCategories(
   }
 }
 
-export async function getCategoryBySlug(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getCategoryBySlug(req: Request, res: Response, next: NextFunction) {
   try {
+    if (!SERVICE_DOMAIN_SLUGS.includes(req.params.slug)) {
+      res.status(404).json({ success: false, error: "Category not found" });
+      return;
+    }
+
     const category = await prisma.category.findUnique({
       where: { slug: req.params.slug },
       include: {
@@ -49,15 +51,14 @@ export async function getCategoryBySlug(
   }
 }
 
-export async function getServiceTypes(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getServiceTypes(req: Request, res: Response, next: NextFunction) {
   try {
     const { categoryId } = req.query as { categoryId?: string };
 
-    const where: any = { isActive: true };
+    const where: any = {
+      isActive: true,
+      category: { slug: { in: SERVICE_DOMAIN_SLUGS } },
+    };
     if (categoryId) {
       where.categoryId = categoryId;
     }

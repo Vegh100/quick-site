@@ -96,9 +96,7 @@ export function DesignShowcase() {
 
           <Alert variant="destructive">
             <XCircle className="h-4 w-4" />
-            <AlertDescription>
-              Error: Unable to process payment. Please try again.
-            </AlertDescription>
+            <AlertDescription>Error: Unable to process payment. Please try again.</AlertDescription>
           </Alert>
         </div>
       </Card>

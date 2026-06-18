@@ -1,13 +1,5 @@
 import { useBookingTimeline } from "../../hooks/useApi";
-import {
-  Clock,
-  Check,
-  Play,
-  CheckCircle2,
-  XCircle,
-  Loader2,
-  FileText,
-} from "lucide-react";
+import { Clock, Check, Play, CheckCircle2, XCircle, Loader2, FileText } from "lucide-react";
 import type { BookingActivityItem } from "../../lib/api-services";
 
 const ACTION_CONFIG: Record<
@@ -69,9 +61,8 @@ function formatDate(dateStr: string): string {
 function getPerformerName(activity: BookingActivityItem): string {
   if (!activity.performer) return "Rendszer";
   return (
-    [activity.performer.firstName, activity.performer.lastName]
-      .filter(Boolean)
-      .join(" ") || "Felhasználó"
+    [activity.performer.firstName, activity.performer.lastName].filter(Boolean).join(" ") ||
+    "Felhasználó"
   );
 }
 
@@ -89,9 +80,7 @@ export function BookingTimeline({ bookingId }: { bookingId: string }) {
 
   if (activities.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground py-4 text-center">
-        Nincs tevékenységi napló.
-      </p>
+      <p className="text-sm text-muted-foreground py-4 text-center">Nincs tevékenységi napló.</p>
     );
   }
 
@@ -127,13 +116,9 @@ export function BookingTimeline({ bookingId }: { bookingId: string }) {
                     {formatDate(activity.createdAt)}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {getPerformerName(activity)}
-                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{getPerformerName(activity)}</p>
                 {activity.note && (
-                  <p className="text-xs text-muted-foreground mt-1 italic">
-                    „{activity.note}"
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 italic">„{activity.note}"</p>
                 )}
               </div>
             </div>

@@ -33,16 +33,10 @@ export function BusinessHoursCard({ providerId }: { providerId: string }) {
             <div
               key={day.dayOfWeek}
               className={`flex items-center justify-between py-1.5 px-3 rounded-lg text-sm ${
-                isToday
-                  ? "bg-primary/5 font-medium"
-                  : ""
+                isToday ? "bg-primary/5 font-medium" : ""
               }`}
             >
-              <span
-                className={`${
-                  isToday ? "text-primary" : "text-muted-foreground"
-                }`}
-              >
+              <span className={`${isToday ? "text-primary" : "text-muted-foreground"}`}>
                 {day.dayName}
                 {isToday && (
                   <span className="ml-1.5 text-[10px] bg-primary text-white rounded-full px-1.5 py-0.5">

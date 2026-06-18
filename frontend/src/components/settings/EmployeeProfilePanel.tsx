@@ -25,11 +25,15 @@ export function EmployeeProfilePanel() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+
+    const timeout = window.setTimeout(() => {
       setFirstName(user.firstName || "");
       setLastName(user.lastName || "");
       setPhone(user.phone || "");
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
   }, [user]);
 
   const handleSaveProfile = async () => {
@@ -104,11 +108,7 @@ export function EmployeeProfilePanel() {
                 <div className="relative">
                   <div className="h-24 w-24 rounded-full bg-muted flex items-center justify-center overflow-hidden">
                     {user?.avatarUrl ? (
-                      <img
-                        src={user.avatarUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
+                      <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
                       <Camera className="h-10 w-10 text-muted-foreground" />
                     )}
@@ -130,9 +130,7 @@ export function EmployeeProfilePanel() {
                 </div>
                 <div>
                   <p className="text-sm font-medium">Profilkép módosítása</p>
-                  <p className="text-xs text-muted-foreground">
-                    JPG, PNG vagy WebP, max 5MB
-                  </p>
+                  <p className="text-xs text-muted-foreground">JPG, PNG vagy WebP, max 5MB</p>
                 </div>
               </div>
             </div>
@@ -172,9 +170,7 @@ export function EmployeeProfilePanel() {
                     disabled
                     className="bg-muted"
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Az email cím nem módosítható
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Az email cím nem módosítható</p>
                 </div>
                 <div>
                   <Label htmlFor="emp-phone">Telefonszám</Label>
@@ -189,13 +185,8 @@ export function EmployeeProfilePanel() {
             </div>
 
             <div className="flex justify-end">
-              <Button
-                onClick={handleSaveProfile}
-                disabled={updateProfile.isPending}
-              >
-                {updateProfile.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : null}
+              <Button onClick={handleSaveProfile} disabled={updateProfile.isPending}>
+                {updateProfile.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Mentés
               </Button>
             </div>
@@ -229,9 +220,7 @@ export function EmployeeProfilePanel() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="emp-confirmPassword">
-                    Jelszó megerősítése
-                  </Label>
+                  <Label htmlFor="emp-confirmPassword">Jelszó megerősítése</Label>
                   <Input
                     id="emp-confirmPassword"
                     type="password"
@@ -240,10 +229,7 @@ export function EmployeeProfilePanel() {
                     placeholder="••••••••"
                   />
                 </div>
-                <Button
-                  onClick={handleChangePassword}
-                  disabled={!currentPassword || !newPassword}
-                >
+                <Button onClick={handleChangePassword} disabled={!currentPassword || !newPassword}>
                   Jelszó módosítása
                 </Button>
               </div>

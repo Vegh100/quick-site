@@ -2,11 +2,7 @@ import { Response, NextFunction } from "express";
 import * as memberService from "../services/member.service.js";
 import { AuthenticatedRequest } from "../types/index.js";
 
-export async function inviteMember(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function inviteMember(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const member = await memberService.inviteMember(req.user!.userId, req.body);
     res.status(201).json({ success: true, data: member });
@@ -15,11 +11,7 @@ export async function inviteMember(
   }
 }
 
-export async function listMembers(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function listMembers(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const members = await memberService.listMembers(req.user!.userId);
     res.json({ success: true, data: members });
@@ -28,11 +20,7 @@ export async function listMembers(
   }
 }
 
-export async function updateMember(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function updateMember(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const member = await memberService.updateMember(
       req.user!.userId,
@@ -51,10 +39,7 @@ export async function deactivateMember(
   next: NextFunction,
 ) {
   try {
-    const member = await memberService.deactivateMember(
-      req.user!.userId,
-      req.params.memberId,
-    );
+    const member = await memberService.deactivateMember(req.user!.userId, req.params.memberId);
     res.json({ success: true, data: member });
   } catch (error) {
     next(error);
@@ -74,11 +59,7 @@ export async function getPendingInvites(
   }
 }
 
-export async function assignService(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function assignService(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const result = await memberService.assignService(
       req.user!.userId,
@@ -91,17 +72,9 @@ export async function assignService(
   }
 }
 
-export async function removeService(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function removeService(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    await memberService.removeService(
-      req.user!.userId,
-      req.params.memberId,
-      req.params.serviceId,
-    );
+    await memberService.removeService(req.user!.userId, req.params.memberId, req.params.serviceId);
     res.json({ success: true, message: "Service assignment removed" });
   } catch (error) {
     next(error);
@@ -125,11 +98,7 @@ export async function setMemberAvailability(
   }
 }
 
-export async function getInviteInfo(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getInviteInfo(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const info = await memberService.getInviteInfo(req.params.token);
     res.json({ success: true, data: info });
@@ -144,10 +113,7 @@ export async function getMemberDetail(
   next: NextFunction,
 ) {
   try {
-    const detail = await memberService.getMemberDetail(
-      req.user!.userId,
-      req.params.memberId,
-    );
+    const detail = await memberService.getMemberDetail(req.user!.userId, req.params.memberId);
     res.json({ success: true, data: detail });
   } catch (error) {
     next(error);

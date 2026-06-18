@@ -93,11 +93,7 @@ export async function addAddress(userId: string, data: AddAddressInput) {
   });
 }
 
-export async function updateAddress(
-  userId: string,
-  addressId: string,
-  data: UpdateAddressInput,
-) {
+export async function updateAddress(userId: string, addressId: string, data: UpdateAddressInput) {
   const address = await prisma.address.findFirst({
     where: { id: addressId, userId },
   });
@@ -141,10 +137,7 @@ export async function getNotificationPrefs(userId: string) {
   return prefs;
 }
 
-export async function updateNotificationPrefs(
-  userId: string,
-  data: UpdateNotificationPrefsInput,
-) {
+export async function updateNotificationPrefs(userId: string, data: UpdateNotificationPrefsInput) {
   return prisma.notificationPreference.upsert({
     where: { userId },
     update: data,

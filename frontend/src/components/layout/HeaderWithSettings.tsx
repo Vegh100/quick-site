@@ -1,12 +1,4 @@
-import {
-  Menu,
-  User,
-  Settings,
-  LogOut,
-  CreditCard,
-  Shield,
-  HelpCircle,
-} from "lucide-react";
+import { Menu, User, Settings, LogOut, CreditCard, Shield, HelpCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../ui/button";
 import {
@@ -83,8 +75,7 @@ export function HeaderWithSettings({
         { icon: HelpCircle, label: "Segítség", action: "help" },
       ];
 
-  const menuItems =
-    userType === "customer" ? customerMenuItems : providerMenuItems;
+  const menuItems = userType === "customer" ? customerMenuItems : providerMenuItems;
 
   return (
     <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -112,7 +103,7 @@ export function HeaderWithSettings({
                 {user?.avatarUrl ? (
                   <img
                     src={user.avatarUrl}
-                    alt=""
+                    alt={displayName || "Felhasználó avatar"}
                     className="h-7 w-7 rounded-full object-cover"
                   />
                 ) : (
@@ -124,12 +115,8 @@ export function HeaderWithSettings({
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    {displayName}
-                  </p>
-                  <p className="text-xs leading-none text-muted-foreground">
-                    {displayEmail}
-                  </p>
+                  <p className="text-sm font-medium leading-none">{displayName}</p>
+                  <p className="text-xs leading-none text-muted-foreground">{displayEmail}</p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
@@ -137,10 +124,7 @@ export function HeaderWithSettings({
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <DropdownMenuItem
-                    key={item.action}
-                    onClick={() => handleMenuAction(item.action)}
-                  >
+                  <DropdownMenuItem key={item.action} onClick={() => handleMenuAction(item.action)}>
                     <Icon className="mr-2 h-4 w-4" />
                     <span>{item.label}</span>
                   </DropdownMenuItem>

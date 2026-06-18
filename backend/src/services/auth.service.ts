@@ -1,11 +1,14 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import { UserRole } from "@prisma/client";
 import prisma from "../lib/prisma.js";
 import { authConfig } from "../config/auth.config.js";
+import { env } from "../config/env.config.js";
 import { AppError, ConflictError, UnauthorizedError } from "../lib/errors.js";
 import { AuthPayload, GoogleUserInfo } from "../types/index.js";
+import { sendVerificationEmail } from "./email.service.js";
 import {
   RegisterInput,
   LoginInput,
@@ -18,11 +21,7 @@ const googleClient = new OAuth2Client(authConfig.google.clientId);
 // REGISTER
 // ============================================================================
 
-export async function register(
-  input: RegisterInput,
-  userAgent?: string,
-  ipAddress?: string,
-) {
+export async function register(input: RegisterInput, userAgent?: string, ipAddress?: string) {
   const existing = await prisma.user.findUnique({
     where: { email: input.email },
   });
@@ -30,10 +29,7 @@ export async function register(
     throw new ConflictError("Email already registered");
   }
 
-  const passwordHash = await bcrypt.hash(
-    input.password,
-    authConfig.password.saltRounds,
-  );
+  const passwordHash = await bcrypt.hash(input.password, authConfig.password.saltRounds);
 
   const user = await prisma.user.create({
     data: {
@@ -49,6 +45,9 @@ export async function register(
   await prisma.notificationPreference.create({
     data: { userId: user.id },
   });
+
+  // Send email verification (fire-and-forget)
+  sendEmailVerification(user.id).catch(() => {});
 
   const { token, session } = await createSession(
     user.id,
@@ -98,10 +97,7 @@ export async function registerFromInvite(
     );
   }
 
-  const passwordHash = await bcrypt.hash(
-    input.password,
-    authConfig.password.saltRounds,
-  );
+  const passwordHash = await bcrypt.hash(input.password, authConfig.password.saltRounds);
 
   // Create user + link member in a transaction
   const user = await prisma.$transaction(async (tx) => {
@@ -123,10 +119,7 @@ export async function registerFromInvite(
         status: "ACTIVE",
         joinedAt: new Date(),
         inviteToken: null, // Consume the token
-        displayName:
-          member.displayName ||
-          `${input.firstName} ${input.lastName}`.trim() ||
-          null,
+        displayName: member.displayName || `${input.firstName} ${input.lastName}`.trim() || null,
       },
     });
 
@@ -161,11 +154,7 @@ export async function registerFromInvite(
 // LOGIN
 // ============================================================================
 
-export async function login(
-  input: LoginInput,
-  userAgent?: string,
-  ipAddress?: string,
-) {
+export async function login(input: LoginInput, userAgent?: string, ipAddress?: string) {
   const user = await prisma.user.findUnique({ where: { email: input.email } });
 
   if (!user || !user.passwordHash) {
@@ -265,9 +254,7 @@ export async function googleAuth(
       user = existingUser;
     } else {
       // Create new user
-      const role = (
-        preferredRole === "PROVIDER" ? "PROVIDER" : "CUSTOMER"
-      ) as UserRole;
+      const role = (preferredRole === "PROVIDER" ? "PROVIDER" : "CUSTOMER") as UserRole;
       user = await prisma.user.create({
         data: {
           email: googleUser.email,
@@ -325,19 +312,12 @@ export async function logoutAll(userId: string) {
 // CHANGE PASSWORD
 // ============================================================================
 
-export async function changePassword(
-  userId: string,
-  currentPassword: string,
-  newPassword: string,
-) {
+export async function changePassword(userId: string, currentPassword: string, newPassword: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new AppError("User not found", 404);
 
   if (!user.passwordHash) {
-    throw new AppError(
-      "Account uses Google sign-in. Set a password first.",
-      400,
-    );
+    throw new AppError("Account uses Google sign-in. Set a password first.", 400);
   }
 
   const valid = await bcrypt.compare(currentPassword, user.passwordHash);
@@ -345,14 +325,63 @@ export async function changePassword(
     throw new UnauthorizedError("Current password is incorrect");
   }
 
-  const newHash = await bcrypt.hash(
-    newPassword,
-    authConfig.password.saltRounds,
-  );
+  const newHash = await bcrypt.hash(newPassword, authConfig.password.saltRounds);
   await prisma.user.update({
     where: { id: userId },
     data: { passwordHash: newHash },
   });
+}
+
+// ============================================================================
+// EMAIL VERIFICATION
+// ============================================================================
+
+export async function sendEmailVerification(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError("User not found", 404);
+  if (user.emailVerified) throw new AppError("Email already verified", 400);
+
+  // Delete any existing tokens for this user
+  await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+  await prisma.emailVerificationToken.create({
+    data: { userId, token, expiresAt },
+  });
+
+  const verifyUrl = `${env.FRONTEND_URL}/verify-email?token=${token}`;
+
+  await sendVerificationEmail({
+    toEmail: user.email,
+    firstName: user.firstName || "",
+    verifyUrl,
+  });
+
+  return { message: "Verification email sent" };
+}
+
+export async function verifyEmail(token: string) {
+  const record = await prisma.emailVerificationToken.findUnique({
+    where: { token },
+  });
+
+  if (!record) throw new AppError("Invalid verification token", 400);
+  if (record.expiresAt < new Date()) {
+    await prisma.emailVerificationToken.delete({ where: { id: record.id } });
+    throw new AppError("Verification token expired", 400);
+  }
+
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: record.userId },
+      data: { emailVerified: true },
+    }),
+    prisma.emailVerificationToken.delete({ where: { id: record.id } }),
+  ]);
+
+  return { message: "Email verified successfully" };
 }
 
 // ============================================================================

@@ -7,11 +7,7 @@
  * export in ./index.ts — no consumer code changes needed.
  */
 
-import type {
-  AddressDetails,
-  GeocodingSearchResult,
-  GeocodingService,
-} from "./types";
+import type { AddressDetails, GeocodingSearchResult, GeocodingService } from "./types";
 
 interface NominatimResult {
   place_id: number;
@@ -36,10 +32,7 @@ const USER_AGENT = "QvickApp/1.0";
 const BASE_URL = "https://nominatim.openstreetmap.org";
 
 export class NominatimGeocodingService implements GeocodingService {
-  async reverseGeocode(
-    lat: number,
-    lng: number,
-  ): Promise<AddressDetails | null> {
+  async reverseGeocode(lat: number, lng: number): Promise<AddressDetails | null> {
     try {
       const res = await fetch(
         `${BASE_URL}/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=hu`,

@@ -23,15 +23,7 @@ import type { Booking, BookingStatus } from "../../lib/types";
 // ============================================================================
 
 const DAY_NAMES_SHORT = ["Hé", "Ke", "Sze", "Csü", "Pé", "Szo", "Va"];
-const DAY_NAMES_FULL = [
-  "Hétfő",
-  "Kedd",
-  "Szerda",
-  "Csütörtök",
-  "Péntek",
-  "Szombat",
-  "Vasárnap",
-];
+const DAY_NAMES_FULL = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"];
 const MONTH_NAMES = [
   "Január",
   "Február",
@@ -202,9 +194,7 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
 
   // ------- DAY VIEW HELPERS -------
   const visibleDays = useMemo(() => {
-    return Array.from({ length: VISIBLE_DAYS }, (_, i) =>
-      addDays(focusDate, i),
-    );
+    return Array.from({ length: VISIBLE_DAYS }, (_, i) => addDays(focusDate, i));
   }, [focusDate]);
 
   const prevDays = () => setFocusDate(addDays(focusDate, -VISIBLE_DAYS));
@@ -218,19 +208,14 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
   }, [viewMode]);
 
   const hours = useMemo(() => {
-    return Array.from(
-      { length: HOUR_END - HOUR_START },
-      (_, i) => HOUR_START + i,
-    );
+    return Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i);
   }, []);
 
   // Stats
   const activeCount = bookings.filter(
     (b) => b.status !== "CANCELLED" && b.status !== "COMPLETED",
   ).length;
-  const confirmedCount = bookings.filter(
-    (b) => b.status === "CONFIRMED",
-  ).length;
+  const confirmedCount = bookings.filter((b) => b.status === "CONFIRMED").length;
   const pendingCount = bookings.filter((b) => b.status === "PENDING").length;
 
   // ======================================================================
@@ -297,137 +282,122 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
                 <div key={`e-${i}`} className="aspect-square" />
               ))}
 
-              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(
-                (day) => {
-                  const date = new Date(year, month, day);
-                  const key = toDateKey(date);
-                  const dayBookings = bookingsByDate.get(key) || [];
-                  const isToday = isSameDay(date, today);
-                  const hasBookings = dayBookings.length > 0;
-                  const pendingCount2 = dayBookings.filter(
-                    (b) => b.status === "PENDING",
-                  ).length;
-                  const confirmedCount2 = dayBookings.filter(
-                    (b) =>
-                      b.status === "CONFIRMED" || b.status === "IN_PROGRESS",
-                  ).length;
-                  const hasPending = pendingCount2 > 0;
+              {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+                const date = new Date(year, month, day);
+                const key = toDateKey(date);
+                const dayBookings = bookingsByDate.get(key) || [];
+                const isToday = isSameDay(date, today);
+                const hasBookings = dayBookings.length > 0;
+                const pendingCount2 = dayBookings.filter((b) => b.status === "PENDING").length;
+                const confirmedCount2 = dayBookings.filter(
+                  (b) => b.status === "CONFIRMED" || b.status === "IN_PROGRESS",
+                ).length;
+                const hasPending = pendingCount2 > 0;
 
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => openDay(date)}
-                      className={[
-                        "aspect-square border rounded-lg p-1 hover:bg-muted/50 transition-all text-left flex flex-col cursor-pointer relative overflow-hidden",
-                        isToday
-                          ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                          : hasBookings
-                            ? "border-border"
-                            : "border-border opacity-50",
-                      ].join(" ")}
-                      style={
-                        hasPending
-                          ? { borderLeftWidth: 3, borderLeftColor: "#eab308" }
-                          : hasBookings && !hasPending
-                            ? {
-                                borderLeftWidth: 3,
-                                borderLeftColor: "#3b82f6",
-                              }
-                            : undefined
-                      }
-                    >
-                      {/* Day number + booking count badge */}
-                      <div className="flex items-start justify-between w-full">
-                        <span
-                          className={[
-                            "text-sm font-medium leading-none",
-                            isToday ? "text-primary font-bold" : "",
-                          ].join(" ")}
-                        >
-                          {day}
-                        </span>
-                        {hasBookings && (
-                          <span
-                            className="text-[10px] font-bold leading-none rounded-full min-w-[16px] h-[16px] flex items-center justify-center"
-                            style={{
-                              backgroundColor: hasPending
-                                ? "#fef3c7"
-                                : "#dbeafe",
-                              color: hasPending ? "#92400e" : "#1e40af",
-                            }}
-                          >
-                            {dayBookings.length}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Mini booking info */}
+                return (
+                  <button
+                    key={day}
+                    onClick={() => openDay(date)}
+                    className={[
+                      "aspect-square border rounded-lg p-1 hover:bg-muted/50 transition-all text-left flex flex-col cursor-pointer relative overflow-hidden",
+                      isToday
+                        ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                        : hasBookings
+                          ? "border-border"
+                          : "border-border opacity-50",
+                    ].join(" ")}
+                    style={
+                      hasPending
+                        ? { borderLeftWidth: 3, borderLeftColor: "#eab308" }
+                        : hasBookings && !hasPending
+                          ? {
+                              borderLeftWidth: 3,
+                              borderLeftColor: "#3b82f6",
+                            }
+                          : undefined
+                    }
+                  >
+                    {/* Day number + booking count badge */}
+                    <div className="flex items-start justify-between w-full">
+                      <span
+                        className={[
+                          "text-sm font-medium leading-none",
+                          isToday ? "text-primary font-bold" : "",
+                        ].join(" ")}
+                      >
+                        {day}
+                      </span>
                       {hasBookings && (
-                        <div className="flex flex-col gap-0.5 mt-auto w-full min-w-0 overflow-hidden">
-                          {/* Status summary dots + text */}
-                          <div className="flex items-center gap-1 flex-wrap">
-                            {dayBookings.slice(0, 3).map((b) => (
-                              <div
-                                key={b.id}
-                                className="w-2 h-2 rounded-full flex-shrink-0"
-                                style={{
-                                  backgroundColor: STATUS_DOT_COLOR[b.status],
-                                }}
-                                title={`${b.scheduledTime} - ${b.service?.name || "Foglalás"} (${STATUS_HU[b.status]})`}
-                              />
-                            ))}
-                            {dayBookings.length > 3 && (
-                              <span className="text-[9px] text-muted-foreground leading-none flex-shrink-0">
-                                +{dayBookings.length - 3}
-                              </span>
-                            )}
-                          </div>
+                        <span
+                          className="text-[10px] font-bold leading-none rounded-full min-w-[16px] h-[16px] flex items-center justify-center"
+                          style={{
+                            backgroundColor: hasPending ? "#fef3c7" : "#dbeafe",
+                            color: hasPending ? "#92400e" : "#1e40af",
+                          }}
+                        >
+                          {dayBookings.length}
+                        </span>
+                      )}
+                    </div>
 
-                          {/* Pending label if any */}
-                          {hasPending && (
-                            <span
-                              className="text-[9px] font-medium leading-tight truncate hidden md:block"
-                              style={{ color: "#b45309" }}
-                            >
-                              {pendingCount2} függőben
-                            </span>
-                          )}
-                          {!hasPending && confirmedCount2 > 0 && (
-                            <span
-                              className="text-[9px] font-medium leading-tight truncate hidden md:block"
-                              style={{ color: "#2563eb" }}
-                            >
-                              {confirmedCount2} megerősítve
+                    {/* Mini booking info */}
+                    {hasBookings && (
+                      <div className="flex flex-col gap-0.5 mt-auto w-full min-w-0 overflow-hidden">
+                        {/* Status summary dots + text */}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {dayBookings.slice(0, 3).map((b) => (
+                            <div
+                              key={b.id}
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{
+                                backgroundColor: STATUS_DOT_COLOR[b.status],
+                              }}
+                              title={`${b.scheduledTime} - ${b.service?.name || "Foglalás"} (${STATUS_HU[b.status]})`}
+                            />
+                          ))}
+                          {dayBookings.length > 3 && (
+                            <span className="text-[9px] text-muted-foreground leading-none flex-shrink-0">
+                              +{dayBookings.length - 3}
                             </span>
                           )}
                         </div>
-                      )}
-                    </button>
-                  );
-                },
-              )}
+
+                        {/* Pending label if any */}
+                        {hasPending && (
+                          <span
+                            className="text-[9px] font-medium leading-tight truncate hidden md:block"
+                            style={{ color: "#b45309" }}
+                          >
+                            {pendingCount2} függőben
+                          </span>
+                        )}
+                        {!hasPending && confirmedCount2 > 0 && (
+                          <span
+                            className="text-[9px] font-medium leading-tight truncate hidden md:block"
+                            style={{ color: "#2563eb" }}
+                          >
+                            {confirmedCount2} megerősítve
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
 
           {/* Legend */}
           <div className="flex flex-wrap gap-4 mt-4 pt-4 border-t">
             {(
-              [
-                "PENDING",
-                "CONFIRMED",
-                "IN_PROGRESS",
-                "COMPLETED",
-                "CANCELLED",
-              ] as BookingStatus[]
+              ["PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as BookingStatus[]
             ).map((status) => (
               <div key={status} className="flex items-center gap-1.5">
                 <div
                   className="w-2.5 h-2.5 rounded-full"
                   style={{ backgroundColor: STATUS_DOT_COLOR[status] }}
                 />
-                <span className="text-xs text-muted-foreground">
-                  {STATUS_HU[status]}
-                </span>
+                <span className="text-xs text-muted-foreground">{STATUS_HU[status]}</span>
               </div>
             ))}
           </div>
@@ -446,12 +416,7 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
     <div className="space-y-4">
       {/* Top bar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => setViewMode("month")}
-          className="gap-1.5"
-        >
+        <Button variant="ghost" size="sm" onClick={() => setViewMode("month")} className="gap-1.5">
           <ArrowLeft className="h-4 w-4" />
           Havi nézet
         </Button>
@@ -460,11 +425,7 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
           <Button variant="outline" size="icon" onClick={prevDays}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setFocusDate(new Date())}
-          >
+          <Button variant="outline" size="sm" onClick={() => setFocusDate(new Date())}>
             Ma
           </Button>
           <Button variant="outline" size="icon" onClick={nextDays}>
@@ -476,10 +437,7 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
       {/* Day view grid */}
       <Card className="overflow-hidden">
         {/* Day column headers */}
-        <div
-          className="grid border-b bg-muted/30"
-          style={{ gridTemplateColumns: colTemplate }}
-        >
+        <div className="grid border-b bg-muted/30" style={{ gridTemplateColumns: colTemplate }}>
           {/* Time gutter spacer */}
           <div className="border-r p-2" />
 
@@ -502,10 +460,7 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
                   {getDayOfWeekHu(date)}
                 </div>
                 <div
-                  className={[
-                    "text-2xl font-bold mt-0.5",
-                    isToday ? "text-primary" : "",
-                  ].join(" ")}
+                  className={["text-2xl font-bold mt-0.5", isToday ? "text-primary" : ""].join(" ")}
                 >
                   {date.getDate()}
                 </div>
@@ -571,9 +526,7 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
                     dayBookings={dayBookings}
                     selectedBookingId={selectedBooking?.id || null}
                     onSelectBooking={(b) =>
-                      setSelectedBooking(
-                        selectedBooking?.id === b.id ? null : b,
-                      )
+                      setSelectedBooking(selectedBooking?.id === b.id ? null : b)
                     }
                   />
                 );
@@ -585,30 +538,18 @@ export function CalendarView({ memberId }: CalendarViewProps = {}) {
 
       {/* Selected booking detail */}
       {selectedBooking && (
-        <BookingDetailPanel
-          booking={selectedBooking}
-          onClose={() => setSelectedBooking(null)}
-        />
+        <BookingDetailPanel booking={selectedBooking} onClose={() => setSelectedBooking(null)} />
       )}
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 px-1">
-        {(
-          [
-            "PENDING",
-            "CONFIRMED",
-            "IN_PROGRESS",
-            "COMPLETED",
-          ] as BookingStatus[]
-        ).map((status) => (
+        {(["PENDING", "CONFIRMED", "IN_PROGRESS", "COMPLETED"] as BookingStatus[]).map((status) => (
           <div key={status} className="flex items-center gap-1.5">
             <div
               className="w-2.5 h-2.5 rounded-full"
               style={{ backgroundColor: STATUS_DOT_COLOR[status] }}
             />
-            <span className="text-xs text-muted-foreground">
-              {STATUS_HU[status]}
-            </span>
+            <span className="text-xs text-muted-foreground">{STATUS_HU[status]}</span>
           </div>
         ))}
       </div>
@@ -635,10 +576,9 @@ function DayColumn({
 }) {
   return (
     <div
-      className={[
-        "relative border-r last:border-r-0",
-        isToday ? "bg-primary/[0.02]" : "",
-      ].join(" ")}
+      className={["relative border-r last:border-r-0", isToday ? "bg-primary/[0.02]" : ""].join(
+        " ",
+      )}
     >
       {/* Hour lines */}
       {hours.map((hour) => (
@@ -690,10 +630,7 @@ function CurrentTimeIndicator() {
   const top = ((nowMins - startMins) / 60) * HOUR_HEIGHT;
 
   return (
-    <div
-      className="absolute left-0 right-0 z-20 pointer-events-none"
-      style={{ top }}
-    >
+    <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top }}>
       <div className="relative">
         <div className="absolute left-0 w-2.5 h-2.5 -translate-y-1/2 rounded-full bg-red-500" />
         <div className="h-[2px] bg-red-500 ml-2" />
@@ -724,10 +661,7 @@ function BookingBlock({
 
   const memberName = booking.assignedMember
     ? booking.assignedMember.displayName ||
-      [
-        booking.assignedMember.user?.firstName || "",
-        booking.assignedMember.user?.lastName || "",
-      ]
+      [booking.assignedMember.user?.firstName || "", booking.assignedMember.user?.lastName || ""]
         .join(" ")
         .trim()
     : null;
@@ -741,9 +675,7 @@ function BookingBlock({
       className={[
         "absolute left-1 right-1 rounded-md border px-2 py-1 text-left overflow-hidden transition-all z-10 cursor-pointer",
         isCancelled ? "line-through" : "",
-        isSelected
-          ? "ring-2 ring-primary shadow-lg z-30"
-          : "hover:shadow-md hover:z-20",
+        isSelected ? "ring-2 ring-primary shadow-lg z-30" : "hover:shadow-md hover:z-20",
       ].join(" ")}
       style={{
         top: Math.max(top, 0),
@@ -778,19 +710,10 @@ function BookingBlock({
 // BOOKING DETAIL PANEL
 // ============================================================================
 
-function BookingDetailPanel({
-  booking,
-  onClose,
-}: {
-  booking: Booking;
-  onClose: () => void;
-}) {
+function BookingDetailPanel({ booking, onClose }: { booking: Booking; onClose: () => void }) {
   const memberName = booking.assignedMember
     ? booking.assignedMember.displayName ||
-      [
-        booking.assignedMember.user?.firstName || "",
-        booking.assignedMember.user?.lastName || "",
-      ]
+      [booking.assignedMember.user?.firstName || "", booking.assignedMember.user?.lastName || ""]
         .join(" ")
         .trim() ||
       "\u2014"
@@ -803,12 +726,7 @@ function BookingDetailPanel({
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
           <h3 className="font-semibold text-sm">Foglalás részletei</h3>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          className="h-7 w-7"
-        >
+        <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7">
           <X className="h-4 w-4" />
         </Button>
       </div>
@@ -820,13 +738,9 @@ function BookingDetailPanel({
           <div>
             <p className="font-medium">
               {booking.scheduledDate} &middot; {booking.scheduledTime}
-              {booking.scheduledEndTime
-                ? ` \u2013 ${booking.scheduledEndTime}`
-                : ""}
+              {booking.scheduledEndTime ? ` \u2013 ${booking.scheduledEndTime}` : ""}
             </p>
-            <p className="text-xs text-muted-foreground">
-              {booking.durationMin} perc
-            </p>
+            <p className="text-xs text-muted-foreground">{booking.durationMin} perc</p>
           </div>
         </div>
 
@@ -834,9 +748,7 @@ function BookingDetailPanel({
         <div className="flex items-start gap-2">
           <Wrench className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">
-              {booking.service?.name || "Szolgáltatás"}
-            </p>
+            <p className="font-medium">{booking.service?.name || "Szolgáltatás"}</p>
             <p className="text-xs text-muted-foreground">
               {Number(booking.totalAmount)} {booking.currency}
             </p>
@@ -848,13 +760,10 @@ function BookingDetailPanel({
           <User className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
           <div>
             <p className="font-medium">
-              {booking.customer?.firstName || ""}{" "}
-              {booking.customer?.lastName || ""}
+              {booking.customer?.firstName || ""} {booking.customer?.lastName || ""}
             </p>
             {booking.customer?.email && (
-              <p className="text-xs text-muted-foreground">
-                {booking.customer.email}
-              </p>
+              <p className="text-xs text-muted-foreground">{booking.customer.email}</p>
             )}
           </div>
         </div>
@@ -870,9 +779,7 @@ function BookingDetailPanel({
               {STATUS_HU[booking.status]}
             </Badge>
             {memberName && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Munkatárs: {memberName}
-              </p>
+              <p className="text-xs text-muted-foreground mt-1">Munkatárs: {memberName}</p>
             )}
           </div>
         </div>
@@ -882,20 +789,14 @@ function BookingDetailPanel({
       {booking.address && (
         <div className="flex items-start gap-2 mt-3 pt-3 border-t text-sm">
           <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-          <span>
-            {[booking.address.city, booking.address.street]
-              .filter(Boolean)
-              .join(", ")}
-          </span>
+          <span>{[booking.address.city, booking.address.street].filter(Boolean).join(", ")}</span>
         </div>
       )}
 
       {/* Notes */}
       {booking.notes && (
         <div className="mt-3 pt-3 border-t">
-          <p className="text-xs text-muted-foreground italic">
-            &bdquo;{booking.notes}&rdquo;
-          </p>
+          <p className="text-xs text-muted-foreground italic">&bdquo;{booking.notes}&rdquo;</p>
         </div>
       )}
 

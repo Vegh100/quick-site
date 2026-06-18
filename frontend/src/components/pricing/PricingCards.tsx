@@ -75,11 +75,14 @@ export function PricingCards() {
           }`}
         >
           {tier.badge && (
-            <Badge className="absolute -top-3 left-1/2 -translate-x-1/2" variant={tier.variant === "primary" ? "default" : "secondary"}>
+            <Badge
+              className="absolute -top-3 left-1/2 -translate-x-1/2"
+              variant={tier.variant === "primary" ? "default" : "secondary"}
+            >
               {tier.badge}
             </Badge>
           )}
-          
+
           <div className="text-center mb-6">
             <h3 className="mb-2">{tier.name}</h3>
             <div className="flex items-baseline justify-center gap-1 mb-1">
@@ -97,10 +100,7 @@ export function PricingCards() {
             ))}
           </ul>
 
-          <Button
-            className="w-full"
-            variant={tier.variant === "primary" ? "default" : "outline"}
-          >
+          <Button className="w-full" variant={tier.variant === "primary" ? "default" : "outline"}>
             {tier.cta}
           </Button>
         </Card>

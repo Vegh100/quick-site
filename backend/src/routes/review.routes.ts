@@ -2,10 +2,7 @@ import { Router } from "express";
 import * as reviewController from "../controllers/review.controller.js";
 import { authenticate } from "../middleware/auth.js";
 import { validate } from "../middleware/validate.js";
-import {
-  createReviewSchema,
-  reviewFilterSchema,
-} from "../validators/review.validators.js";
+import { createReviewSchema, reviewFilterSchema } from "../validators/review.validators.js";
 
 const router = Router();
 
@@ -17,12 +14,7 @@ router.get(
 );
 
 // Authenticated
-router.post(
-  "/",
-  authenticate,
-  validate(createReviewSchema),
-  reviewController.createReview,
-);
+router.post("/", authenticate, validate(createReviewSchema), reviewController.createReview);
 
 router.get(
   "/me",
@@ -32,10 +24,6 @@ router.get(
 );
 
 // Provider responds to a review
-router.post(
-  "/:id/respond",
-  authenticate,
-  reviewController.respondToReview,
-);
+router.post("/:id/respond", authenticate, reviewController.respondToReview);
 
 export default router;

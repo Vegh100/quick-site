@@ -8,10 +8,7 @@ export async function exportBookingsCsv(
   next: NextFunction,
 ) {
   try {
-    const csv = await exportService.exportBookingsCsv(
-      req.user!.userId,
-      req.query as any,
-    );
+    const csv = await exportService.exportBookingsCsv(req.user!.userId, req.query as any);
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader(
@@ -36,17 +33,11 @@ export async function getRevenueSummary(
     };
 
     if (!dateFrom || !dateTo) {
-      res
-        .status(400)
-        .json({ success: false, error: "dateFrom and dateTo are required" });
+      res.status(400).json({ success: false, error: "dateFrom and dateTo are required" });
       return;
     }
 
-    const summary = await exportService.getRevenueSummary(
-      req.user!.userId,
-      dateFrom,
-      dateTo,
-    );
+    const summary = await exportService.getRevenueSummary(req.user!.userId, dateFrom, dateTo);
     res.json({ success: true, data: summary });
   } catch (error) {
     next(error);

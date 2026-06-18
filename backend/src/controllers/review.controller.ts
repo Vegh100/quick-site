@@ -2,11 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import * as reviewService from "../services/review.service.js";
 import { AuthenticatedRequest } from "../types/index.js";
 
-export async function createReview(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function createReview(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
     const review = await reviewService.createReview(req.user!.userId, req.body);
     res.status(201).json({ success: true, data: review });
@@ -15,16 +11,9 @@ export async function createReview(
   }
 }
 
-export async function getProviderReviews(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getProviderReviews(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await reviewService.getProviderReviews(
-      req.params.providerId,
-      req.query as any,
-    );
+    const result = await reviewService.getProviderReviews(req.params.providerId, req.query as any);
     res.json({
       success: true,
       data: { reviews: result.reviews, meta: result.meta },
@@ -34,19 +23,10 @@ export async function getProviderReviews(
   }
 }
 
-export async function getMyReviews(
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction,
-) {
+export async function getMyReviews(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   try {
-    const type =
-      (req.query.type as string) === "received" ? "received" : "given";
-    const result = await reviewService.getUserReviews(
-      req.user!.userId,
-      type,
-      req.query as any,
-    );
+    const type = (req.query.type as string) === "received" ? "received" : "given";
+    const result = await reviewService.getUserReviews(req.user!.userId, type, req.query as any);
     res.json({
       success: true,
       data: { reviews: result.reviews, meta: result.meta },
@@ -64,9 +44,7 @@ export async function respondToReview(
   try {
     const { response } = req.body;
     if (!response || typeof response !== "string" || response.trim().length === 0) {
-      res
-        .status(400)
-        .json({ success: false, error: "Response text is required" });
+      res.status(400).json({ success: false, error: "Response text is required" });
       return;
     }
 

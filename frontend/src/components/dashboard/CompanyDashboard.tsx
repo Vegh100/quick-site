@@ -63,9 +63,7 @@ function KpiCard({
           <p className="text-2xl font-bold mt-1">{value}</p>
           <div className="flex items-center gap-2 mt-1">
             {change !== undefined && (
-              <span
-                className={`text-xs font-medium flex items-center gap-0.5 ${getTrendColor()}`}
-              >
+              <span className={`text-xs font-medium flex items-center gap-0.5 ${getTrendColor()}`}>
                 {trend === "up" ? (
                   <TrendingUp className="h-3 w-3" />
                 ) : trend === "down" ? (
@@ -75,9 +73,7 @@ function KpiCard({
                 {change}%
               </span>
             )}
-            {subValue && (
-              <span className="text-xs text-muted-foreground">{subValue}</span>
-            )}
+            {subValue && <span className="text-xs text-muted-foreground">{subValue}</span>}
           </div>
         </div>
         <div
@@ -121,13 +117,7 @@ export function PersonalDashboard({ stats }: { stats: StatsData }) {
           label="Havi bevétel"
           value={`${stats.thisMonthRevenue.toLocaleString("hu-HU")} RON`}
           change={stats.revenueChange}
-          trend={
-            stats.revenueChange > 0
-              ? "up"
-              : stats.revenueChange < 0
-                ? "down"
-                : "neutral"
-          }
+          trend={stats.revenueChange > 0 ? "up" : stats.revenueChange < 0 ? "down" : "neutral"}
           subValue="vs előző hónap"
           icon={DollarSign}
         />
@@ -135,21 +125,11 @@ export function PersonalDashboard({ stats }: { stats: StatsData }) {
           label="Havi foglalások"
           value={String(stats.thisMonthBookings)}
           change={stats.bookingChange}
-          trend={
-            stats.bookingChange > 0
-              ? "up"
-              : stats.bookingChange < 0
-                ? "down"
-                : "neutral"
-          }
+          trend={stats.bookingChange > 0 ? "up" : stats.bookingChange < 0 ? "down" : "neutral"}
           subValue="vs előző hónap"
           icon={Calendar}
         />
-        <KpiCard
-          label="Ügyfelek"
-          value={String(stats.totalClients)}
-          icon={Users}
-        />
+        <KpiCard label="Ügyfelek" value={String(stats.totalClients)} icon={Users} />
         <KpiCard
           label="Értékelés"
           value={stats.averageRating.toFixed(1)}
@@ -160,21 +140,13 @@ export function PersonalDashboard({ stats }: { stats: StatsData }) {
 
       {/* Secondary KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          label="Teljesítési arány"
-          value={`${stats.completionRate}%`}
-          icon={Target}
-        />
+        <KpiCard label="Teljesítési arány" value={`${stats.completionRate}%`} icon={Target} />
         <KpiCard
           label="Átl. foglalás értéke"
           value={`${stats.avgBookingValue} RON`}
           icon={BarChart3}
         />
-        <KpiCard
-          label="Átl. időtartam"
-          value={`${stats.avgDuration} perc`}
-          icon={Clock}
-        />
+        <KpiCard label="Átl. időtartam" value={`${stats.avgDuration} perc`} icon={Clock} />
         <KpiCard
           label="Heti foglalások"
           value={String(stats.thisWeekBookings)}
@@ -192,16 +164,8 @@ export function PersonalDashboard({ stats }: { stats: StatsData }) {
             <AreaChart data={stats.revenueByMonth}>
               <defs>
                 <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop
-                    offset="5%"
-                    stopColor="var(--primary)"
-                    stopOpacity={0.3}
-                  />
-                  <stop
-                    offset="95%"
-                    stopColor="var(--primary)"
-                    stopOpacity={0}
-                  />
+                  <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
@@ -214,9 +178,7 @@ export function PersonalDashboard({ stats }: { stats: StatsData }) {
               <YAxis
                 stroke="var(--muted-foreground)"
                 fontSize={12}
-                tickFormatter={(v: number) =>
-                  v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
-                }
+                tickFormatter={(v: number) => (v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v))}
               />
               <Tooltip
                 contentStyle={{
@@ -225,13 +187,8 @@ export function PersonalDashboard({ stats }: { stats: StatsData }) {
                   borderRadius: "8px",
                   fontSize: "13px",
                 }}
-                formatter={(value: number) => [
-                  `${value.toLocaleString("hu-HU")} RON`,
-                  "Bevétel",
-                ]}
-                labelFormatter={(label: string) =>
-                  monthNames[label.split("-")[1]] || label
-                }
+                formatter={(value: number) => [`${value.toLocaleString("hu-HU")} RON`, "Bevétel"]}
+                labelFormatter={(label: string) => monthNames[label.split("-")[1]] || label}
               />
               <Area
                 type="monotone"
@@ -289,13 +246,7 @@ export function CompanyDashboard({ stats }: { stats: StatsData }) {
           label="Havi bevétel"
           value={`${stats.thisMonthRevenue.toLocaleString("hu-HU")} RON`}
           change={stats.revenueChange}
-          trend={
-            stats.revenueChange > 0
-              ? "up"
-              : stats.revenueChange < 0
-                ? "down"
-                : "neutral"
-          }
+          trend={stats.revenueChange > 0 ? "up" : stats.revenueChange < 0 ? "down" : "neutral"}
           subValue="vs előző hónap"
           icon={DollarSign}
         />
@@ -308,30 +259,16 @@ export function CompanyDashboard({ stats }: { stats: StatsData }) {
           label="Havi foglalások"
           value={String(stats.thisMonthBookings)}
           change={stats.bookingChange}
-          trend={
-            stats.bookingChange > 0
-              ? "up"
-              : stats.bookingChange < 0
-                ? "down"
-                : "neutral"
-          }
+          trend={stats.bookingChange > 0 ? "up" : stats.bookingChange < 0 ? "down" : "neutral"}
           subValue="vs előző hónap"
           icon={Calendar}
         />
-        <KpiCard
-          label="Összes ügyfél"
-          value={String(stats.totalClients)}
-          icon={Users}
-        />
+        <KpiCard label="Összes ügyfél" value={String(stats.totalClients)} icon={Users} />
       </div>
 
       {/* Second KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard
-          label="Teljesítési arány"
-          value={`${stats.completionRate}%`}
-          icon={Target}
-        />
+        <KpiCard label="Teljesítési arány" value={`${stats.completionRate}%`} icon={Target} />
         <KpiCard
           label="Átl. foglalás érték"
           value={`${stats.avgBookingValue} RON`}
@@ -362,42 +299,21 @@ export function CompanyDashboard({ stats }: { stats: StatsData }) {
         {stats.revenueByMonth && stats.revenueByMonth.length > 0 && (
           <Card className="p-6">
             <h3 className="font-semibold mb-1">Bevétel alakulás</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Havi bevétel, utolsó 6 hónap
-            </p>
+            <p className="text-sm text-muted-foreground mb-4">Havi bevétel, utolsó 6 hónap</p>
             <ResponsiveContainer width="100%" height={280}>
               <AreaChart data={stats.revenueByMonth}>
                 <defs>
-                  <linearGradient
-                    id="companyRevenueGrad"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="5%"
-                      stopColor="var(--primary)"
-                      stopOpacity={0.3}
-                    />
-                    <stop
-                      offset="95%"
-                      stopColor="var(--primary)"
-                      stopOpacity={0}
-                    />
+                  <linearGradient id="companyRevenueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="rgba(0,0,0,0.06)"
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
                 <XAxis
                   dataKey="month"
                   stroke="var(--muted-foreground)"
                   fontSize={12}
-                  tickFormatter={(v: string) =>
-                    monthNames[v.split("-")[1]] || v
-                  }
+                  tickFormatter={(v: string) => monthNames[v.split("-")[1]] || v}
                 />
                 <YAxis
                   stroke="var(--muted-foreground)"
@@ -413,13 +329,8 @@ export function CompanyDashboard({ stats }: { stats: StatsData }) {
                     borderRadius: "8px",
                     fontSize: "13px",
                   }}
-                  formatter={(value: number) => [
-                    `${value.toLocaleString("hu-HU")} RON`,
-                    "Bevétel",
-                  ]}
-                  labelFormatter={(label: string) =>
-                    monthNames[label.split("-")[1]] || label
-                  }
+                  formatter={(value: number) => [`${value.toLocaleString("hu-HU")} RON`, "Bevétel"]}
+                  labelFormatter={(label: string) => monthNames[label.split("-")[1]] || label}
                 />
                 <Area
                   type="monotone"
@@ -442,10 +353,7 @@ export function CompanyDashboard({ stats }: { stats: StatsData }) {
             </p>
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={stats.dailyData}>
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="rgba(0,0,0,0.06)"
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
                 <XAxis
                   dataKey="date"
                   stroke="var(--muted-foreground)"
@@ -456,11 +364,7 @@ export function CompanyDashboard({ stats }: { stats: StatsData }) {
                   }}
                   interval={4}
                 />
-                <YAxis
-                  stroke="var(--muted-foreground)"
-                  fontSize={12}
-                  allowDecimals={false}
-                />
+                <YAxis stroke="var(--muted-foreground)" fontSize={12} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: "var(--card)",
@@ -522,19 +426,13 @@ const STATUS_CHART_COLORS: Record<string, string> = {
   CANCELLED: "#ef4444",
 };
 
-function StatusDonut({
-  data,
-}: {
-  data: { status: string; count: number; label: string }[];
-}) {
+function StatusDonut({ data }: { data: { status: string; count: number; label: string }[] }) {
   const total = data.reduce((sum, d) => sum + d.count, 0);
 
   return (
     <Card className="p-6">
       <h3 className="font-semibold mb-1">Foglalás státuszok</h3>
-      <p className="text-sm text-muted-foreground mb-4">
-        Összes foglalás eloszlása
-      </p>
+      <p className="text-sm text-muted-foreground mb-4">Összes foglalás eloszlása</p>
       <div className="flex items-center gap-6">
         <ResponsiveContainer width="50%" height={220}>
           <PieChart>
@@ -549,10 +447,7 @@ function StatusDonut({
               nameKey="label"
             >
               {data.map((entry) => (
-                <Cell
-                  key={entry.status}
-                  fill={STATUS_CHART_COLORS[entry.status] || "#94a3b8"}
-                />
+                <Cell key={entry.status} fill={STATUS_CHART_COLORS[entry.status] || "#94a3b8"} />
               ))}
             </Pie>
             <Tooltip
@@ -575,13 +470,10 @@ function StatusDonut({
               <div
                 className="h-3 w-3 rounded-full flex-shrink-0"
                 style={{
-                  backgroundColor:
-                    STATUS_CHART_COLORS[entry.status] || "#94a3b8",
+                  backgroundColor: STATUS_CHART_COLORS[entry.status] || "#94a3b8",
                 }}
               />
-              <span className="flex-1 text-muted-foreground">
-                {entry.label}
-              </span>
+              <span className="flex-1 text-muted-foreground">{entry.label}</span>
               <span className="font-medium">{entry.count}</span>
               <span className="text-muted-foreground text-xs">
                 ({total > 0 ? Math.round((entry.count / total) * 100) : 0}%)
@@ -624,16 +516,10 @@ function ServiceBreakdownChart({
   return (
     <Card className="p-6">
       <h3 className="font-semibold mb-1">Szolgáltatások</h3>
-      <p className="text-sm text-muted-foreground mb-4">
-        Foglalások szolgáltatás szerint
-      </p>
+      <p className="text-sm text-muted-foreground mb-4">Foglalások szolgáltatás szerint</p>
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} layout="vertical">
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="rgba(0,0,0,0.06)"
-            horizontal={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
           <XAxis type="number" stroke="var(--muted-foreground)" fontSize={12} />
           <YAxis
             type="category"
@@ -641,9 +527,7 @@ function ServiceBreakdownChart({
             stroke="var(--muted-foreground)"
             fontSize={12}
             width={120}
-            tickFormatter={(v: string) =>
-              v.length > 16 ? v.substring(0, 14) + "…" : v
-            }
+            tickFormatter={(v: string) => (v.length > 16 ? v.substring(0, 14) + "…" : v)}
           />
           <Tooltip
             contentStyle={{
@@ -654,11 +538,7 @@ function ServiceBreakdownChart({
             }}
             formatter={(value: number, name: string) => [
               value,
-              name === "bookingCount"
-                ? "Foglalások"
-                : name === "revenue"
-                  ? "Bevétel (RON)"
-                  : name,
+              name === "bookingCount" ? "Foglalások" : name === "revenue" ? "Bevétel (RON)" : name,
             ]}
           />
           <Bar
@@ -690,19 +570,10 @@ function MemberPerformanceChart({
   return (
     <Card className="p-6">
       <h3 className="font-semibold mb-1">Csapattagok teljesítménye</h3>
-      <p className="text-sm text-muted-foreground mb-4">
-        Foglalások és bevétel csapattagonként
-      </p>
-      <ResponsiveContainer
-        width="100%"
-        height={Math.max(200, data.length * 60)}
-      >
+      <p className="text-sm text-muted-foreground mb-4">Foglalások és bevétel csapattagonként</p>
+      <ResponsiveContainer width="100%" height={Math.max(200, data.length * 60)}>
         <BarChart data={data} layout="vertical">
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="rgba(0,0,0,0.06)"
-            horizontal={false}
-          />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" horizontal={false} />
           <XAxis type="number" stroke="var(--muted-foreground)" fontSize={12} />
           <YAxis
             type="category"
@@ -710,9 +581,7 @@ function MemberPerformanceChart({
             stroke="var(--muted-foreground)"
             fontSize={12}
             width={140}
-            tickFormatter={(v: string) =>
-              v.length > 18 ? v.substring(0, 16) + "…" : v
-            }
+            tickFormatter={(v: string) => (v.length > 18 ? v.substring(0, 16) + "…" : v)}
           />
           <Tooltip
             contentStyle={{
@@ -722,9 +591,7 @@ function MemberPerformanceChart({
               fontSize: "13px",
             }}
             formatter={(value: number, name: string) => [
-              name === "revenue"
-                ? `${value.toLocaleString("hu-HU")} RON`
-                : value,
+              name === "revenue" ? `${value.toLocaleString("hu-HU")} RON` : value,
               name === "bookingCount" ? "Foglalások" : "Bevétel",
             ]}
           />
@@ -733,18 +600,8 @@ function MemberPerformanceChart({
               value === "bookingCount" ? "Foglalások" : "Bevétel (RON)"
             }
           />
-          <Bar
-            dataKey="bookingCount"
-            fill="#3b82f6"
-            radius={[0, 4, 4, 0]}
-            maxBarSize={20}
-          />
-          <Bar
-            dataKey="revenue"
-            fill="#10b981"
-            radius={[0, 4, 4, 0]}
-            maxBarSize={20}
-          />
+          <Bar dataKey="bookingCount" fill="#3b82f6" radius={[0, 4, 4, 0]} maxBarSize={20} />
+          <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} maxBarSize={20} />
         </BarChart>
       </ResponsiveContainer>
     </Card>

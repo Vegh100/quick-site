@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { logger } from "../lib/logger.js";
 
 // ============================================================================
 // SMTP TRANSPORTER
@@ -23,19 +24,18 @@ const FROM_EMAIL = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER || "";
  */
 export async function verifyEmailConnection(): Promise<boolean> {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn(
-      "SMTP credentials not configured — email sending is disabled. " +
-        "Set SMTP_USER and SMTP_PASS in .env to enable.",
+    logger.warn(
+      "SMTP credentials not configured — email sending is disabled. Set SMTP_USER and SMTP_PASS in .env to enable.",
     );
     return false;
   }
 
   try {
     await transporter.verify();
-    console.log("Email service connected successfully");
+    logger.info("Email service connected successfully");
     return true;
   } catch (error) {
-    console.warn("Email service connection failed:", (error as Error).message);
+    logger.warn({ err: error }, "Email service connection failed");
     return false;
   }
 }
@@ -58,9 +58,9 @@ export async function sendInviteEmail({
   displayName,
 }: InviteEmailParams): Promise<boolean> {
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn(
-      `📧 Email not sent to ${toEmail} (SMTP not configured). ` +
-        `Invite link: ${getInviteUrl(inviteToken)}`,
+    logger.warn(
+      { toEmail, inviteUrl: getInviteUrl(inviteToken) },
+      "Email not sent (SMTP not configured)",
     );
     return false;
   }
@@ -168,10 +168,89 @@ Ha nem ismered a "${businessName}" céget, kérlek hagyd figyelmen kívül ezt a
       html,
     });
 
-    console.log(`Invite email sent to ${toEmail}`);
+    logger.info({ toEmail }, "Invite email sent");
     return true;
   } catch (error) {
-    console.error(`Failed to send invite email to ${toEmail}:`, (error as Error).message);
+    logger.error({ err: error, toEmail }, "Failed to send invite email");
+    return false;
+  }
+}
+
+// ============================================================================
+// VERIFICATION EMAIL
+// ============================================================================
+
+interface VerificationEmailParams {
+  toEmail: string;
+  firstName: string;
+  verifyUrl: string;
+}
+
+export async function sendVerificationEmail({
+  toEmail,
+  firstName,
+  verifyUrl,
+}: VerificationEmailParams): Promise<boolean> {
+  if (!isSmtpConfigured()) return false;
+
+  const greeting = firstName ? `Kedves ${firstName}` : "Kedves Felhasználó";
+
+  const html = `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 20px">
+  <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background: #fff; border-radius: 8px; overflow: hidden">
+          <tr>
+            <td style="background: #FF5100; padding: 24px; text-align: center">
+              <h1 style="color: #fff; margin: 0; font-size: 24px">Qvick</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 32px">
+              <p style="font-size: 16px">${greeting},</p>
+              <p style="font-size: 16px">Köszönjük a regisztrációt! Kérjük, erősítsd meg az e-mail címedet az alábbi gombra kattintva:</p>
+              <p style="text-align: center; margin: 32px 0">
+                <a href="${verifyUrl}" style="background: #FF5100; color: #fff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: bold">E-mail cím megerősítése</a>
+              </p>
+              <p style="font-size: 14px; color: #666">A link 24 órán belül érvényes.</p>
+              <p style="font-size: 12px; color: #999; margin-top: 24px">Ha nem te regisztráltál, kérjük hagyd figyelmen kívül ezt az e-mailt.</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background: #f8f8f8; padding: 16px; text-align: center">
+              <p style="color: #999; font-size: 12px; margin: 0">&copy; ${new Date().getFullYear()} Qvick</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = `${greeting},
+
+Köszönjük a regisztrációt! Kérjük, erősítsd meg az e-mail címedet: ${verifyUrl}
+
+A link 24 órán belül érvényes.
+
+© ${new Date().getFullYear()} Qvick`;
+
+  try {
+    await transporter.sendMail({
+      from: `"${FROM_NAME}" <${FROM_EMAIL}>`,
+      to: toEmail,
+      subject: "E-mail cím megerősítése – Qvick",
+      text,
+      html,
+    });
+
+    logger.info({ toEmail }, "Verification email sent");
+    return true;
+  } catch (error) {
+    logger.error({ err: error, toEmail }, "Failed to send verification email");
     return false;
   }
 }
@@ -188,8 +267,8 @@ interface BookingEmailParams {
   serviceName: string;
   scheduledDate: string; // formatted e.g. "2026. február 23."
   scheduledTime: string; // e.g. "14:00"
-  duration: number;      // minutes
-  totalAmount: string;   // formatted e.g. "12 500 RON"
+  duration: number; // minutes
+  totalAmount: string; // formatted e.g. "12 500 RON"
   bookingId: string;
 }
 
@@ -199,7 +278,17 @@ interface BookingEmailParams {
 export async function sendBookingCreatedEmail(params: BookingEmailParams): Promise<boolean> {
   if (!isSmtpConfigured()) return false;
 
-  const { customerEmail, customerName, providerEmail, businessName, serviceName, scheduledDate, scheduledTime, duration, totalAmount } = params;
+  const {
+    customerEmail,
+    customerName,
+    providerEmail,
+    businessName,
+    serviceName,
+    scheduledDate,
+    scheduledTime,
+    duration,
+    totalAmount,
+  } = params;
   const dashboardUrl = `${getBaseUrl()}/ugyfel/foglalasaim`;
 
   // Email to customer
@@ -230,9 +319,9 @@ export async function sendBookingCreatedEmail(params: BookingEmailParams): Promi
       text: `Kedves ${customerName}, foglalásodat rögzítettük: ${serviceName} – ${scheduledDate} ${scheduledTime}. ${businessName}`,
       html: customerHtml,
     });
-    console.log(`Booking created email sent to customer: ${customerEmail}`);
+    logger.info({ customerEmail }, "Booking created email sent to customer");
   } catch (err) {
-    console.error(`Failed to send booking email to ${customerEmail}:`, (err as Error).message);
+    logger.error({ err, customerEmail }, "Failed to send booking email to customer");
   }
 
   // Email to provider
@@ -262,9 +351,9 @@ export async function sendBookingCreatedEmail(params: BookingEmailParams): Promi
         text: `Új foglalás érkezett: ${customerName} – ${serviceName}, ${scheduledDate} ${scheduledTime}.`,
         html: providerHtml,
       });
-      console.log(`Booking created email sent to provider: ${providerEmail}`);
+      logger.info({ providerEmail }, "Booking created email sent to provider");
     } catch (err) {
-      console.error(`Failed to send booking email to provider ${providerEmail}:`, (err as Error).message);
+      logger.error({ err, providerEmail }, "Failed to send booking email to provider");
     }
   }
 
@@ -277,7 +366,16 @@ export async function sendBookingCreatedEmail(params: BookingEmailParams): Promi
 export async function sendBookingConfirmedEmail(params: BookingEmailParams): Promise<boolean> {
   if (!isSmtpConfigured()) return false;
 
-  const { customerEmail, customerName, businessName, serviceName, scheduledDate, scheduledTime, duration, totalAmount } = params;
+  const {
+    customerEmail,
+    customerName,
+    businessName,
+    serviceName,
+    scheduledDate,
+    scheduledTime,
+    duration,
+    totalAmount,
+  } = params;
   const dashboardUrl = `${getBaseUrl()}/ugyfel/foglalasaim`;
 
   const html = buildEmailLayout({
@@ -307,10 +405,10 @@ export async function sendBookingConfirmedEmail(params: BookingEmailParams): Pro
       text: `Kedves ${customerName}, foglalásodat megerősítették: ${serviceName} – ${scheduledDate} ${scheduledTime}. ${businessName}`,
       html,
     });
-    console.log(`Booking confirmed email sent to ${customerEmail}`);
+    logger.info({ customerEmail }, "Booking confirmed email sent");
     return true;
   } catch (err) {
-    console.error(`Failed to send confirmation email to ${customerEmail}:`, (err as Error).message);
+    logger.error({ err, customerEmail }, "Failed to send confirmation email");
     return false;
   }
 }
@@ -323,9 +421,22 @@ export async function sendBookingCancelledEmail(
 ): Promise<boolean> {
   if (!isSmtpConfigured()) return false;
 
-  const { customerEmail, customerName, businessName, serviceName, scheduledDate, scheduledTime, duration, totalAmount, cancelledByProvider, cancelReason } = params;
+  const {
+    customerEmail,
+    customerName,
+    businessName,
+    serviceName,
+    scheduledDate,
+    scheduledTime,
+    duration,
+    totalAmount,
+    cancelledByProvider,
+    cancelReason,
+  } = params;
 
-  const recipientEmail = cancelledByProvider ? customerEmail : (params.providerEmail || customerEmail);
+  const recipientEmail = cancelledByProvider
+    ? customerEmail
+    : params.providerEmail || customerEmail;
   const recipientName = cancelledByProvider ? customerName : businessName;
   const cancelledByText = cancelledByProvider ? businessName : customerName;
 
@@ -340,11 +451,15 @@ export async function sendBookingCancelledEmail(
         Sajnálattal értesítünk, hogy az alábbi foglalást <strong>${cancelledByText}</strong> lemondta.
       </p>
       ${bookingDetailsBlock({ serviceName, scheduledDate, scheduledTime, duration, totalAmount, businessName })}
-      ${cancelReason ? `
+      ${
+        cancelReason
+          ? `
       <div style="margin:20px 0;padding:12px 16px;background:#fef2f2;border-left:4px solid #ef4444;border-radius:4px;">
         <p style="margin:0;color:#666;font-size:13px;"><strong>Lemondás oka:</strong></p>
         <p style="margin:4px 0 0;color:#333;font-size:14px;">${cancelReason}</p>
-      </div>` : ""}
+      </div>`
+          : ""
+      }
     `,
     ctaText: "Vissza a Qvick-re",
     ctaUrl: getBaseUrl(),
@@ -358,10 +473,10 @@ export async function sendBookingCancelledEmail(
       text: `Foglalás lemondva: ${serviceName} – ${scheduledDate} ${scheduledTime}. Lemondta: ${cancelledByText}.`,
       html,
     });
-    console.log(`Booking cancelled email sent to ${recipientEmail}`);
+    logger.info({ recipientEmail }, "Booking cancelled email sent");
     return true;
   } catch (err) {
-    console.error(`Failed to send cancellation email to ${recipientEmail}:`, (err as Error).message);
+    logger.error({ err, recipientEmail }, "Failed to send cancellation email");
     return false;
   }
 }
@@ -372,7 +487,16 @@ export async function sendBookingCancelledEmail(
 export async function sendBookingReminderEmail(params: BookingEmailParams): Promise<boolean> {
   if (!isSmtpConfigured()) return false;
 
-  const { customerEmail, customerName, businessName, serviceName, scheduledDate, scheduledTime, duration, totalAmount } = params;
+  const {
+    customerEmail,
+    customerName,
+    businessName,
+    serviceName,
+    scheduledDate,
+    scheduledTime,
+    duration,
+    totalAmount,
+  } = params;
   const dashboardUrl = `${getBaseUrl()}/ugyfel/foglalasaim`;
 
   const html = buildEmailLayout({
@@ -402,10 +526,10 @@ export async function sendBookingReminderEmail(params: BookingEmailParams): Prom
       text: `Kedves ${customerName}, emlékeztetünk holnapi foglalásodra: ${serviceName} – ${scheduledDate} ${scheduledTime}. ${businessName}`,
       html,
     });
-    console.log(`Booking reminder email sent to ${customerEmail}`);
+    logger.info({ customerEmail }, "Booking reminder email sent");
     return true;
   } catch (err) {
-    console.error(`Failed to send reminder email to ${customerEmail}:`, (err as Error).message);
+    logger.error({ err, customerEmail }, "Failed to send reminder email");
     return false;
   }
 }

@@ -4,9 +4,7 @@ import { Loader2 } from "lucide-react";
 
 /** Helper: returns the dashboard path for a user's role */
 function dashboardFor(role: string) {
-  return role === "PROVIDER" || role === "EMPLOYEE"
-    ? "/szolgaltato"
-    : "/ugyfel";
+  return role === "PROVIDER" || role === "EMPLOYEE" ? "/szolgaltato" : "/ugyfel";
 }
 
 /**

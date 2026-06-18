@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Provider, TimeSlot } from "../../lib/types";
+import { formatServicePrice } from "../../lib/pricing";
 import type { AddressDetails } from "../common/AddressPickerMap";
 
 const AddressPickerMap = lazy(() =>
@@ -43,6 +44,7 @@ const AddressPickerMap = lazy(() =>
 interface ProviderDetailPageProps {
   providerId: string;
   initialServiceId?: string | null;
+  initialCategorySlug?: string | null;
   onBack: () => void;
   onBookingCreated?: (bookingId: string) => void;
 }
@@ -52,6 +54,7 @@ const DAY_NAMES = ["Va", "Hé", "Ke", "Sze", "Csü", "Pé", "Szo"];
 export function ProviderDetailPage({
   providerId,
   initialServiceId,
+  initialCategorySlug,
   onBack,
   onBookingCreated,
 }: ProviderDetailPageProps) {
@@ -154,8 +157,14 @@ export function ProviderDetailPage({
     if (featuredServiceId) {
       return services.find((s) => s.id === featuredServiceId) || services[0];
     }
+    if (initialCategorySlug) {
+      return (
+        services.find((service) => service.serviceType?.category?.slug === initialCategorySlug) ||
+        services[0]
+      );
+    }
     return services[0];
-  }, [services, featuredServiceId]);
+  }, [services, featuredServiceId, initialCategorySlug]);
 
   const otherServices = useMemo(() => {
     if (!featuredService) return services;
@@ -202,8 +211,7 @@ export function ProviderDetailPage({
           date: dateStr,
         }
       : null;
-  const { data: slotsData, isLoading: slotsLoading } =
-    useAvailableSlots(slotsParams);
+  const { data: slotsData, isLoading: slotsLoading } = useAvailableSlots(slotsParams);
   const slotsPayload = slotsData?.data;
   const timeSlots: TimeSlot[] = Array.isArray(slotsPayload)
     ? slotsPayload
@@ -251,9 +259,7 @@ export function ProviderDetailPage({
           }
         },
         onError: (err: any) => {
-          toast.error(
-            err?.response?.data?.error || "Hiba történt a foglalásnál",
-          );
+          toast.error(err?.response?.data?.error || "Hiba történt a foglalásnál");
         },
       },
     );
@@ -268,10 +274,7 @@ export function ProviderDetailPage({
   }
 
   // Merge availability for the overview section
-  const mergedAvailability = new Map<
-    number,
-    { startTime: string; endTime: string }
-  >();
+  const mergedAvailability = new Map<number, { startTime: string; endTime: string }>();
   for (const member of members) {
     for (const a of member.availability || []) {
       if (!a.isEnabled) continue;
@@ -300,9 +303,7 @@ export function ProviderDetailPage({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center">
-            <span className="text-xl">
-              {provider.categories?.[0]?.category?.icon || "🔧"}
-            </span>
+            <span className="text-xl">{provider.categories?.[0]?.category?.icon || "🔧"}</span>
           </div>
           <div>
             <h2 className="font-semibold text-lg">{provider.businessName}</h2>
@@ -318,9 +319,7 @@ export function ProviderDetailPage({
                 <div className="flex items-center gap-1">
                   <MapPin className="h-3.5 w-3.5" />
                   {provider.city
-                    ? [provider.city, provider.county]
-                        .filter(Boolean)
-                        .join(", ")
+                    ? [provider.city, provider.county].filter(Boolean).join(", ")
                     : provider.serviceArea}
                 </div>
               )}
@@ -333,22 +332,13 @@ export function ProviderDetailPage({
             </div>
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={toggleFavorite}
-          className="h-10 w-10"
-        >
-          <Heart
-            className={`h-5 w-5 ${isFavorite ? "fill-red-500 text-red-500" : ""}`}
-          />
+        <Button variant="ghost" size="icon" onClick={toggleFavorite} className="h-10 w-10">
+          <Heart className={`h-5 w-5 ${isFavorite ? "fill-red-500 text-red-500" : ""}`} />
         </Button>
       </div>
 
       {provider.description && (
-        <p className="text-sm text-muted-foreground -mt-2">
-          {provider.description}
-        </p>
+        <p className="text-sm text-muted-foreground -mt-2">{provider.description}</p>
       )}
 
       {/* Featured Service + Inline Booking */}
@@ -369,26 +359,18 @@ export function ProviderDetailPage({
               {featuredService.serviceType?.category && (
                 <Badge variant="secondary" className="mb-3">
                   {featuredService.serviceType.category.icon && (
-                    <span className="mr-1">
-                      {featuredService.serviceType.category.icon}
-                    </span>
+                    <span className="mr-1">{featuredService.serviceType.category.icon}</span>
                   )}
                   {featuredService.serviceType.category.name}
                 </Badge>
               )}
               <h2 className="text-xl font-bold mb-2">{featuredService.name}</h2>
               {featuredService.description && (
-                <p className="text-sm text-muted-foreground mb-4">
-                  {featuredService.description}
-                </p>
+                <p className="text-sm text-muted-foreground mb-4">{featuredService.description}</p>
               )}
               <div className="text-3xl font-bold text-primary mb-1">
-                {Number(featuredService.priceAmount)}{" "}
-                {featuredService.priceCurrency}
+                {formatServicePrice(featuredService)}
               </div>
-              {featuredService.priceType === "PER_HOUR" && (
-                <span className="text-sm text-muted-foreground">/óra</span>
-              )}
               <div className="flex items-center gap-1 mt-3 text-sm text-muted-foreground">
                 <Clock className="h-4 w-4" />
                 {featuredService.durationMin} perc
@@ -406,15 +388,12 @@ export function ProviderDetailPage({
                         `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim() ||
                         "Munkatárs";
                       return (
-                        <div
-                          key={m.id}
-                          className="flex items-center gap-1.5 text-sm"
-                        >
+                        <div key={m.id} className="flex items-center gap-1.5 text-sm">
                           <div className="h-6 w-6 bg-muted rounded-full flex items-center justify-center">
                             {m.user?.avatarUrl ? (
                               <img
                                 src={m.user.avatarUrl}
-                                alt=""
+                                alt={mName}
                                 className="h-6 w-6 rounded-full object-cover"
                               />
                             ) : (
@@ -462,8 +441,7 @@ export function ProviderDetailPage({
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Időpontok betöltése...
                     </div>
-                  ) : timeSlots.filter((s: TimeSlot) => s.isAvailable)
-                      .length === 0 ? (
+                  ) : timeSlots.filter((s: TimeSlot) => s.isAvailable).length === 0 ? (
                     <p className="text-sm text-muted-foreground py-2">
                       Nincs elérhető időpont ezen a napon.
                     </p>
@@ -472,17 +450,12 @@ export function ProviderDetailPage({
                       {timeSlots
                         .filter((s: TimeSlot) => s.isAvailable)
                         .map((slot: TimeSlot) => {
-                          const memberCount =
-                            slot.availableMembers?.length || 0;
+                          const memberCount = slot.availableMembers?.length || 0;
                           return (
                             <Button
                               key={slot.startTime}
                               size="sm"
-                              variant={
-                                selectedTime === slot.startTime
-                                  ? "default"
-                                  : "outline"
-                              }
+                              variant={selectedTime === slot.startTime ? "default" : "outline"}
                               className="text-xs gap-1.5"
                               onClick={() => {
                                 setSelectedTime(slot.startTime);
@@ -522,9 +495,7 @@ export function ProviderDetailPage({
                   }
                   return (
                     <div className="mb-4">
-                      <Label className="text-sm mb-1.5 block">
-                        Válassz szakembert
-                      </Label>
+                      <Label className="text-sm mb-1.5 block">Válassz szakembert</Label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {slotMembers.map((m) => (
                           <button
@@ -540,16 +511,14 @@ export function ProviderDetailPage({
                               {m.avatarUrl ? (
                                 <img
                                   src={m.avatarUrl}
-                                  alt=""
+                                  alt={m.displayName || "Csapattag"}
                                   className="h-8 w-8 rounded-full object-cover"
                                 />
                               ) : (
                                 <User className="h-4 w-4 text-muted-foreground" />
                               )}
                             </div>
-                            <span className="text-sm font-medium">
-                              {m.displayName}
-                            </span>
+                            <span className="text-sm font-medium">{m.displayName}</span>
                             {selectedMemberId === m.id && (
                               <CheckCircle2 className="h-4 w-4 text-primary ml-auto" />
                             )}
@@ -576,9 +545,7 @@ export function ProviderDetailPage({
                         key={addr.id}
                         type="button"
                         onClick={() =>
-                          setSelectedAddressId(
-                            selectedAddressId === addr.id ? "" : addr.id,
-                          )
+                          setSelectedAddressId(selectedAddressId === addr.id ? "" : addr.id)
                         }
                         className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-all flex items-center gap-2 ${
                           selectedAddressId === addr.id
@@ -589,9 +556,7 @@ export function ProviderDetailPage({
                         <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
                         <span className="font-medium">{addr.label}</span>
                         <span className="text-muted-foreground truncate text-xs">
-                          –{" "}
-                          {addr.formattedAddress ||
-                            `${addr.street}, ${addr.city}`}
+                          – {addr.formattedAddress || `${addr.street}, ${addr.city}`}
                         </span>
                         {selectedAddressId === addr.id && (
                           <CheckCircle2 className="h-3.5 w-3.5 text-primary ml-auto shrink-0" />
@@ -624,15 +589,9 @@ export function ProviderDetailPage({
                   <div className="mt-2 border rounded-lg p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">
-                        {savedAddresses.length === 0
-                          ? "Cím megadása"
-                          : "Új cím"}
+                        {savedAddresses.length === 0 ? "Cím megadása" : "Új cím"}
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowNewAddress(false)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => setShowNewAddress(false)}>
                         <ChevronUp className="h-4 w-4" />
                       </Button>
                     </div>
@@ -716,9 +675,7 @@ export function ProviderDetailPage({
               {/* Notes – shown after time selection */}
               {selectedTime && (
                 <div className="mb-4">
-                  <Label className="text-sm mb-1.5 block">
-                    Megjegyzés (opcionális)
-                  </Label>
+                  <Label className="text-sm mb-1.5 block">Megjegyzés (opcionális)</Label>
                   <Textarea
                     value={bookingNotes}
                     onChange={(e) => setBookingNotes(e.target.value)}
@@ -732,9 +689,7 @@ export function ProviderDetailPage({
               <Button
                 className="w-full"
                 size="lg"
-                disabled={
-                  !bookingDate || !selectedTime || createBooking.isPending
-                }
+                disabled={!bookingDate || !selectedTime || createBooking.isPending}
                 onClick={handleBooking}
               >
                 {createBooking.isPending ? (
@@ -757,15 +712,11 @@ export function ProviderDetailPage({
       {/* Other Services */}
       {otherServices.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold mb-3">
-            Más szolgáltatások ettől a cégtől
-          </h2>
+          <h2 className="text-lg font-semibold mb-3">Más szolgáltatások ettől a cégtől</h2>
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {otherServices.map((service) => {
               const svcMembers = members.filter((m: any) =>
-                m.memberServices?.some(
-                  (ms: any) => ms.serviceId === service.id,
-                ),
+                m.memberServices?.some((ms: any) => ms.serviceId === service.id),
               );
               return (
                 <Card
@@ -795,9 +746,7 @@ export function ProviderDetailPage({
                         {service.serviceType?.category && (
                           <Badge variant="secondary" className="mb-1.5 text-xs">
                             {service.serviceType.category.icon && (
-                              <span className="mr-1">
-                                {service.serviceType.category.icon}
-                              </span>
+                              <span className="mr-1">{service.serviceType.category.icon}</span>
                             )}
                             {service.serviceType.category.name}
                           </Badge>
@@ -805,9 +754,7 @@ export function ProviderDetailPage({
                         <h3 className="font-medium text-sm">{service.name}</h3>
                       </div>
                       <div className="text-right flex-shrink-0 ml-3">
-                        <div className="font-bold text-primary">
-                          {Number(service.priceAmount)} {service.priceCurrency}
-                        </div>
+                        <div className="font-bold text-primary">{formatServicePrice(service)}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
@@ -848,9 +795,7 @@ export function ProviderDetailPage({
                       {avail.startTime} – {avail.endTime}
                     </div>
                   ) : (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Zárva
-                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">Zárva</div>
                   )}
                 </div>
               );
@@ -870,10 +815,7 @@ export function ProviderDetailPage({
                 `${member.user?.firstName || ""} ${member.user?.lastName || ""}`.trim() ||
                 "Munkatárs";
               return (
-                <div
-                  key={member.id}
-                  className="flex flex-col items-center text-center p-3"
-                >
+                <div key={member.id} className="flex flex-col items-center text-center p-3">
                   <div className="h-14 w-14 bg-muted rounded-full flex items-center justify-center mb-2">
                     {member.user?.avatarUrl ? (
                       <img
@@ -887,9 +829,7 @@ export function ProviderDetailPage({
                   </div>
                   <span className="text-sm font-medium">{name}</span>
                   {member.role === "OWNER" && (
-                    <span className="text-xs text-muted-foreground">
-                      Tulajdonos
-                    </span>
+                    <span className="text-xs text-muted-foreground">Tulajdonos</span>
                   )}
                 </div>
               );
@@ -900,13 +840,9 @@ export function ProviderDetailPage({
 
       {/* Reviews */}
       <Card className="p-6">
-        <h2 className="text-lg font-semibold mb-4">
-          Értékelések ({provider.reviewCount})
-        </h2>
+        <h2 className="text-lg font-semibold mb-4">Értékelések ({provider.reviewCount})</h2>
         {reviews.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Még nincsenek értékelések
-          </p>
+          <p className="text-sm text-muted-foreground">Még nincsenek értékelések</p>
         ) : (
           <div className="space-y-4">
             {reviews.map((review) => (
@@ -916,7 +852,11 @@ export function ProviderDetailPage({
                     {review.author?.avatarUrl ? (
                       <img
                         src={review.author.avatarUrl}
-                        alt=""
+                        alt={
+                          [review.author.firstName, review.author.lastName]
+                            .filter(Boolean)
+                            .join(" ") || "Értékelő"
+                        }
                         className="h-8 w-8 rounded-full object-cover"
                       />
                     ) : (
@@ -925,8 +865,7 @@ export function ProviderDetailPage({
                   </div>
                   <div>
                     <span className="font-medium text-sm">
-                      {review.author?.firstName || ""}{" "}
-                      {review.author?.lastName || ""}
+                      {review.author?.firstName || ""} {review.author?.lastName || ""}
                     </span>
                     <div className="flex items-center gap-1">
                       {Array.from({ length: 5 }, (_, i) => (
@@ -942,9 +881,7 @@ export function ProviderDetailPage({
                   </div>
                 </div>
                 {review.comment && (
-                  <p className="text-sm text-muted-foreground ml-11">
-                    {review.comment}
-                  </p>
+                  <p className="text-sm text-muted-foreground ml-11">{review.comment}</p>
                 )}
               </div>
             ))}

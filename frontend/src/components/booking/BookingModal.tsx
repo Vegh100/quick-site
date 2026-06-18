@@ -1,18 +1,6 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "../ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Label } from "../ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { Button } from "../ui/button";
 import { Calendar } from "../ui/calendar";
@@ -25,17 +13,11 @@ import {
   useAddAddress,
 } from "../../hooks/useApi";
 import { toast } from "sonner";
-import {
-  Loader2,
-  Clock,
-  CheckCircle2,
-  MapPin,
-  Plus,
-  ChevronUp,
-} from "lucide-react";
+import { Loader2, Clock, CheckCircle2, MapPin, Plus, ChevronUp } from "lucide-react";
 import { Input } from "../ui/input";
 import { ErrorBoundary } from "../common/ErrorBoundary";
 import type { Provider, TimeSlot } from "../../lib/types";
+import { formatServicePrice } from "../../lib/pricing";
 import type { AddressDetails } from "../common/AddressPickerMap";
 
 const AddressPickerMap = lazy(() =>
@@ -50,15 +32,9 @@ interface BookingModalProps {
   onClose: () => void;
 }
 
-export function BookingModal({
-  provider,
-  initialServiceId,
-  onClose,
-}: BookingModalProps) {
+export function BookingModal({ provider, initialServiceId, onClose }: BookingModalProps) {
   const [date, setDate] = useState<Date | undefined>(undefined);
-  const [selectedServiceId, setSelectedServiceId] = useState(
-    initialServiceId || "",
-  );
+  const [selectedServiceId, setSelectedServiceId] = useState(initialServiceId || "");
   const [selectedTime, setSelectedTime] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [notes, setNotes] = useState("");
@@ -155,20 +131,13 @@ export function BookingModal({
         if (!existing) {
           merged.set(a.dayOfWeek, { ...a });
         } else {
-          if (a.startTime < existing.startTime)
-            existing.startTime = a.startTime;
+          if (a.startTime < existing.startTime) existing.startTime = a.startTime;
           if (a.endTime > existing.endTime) existing.endTime = a.endTime;
         }
       }
     }
     return Array.from(merged.values());
   }, [resolvedProvider.members]);
-
-  // Collect days with service slots for the selected service
-  const serviceSlotDays = useMemo(() => {
-    if (!selectedService?.serviceSlots) return new Set<number>();
-    return new Set(selectedService.serviceSlots.map((s) => s.dayOfWeek));
-  }, [selectedService]);
 
   // Fetch available slots from API (all members merged)
   const dateStr = date ? date.toISOString().split("T")[0] : "";
@@ -180,17 +149,16 @@ export function BookingModal({
           date: dateStr,
         }
       : null;
-  const { data: slotsData, isLoading: loadingSlots } =
-    useAvailableSlots(slotsParams);
+  const { data: slotsData, isLoading: loadingSlots } = useAvailableSlots(slotsParams);
   const timeSlots: TimeSlot[] = slotsData?.data?.slots || [];
 
   // Disable days where provider is not available or in the past
+  // Availability is always the top-level constraint (hierarchy: Availability > ServiceSlot)
   const disabledDays = (checkDate: Date) => {
     if (checkDate < new Date(new Date().setHours(0, 0, 0, 0))) return true;
     const dow = checkDate.getDay();
-    // Enable if there are service slots on this day
-    if (serviceSlotDays.has(dow)) return false;
     if (availability.length === 0) return false;
+    // Day must have at least one member with enabled Availability — regardless of ServiceSlots
     return !availability.some((a) => a.dayOfWeek === dow && a.isEnabled);
   };
 
@@ -218,9 +186,7 @@ export function BookingModal({
           onClose();
         },
         onError: (err: any) => {
-          toast.error(
-            err?.response?.data?.error || "Hiba a foglalás létrehozásakor",
-          );
+          toast.error(err?.response?.data?.error || "Hiba a foglalás létrehozásakor");
         },
       },
     );
@@ -253,8 +219,7 @@ export function BookingModal({
               <SelectContent>
                 {services.map((service) => (
                   <SelectItem key={service.id} value={service.id}>
-                    {service.name} - {Number(service.priceAmount)}{" "}
-                    {service.priceCurrency} ({service.durationMin} perc)
+                    {service.name} - {formatServicePrice(service)} ({service.durationMin} perc)
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -330,9 +295,7 @@ export function BookingModal({
                         >
                           <Clock className="h-3 w-3" />
                           {slot.startTime}
-                          {isSelected && (
-                            <CheckCircle2 className="h-3 w-3 ml-0.5" />
-                          )}
+                          {isSelected && <CheckCircle2 className="h-3 w-3 ml-0.5" />}
                           {memberCount > 1 && !isSelected && (
                             <span className="bg-primary text-primary-foreground text-[10px] rounded-full h-4 w-4 flex items-center justify-center shrink-0">
                               {memberCount}
@@ -348,9 +311,7 @@ export function BookingModal({
               {/* Member picker for selected time */}
               {selectedTime &&
                 (() => {
-                  const selectedSlot = timeSlots.find(
-                    (s) => s.startTime === selectedTime,
-                  );
+                  const selectedSlot = timeSlots.find((s) => s.startTime === selectedTime);
                   const slotMembers = selectedSlot?.availableMembers || [];
                   if (slotMembers.length <= 1) return null;
                   return (
@@ -404,28 +365,22 @@ export function BookingModal({
                   {selectedTime && (
                     <p className="text-sm text-muted-foreground mb-1">
                       Időpont: {selectedTime} –{" "}
-                      {timeSlots.find((s) => s.startTime === selectedTime)
-                        ?.endTime || ""}
+                      {timeSlots.find((s) => s.startTime === selectedTime)?.endTime || ""}
                     </p>
                   )}
                   {selectedAddressId &&
                     (() => {
-                      const addr = savedAddresses.find(
-                        (a: any) => a.id === selectedAddressId,
-                      );
+                      const addr = savedAddresses.find((a: any) => a.id === selectedAddressId);
                       if (!addr) return null;
                       return (
                         <p className="text-sm text-muted-foreground mb-1 flex items-center gap-1">
                           <MapPin className="h-3 w-3" />
-                          {addr.label}:{" "}
-                          {addr.formattedAddress ||
-                            `${addr.street}, ${addr.city}`}
+                          {addr.label}: {addr.formattedAddress || `${addr.street}, ${addr.city}`}
                         </p>
                       );
                     })()}
                   <p className="text-lg font-bold text-primary">
-                    {Number(selectedService.priceAmount)}{" "}
-                    {selectedService.priceCurrency}
+                    {formatServicePrice(selectedService)}
                   </p>
                 </div>
               )}
@@ -461,9 +416,7 @@ export function BookingModal({
                         <MapPin className="h-3 w-3 shrink-0" />
                         <span className="font-medium">{addr.label}</span>
                         <span className="text-muted-foreground text-xs truncate">
-                          –{" "}
-                          {addr.formattedAddress ||
-                            `${addr.street}, ${addr.city}`}
+                          – {addr.formattedAddress || `${addr.street}, ${addr.city}`}
                         </span>
                       </span>
                     </SelectItem>
@@ -482,16 +435,10 @@ export function BookingModal({
               <div className="mt-3 border rounded-lg p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-medium">
-                    {savedAddresses.length === 0
-                      ? "Cím megadása"
-                      : "Új cím hozzáadása"}
+                    {savedAddresses.length === 0 ? "Cím megadása" : "Új cím hozzáadása"}
                   </h4>
                   {showNewAddress && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowNewAddress(false)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => setShowNewAddress(false)}>
                       <ChevronUp className="h-4 w-4" />
                     </Button>
                   )}
@@ -514,10 +461,7 @@ export function BookingModal({
                       </div>
                     }
                   >
-                    <AddressPickerMap
-                      onAddressSelect={handleNewAddressFromMap}
-                      height="200px"
-                    />
+                    <AddressPickerMap onAddressSelect={handleNewAddressFromMap} height="200px" />
                   </Suspense>
                 </ErrorBoundary>
 
@@ -566,9 +510,7 @@ export function BookingModal({
                     onClick={handleSaveNewAddress}
                     disabled={addAddressMut.isPending}
                   >
-                    {addAddressMut.isPending && (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    )}
+                    {addAddressMut.isPending && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
                     Cím mentése
                   </Button>
                 </div>
@@ -593,16 +535,9 @@ export function BookingModal({
             <Button
               className="flex-1"
               onClick={handleSubmit}
-              disabled={
-                createBooking.isPending ||
-                !selectedServiceId ||
-                !date ||
-                !selectedTime
-              }
+              disabled={createBooking.isPending || !selectedServiceId || !date || !selectedTime}
             >
-              {createBooking.isPending && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              )}
+              {createBooking.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Foglalás
             </Button>
           </div>

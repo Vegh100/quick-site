@@ -61,10 +61,13 @@ export function RecentBookings() {
           >
             <Avatar>
               <AvatarFallback className="bg-primary/10 text-primary">
-                {booking.customer.split(" ").map(n => n[0]).join("")}
+                {booking.customer
+                  .split(" ")
+                  .map((n) => n[0])
+                  .join("")}
               </AvatarFallback>
             </Avatar>
-            
+
             <div className="flex-1 min-w-0">
               <h4 className="truncate">{booking.customer}</h4>
               <p className="text-sm text-muted-foreground truncate">{booking.service}</p>

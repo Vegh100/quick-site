@@ -11,9 +11,7 @@ export function validate(schema: ZodSchema, target: ValidateTarget = "body") {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const messages = error.errors.map(
-          (e) => `${e.path.join(".")}: ${e.message}`,
-        );
+        const messages = error.errors.map((e) => `${e.path.join(".")}: ${e.message}`);
         _res.status(400).json({
           success: false,
           error: "Validation failed",

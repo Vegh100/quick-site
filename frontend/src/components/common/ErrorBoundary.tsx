@@ -12,10 +12,7 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-export class ErrorBoundary extends Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -49,12 +46,9 @@ export class ErrorBoundary extends Component<
             <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
               <AlertTriangle className="h-6 w-6 text-destructive" />
             </div>
-            <h2 className="text-lg font-semibold">
-              Hoppá! Valami hiba történt
-            </h2>
+            <h2 className="text-lg font-semibold">Hoppá! Valami hiba történt</h2>
             <p className="text-sm text-muted-foreground">
-              Egy váratlan hiba történt az oldal betöltése közben. Kérjük,
-              próbáld újra.
+              Egy váratlan hiba történt az oldal betöltése közben. Kérjük, próbáld újra.
             </p>
             {import.meta.env.DEV && this.state.error && (
               <details className="text-left text-xs bg-muted p-3 rounded-lg">

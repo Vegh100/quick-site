@@ -1,7 +1,15 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../lib/prisma.js";
-import { NotFoundError, ForbiddenError } from "../lib/errors.js";
+import { NotFoundError, ForbiddenError, ValidationError } from "../lib/errors.js";
 import { getProviderForUser } from "./member.service.js";
+import { cacheable, invalidateCache } from "../lib/cache.js";
+import { audit } from "../lib/audit.js";
+import { DAY_NAMES } from "../lib/locale.js";
+import {
+  SERVICE_MATRIX_CATEGORIES,
+  SERVICE_MATRIX_DEFINITIONS,
+  findServiceMatrixDefinition,
+} from "../lib/service-matrix.js";
 import {
   CreateProviderInput,
   UpdateProviderInput,
@@ -11,87 +19,83 @@ import {
   SetServiceSlotsInput,
   UpdatePricingSettingsInput,
   ProviderSearchInput,
+  ServiceMatrixInput,
 } from "../validators/provider.validators.js";
+
+const providerOnboardingInclude = {
+  categories: { include: { category: true } },
+  members: true,
+  subscription: true,
+} satisfies Prisma.ProviderInclude;
 
 // ============================================================================
 // CREATE / ONBOARD PROVIDER
 // ============================================================================
 
-export async function createProvider(
-  userId: string,
-  data: CreateProviderInput,
-) {
-  const { categoryIds, ...providerData } = data;
+export async function createProvider(userId: string, data: CreateProviderInput) {
+  const { categoryIds = [], ...providerData } = data;
 
-  // Get user email for the owner member record
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      provider: {
+        include: providerOnboardingInclude,
+      },
+    },
+  });
   if (!user) throw new NotFoundError("User");
 
-  // Update user role to PROVIDER
-  await prisma.user.update({
-    where: { id: userId },
-    data: { role: "PROVIDER" },
-  });
+  if (user.provider) {
+    if (user.role !== "PROVIDER") {
+      await prisma.user.update({
+        where: { id: userId },
+        data: { role: "PROVIDER" },
+      });
+    }
 
-  const provider = await prisma.provider.create({
-    data: {
-      ...providerData,
-      userId,
-      onboardingDone: true,
-      categories: {
-        create: categoryIds.map((categoryId) => ({ categoryId })),
-      },
-      // Create OWNER member record
-      members: {
-        create: {
-          userId,
-          role: "OWNER",
-          status: "ACTIVE",
-          invitedEmail: user.email,
-          displayName:
-            `${user.firstName || ""} ${user.lastName || ""}`.trim() || null,
-          joinedAt: new Date(),
-        },
-      },
-      // Create default trial subscription
-      subscription: {
-        create: {
-          plan: "STARTER",
-          status: "TRIAL",
-          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
-        },
-      },
-    },
-    include: {
-      categories: { include: { category: true } },
-      members: true,
-      subscription: true,
-    },
-  });
-
-  // Create default availability (Mon-Fri 08:00-17:00) for the OWNER member
-  const ownerMember = provider.members[0];
-  if (ownerMember) {
-    const defaultDays = [1, 2, 3, 4, 5]; // Mon-Fri
-    await prisma.availability.createMany({
-      data: defaultDays.map((dayOfWeek) => ({
-        providerId: provider.id,
-        memberId: ownerMember.id,
-        dayOfWeek,
-        startTime: "08:00",
-        endTime: "17:00",
-        isEnabled: true,
-      })),
-    });
+    return user.provider;
   }
 
-  return provider;
+  return prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: userId },
+      data: { role: "PROVIDER" },
+    });
+
+    return tx.provider.create({
+      data: {
+        ...providerData,
+        userId,
+        onboardingDone: true,
+        categories: categoryIds.length
+          ? {
+              create: categoryIds.map((categoryId) => ({ categoryId })),
+            }
+          : undefined,
+        members: {
+          create: {
+            userId,
+            role: "OWNER",
+            status: "ACTIVE",
+            invitedEmail: user.email,
+            displayName: `${user.firstName || ""} ${user.lastName || ""}`.trim() || null,
+            joinedAt: new Date(),
+          },
+        },
+        subscription: {
+          create: {
+            plan: "STARTER",
+            status: "TRIAL",
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+          },
+        },
+      },
+      include: providerOnboardingInclude,
+    });
+  });
 }
 
-export async function updateProvider(
-  userId: string,
-  data: UpdateProviderInput,
-) {
+export async function updateProvider(userId: string, data: UpdateProviderInput) {
   const { provider, memberRole } = await getProviderForUser(userId);
 
   if (memberRole !== "OWNER") {
@@ -120,6 +124,16 @@ export async function updateProvider(
       })),
     });
   }
+
+  await invalidateCache(`provider:${provider.id}`);
+
+  audit({
+    userId,
+    action: "UPDATE",
+    entity: "Provider",
+    entityId: provider.id,
+    changes: updateData,
+  });
 
   return updated;
 }
@@ -161,7 +175,10 @@ export async function getProviderByUserId(userId: string) {
             },
           },
           memberServices: {
-            include: { service: true },
+            select: {
+              serviceId: true,
+              service: { select: { id: true, name: true } },
+            },
           },
           availability: {
             orderBy: { dayOfWeek: "asc" },
@@ -178,67 +195,62 @@ export async function getProviderByUserId(userId: string) {
 }
 
 export async function getProviderById(providerId: string) {
-  const provider = await prisma.provider.findUnique({
-    where: { id: providerId },
-    include: {
-      user: {
-        select: { id: true, firstName: true, lastName: true, avatarUrl: true },
-      },
-      categories: { include: { category: true } },
-      services: {
-        where: { isActive: true },
-        orderBy: { sortOrder: "asc" },
-        include: {
-          serviceType: { include: { category: true } },
-          serviceSlots: {
-            select: { dayOfWeek: true, memberId: true },
-          },
+  return cacheable(`provider:${providerId}`, 120, async () => {
+    const provider = await prisma.provider.findUnique({
+      where: { id: providerId },
+      include: {
+        user: {
+          select: { id: true, firstName: true, lastName: true, avatarUrl: true },
         },
-      },
-      members: {
-        where: { status: "ACTIVE" },
-        select: {
-          id: true,
-          role: true,
-          displayName: true,
-          user: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              avatarUrl: true,
+        categories: { include: { category: true } },
+        services: {
+          where: { isActive: true },
+          orderBy: { sortOrder: "asc" },
+          include: {
+            serviceType: { include: { category: true } },
+            serviceSlots: {
+              select: { dayOfWeek: true, memberId: true },
             },
           },
-          memberServices: {
-            include: { service: true },
-          },
-          availability: {
-            where: { isEnabled: true },
-            orderBy: { dayOfWeek: "asc" },
-          },
         },
-        orderBy: { role: "asc" },
+        members: {
+          where: { status: "ACTIVE" },
+          select: {
+            id: true,
+            role: true,
+            displayName: true,
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatarUrl: true,
+              },
+            },
+            memberServices: {
+              select: {
+                serviceId: true,
+                service: { select: { id: true, name: true } },
+              },
+            },
+            availability: {
+              where: { isEnabled: true },
+              orderBy: { dayOfWeek: "asc" },
+            },
+          },
+          orderBy: { role: "asc" },
+        },
       },
-    },
-  });
+    });
 
-  if (!provider) throw new NotFoundError("Provider");
-  return provider;
+    if (!provider) throw new NotFoundError("Provider");
+    return provider;
+  });
 }
 
 // ============================================================================
 // BUSINESS HOURS (public)
 // ============================================================================
-
-const DAY_NAMES_HU = [
-  "Vasárnap",
-  "Hétfő",
-  "Kedd",
-  "Szerda",
-  "Csütörtök",
-  "Péntek",
-  "Szombat",
-];
 
 export async function getBusinessHours(providerId: string) {
   const provider = await prisma.provider.findUnique({
@@ -275,7 +287,7 @@ export async function getBusinessHours(providerId: string) {
     const day = byDay.get(i);
     return {
       dayOfWeek: i,
-      dayName: DAY_NAMES_HU[i],
+      dayName: DAY_NAMES[i],
       isOpen: !!day,
       startTime: day?.startTime || null,
       endTime: day?.endTime || null,
@@ -448,11 +460,7 @@ export async function addService(userId: string, data: AddServiceInput) {
   return service;
 }
 
-export async function updateService(
-  userId: string,
-  serviceId: string,
-  data: UpdateServiceInput,
-) {
+export async function updateService(userId: string, serviceId: string, data: UpdateServiceInput) {
   const { provider, memberRole, member } = await getProviderForUser(userId);
 
   const service = await prisma.service.findFirst({
@@ -474,9 +482,7 @@ export async function updateService(
     where: { id: serviceId },
     data: {
       ...data,
-      priceAmount: data.priceAmount
-        ? new Prisma.Decimal(data.priceAmount)
-        : undefined,
+      priceAmount: data.priceAmount ? new Prisma.Decimal(data.priceAmount) : undefined,
     },
   });
 }
@@ -507,13 +513,267 @@ export async function deleteService(userId: string, serviceId: string) {
 }
 
 // ============================================================================
+// SERVICE MATRIX (domain-specific pricing grid)
+// ============================================================================
+
+type PrismaExecutor = Prisma.TransactionClient | typeof prisma;
+
+const SERVICE_TYPE_META: Record<
+  string,
+  { description: string; defaultDurationMin: number; sortOrder: number }
+> = {
+  "house-cleaning:House Cleaning": {
+    description: "Home cleaning packages for apartments and houses",
+    defaultDurationMin: 180,
+    sortOrder: 1,
+  },
+  "car-detailing:Car Detailing": {
+    description: "Interior and exterior vehicle detailing packages",
+    defaultDurationMin: 90,
+    sortOrder: 1,
+  },
+};
+
+async function ensureServiceMatrixTaxonomy(db: PrismaExecutor) {
+  const categories = new Map<string, { id: string }>();
+  const serviceTypes = new Map<string, { id: string }>();
+
+  for (const category of SERVICE_MATRIX_CATEGORIES) {
+    const row = await db.category.upsert({
+      where: { slug: category.slug },
+      update: {
+        name: category.name,
+        icon: category.icon,
+        description: category.description,
+        sortOrder: category.sortOrder,
+        isActive: true,
+      },
+      create: {
+        name: category.name,
+        slug: category.slug,
+        icon: category.icon,
+        description: category.description,
+        sortOrder: category.sortOrder,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    categories.set(category.slug, row);
+  }
+
+  const serviceTypeDefinitions = Array.from(
+    new Map(
+      SERVICE_MATRIX_DEFINITIONS.map((definition) => [
+        `${definition.categorySlug}:${definition.serviceTypeName}`,
+        definition,
+      ]),
+    ).values(),
+  );
+
+  for (const definition of serviceTypeDefinitions) {
+    const category = categories.get(definition.categorySlug);
+    if (!category) continue;
+    const meta = SERVICE_TYPE_META[`${definition.categorySlug}:${definition.serviceTypeName}`] || {
+      description: definition.description,
+      defaultDurationMin: definition.defaultDurationMin,
+      sortOrder: definition.sortOrder,
+    };
+
+    const row = await db.serviceType.upsert({
+      where: {
+        categoryId_name: {
+          categoryId: category.id,
+          name: definition.serviceTypeName,
+        },
+      },
+      update: {
+        description: meta.description,
+        defaultDurationMin: meta.defaultDurationMin,
+        sortOrder: meta.sortOrder,
+        isActive: true,
+      },
+      create: {
+        categoryId: category.id,
+        name: definition.serviceTypeName,
+        description: meta.description,
+        defaultDurationMin: meta.defaultDurationMin,
+        sortOrder: meta.sortOrder,
+        isActive: true,
+      },
+      select: { id: true },
+    });
+    serviceTypes.set(`${definition.categorySlug}:${definition.serviceTypeName}`, row);
+  }
+
+  return { categories, serviceTypes };
+}
+
+function toMatrixEntry(service: {
+  id: string;
+  templateKey: string | null;
+  priceAmount: Prisma.Decimal;
+  durationMin: number;
+  isActive: boolean;
+  pricingUnit: string;
+  description: string | null;
+}) {
+  return {
+    serviceId: service.id,
+    templateKey: service.templateKey,
+    priceAmount: service.priceAmount.toString(),
+    durationMin: service.durationMin,
+    isActive: service.isActive,
+    pricingUnit: service.pricingUnit,
+    description: service.description,
+  };
+}
+
+export async function getServiceMatrix(userId: string) {
+  const { provider } = await getProviderForUser(userId);
+
+  const services = await prisma.service.findMany({
+    where: {
+      providerId: provider.id,
+      isMatrixManaged: true,
+      templateKey: { not: null },
+    },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  return {
+    definitions: SERVICE_MATRIX_DEFINITIONS,
+    entries: services.map(toMatrixEntry),
+  };
+}
+
+export async function upsertServiceMatrix(userId: string, data: ServiceMatrixInput) {
+  const { provider, member } = await getProviderForUser(userId);
+
+  const seen = new Set<string>();
+  const entries = data.entries.map((entry) => {
+    if (seen.has(entry.templateKey)) {
+      throw new ValidationError(`Duplicate matrix entry: ${entry.templateKey}`);
+    }
+    seen.add(entry.templateKey);
+
+    const definition = findServiceMatrixDefinition(entry.templateKey);
+    if (!definition) {
+      throw new ValidationError(`Unknown matrix entry: ${entry.templateKey}`);
+    }
+
+    return { entry, definition };
+  });
+
+  const services = await prisma.$transaction(async (tx) => {
+    const { categories, serviceTypes } = await ensureServiceMatrixTaxonomy(tx);
+    const saved = [];
+
+    for (const { entry, definition } of entries) {
+      const category = categories.get(definition.categorySlug);
+      const serviceType = serviceTypes.get(
+        `${definition.categorySlug}:${definition.serviceTypeName}`,
+      );
+
+      if (!category || !serviceType) {
+        throw new ValidationError(`Missing taxonomy for matrix entry: ${definition.templateKey}`);
+      }
+
+      await tx.providerCategory.upsert({
+        where: {
+          providerId_categoryId: {
+            providerId: provider.id,
+            categoryId: category.id,
+          },
+        },
+        update: {},
+        create: {
+          providerId: provider.id,
+          categoryId: category.id,
+        },
+      });
+
+      const existing = await tx.service.findFirst({
+        where: {
+          providerId: provider.id,
+          templateKey: definition.templateKey,
+        },
+        select: { id: true },
+      });
+
+      const isActive = entry.isActive !== undefined ? entry.isActive : entry.priceAmount > 0;
+      const effectiveDuration =
+        entry.durationMin > 0 ? entry.durationMin : definition.defaultDurationMin;
+
+      const serviceData = {
+        serviceTypeId: serviceType.id,
+        name: definition.name,
+        description: entry.description !== undefined ? entry.description : definition.description,
+        priceAmount: new Prisma.Decimal(entry.priceAmount),
+        priceType: definition.pricingUnit === "PER_SQM" ? "PER_SERVICE" : "FIXED",
+        durationMin: effectiveDuration,
+        slotIntervalMin: Math.min(Math.max(effectiveDuration, 15), 480),
+        templateKey: definition.templateKey,
+        serviceKey: definition.serviceKey,
+        variantKey: definition.variantKey,
+        pricingUnit: definition.pricingUnit,
+        isMatrixManaged: true,
+        isActive,
+        sortOrder: definition.sortOrder,
+      } satisfies Prisma.ServiceUncheckedUpdateInput;
+
+      const service = existing
+        ? await tx.service.update({
+            where: { id: existing.id },
+            data: serviceData,
+            include: { serviceType: { include: { category: true } } },
+          })
+        : await tx.service.create({
+            data: {
+              ...serviceData,
+              providerId: provider.id,
+            } as Prisma.ServiceUncheckedCreateInput,
+            include: { serviceType: { include: { category: true } } },
+          });
+
+      if (member) {
+        await tx.memberService
+          .create({
+            data: {
+              memberId: member.id,
+              serviceId: service.id,
+            },
+          })
+          .catch(() => undefined);
+      }
+
+      saved.push(service);
+    }
+
+    return saved;
+  });
+
+  await invalidateCache(`provider:${provider.id}`, "categories:all");
+
+  audit({
+    userId,
+    action: "UPSERT",
+    entity: "ServiceMatrix",
+    entityId: provider.id,
+    changes: { entries: entries.map(({ definition }) => definition.templateKey) },
+  });
+
+  return {
+    definitions: SERVICE_MATRIX_DEFINITIONS,
+    entries: services.map(toMatrixEntry),
+    services,
+  };
+}
+
+// ============================================================================
 // AVAILABILITY
 // ============================================================================
 
-export async function setAvailability(
-  userId: string,
-  data: SetAvailabilityInput,
-) {
+export async function setAvailability(userId: string, data: SetAvailabilityInput) {
   const { provider, memberRole, member } = await getProviderForUser(userId);
 
   // Owner can set any member's availability; employee can set own only
@@ -545,6 +805,8 @@ export async function setAvailability(
           startTime: slot.startTime,
           endTime: slot.endTime,
           isEnabled: slot.isEnabled,
+          breakStart: slot.breakStart ?? null,
+          breakEnd: slot.breakEnd ?? null,
         },
         create: {
           providerId: provider.id,
@@ -553,9 +815,42 @@ export async function setAvailability(
           startTime: slot.startTime,
           endTime: slot.endTime,
           isEnabled: slot.isEnabled,
+          breakStart: slot.breakStart ?? null,
+          breakEnd: slot.breakEnd ?? null,
         },
       }),
     ),
+  );
+
+  // Cascade: remove ServiceSlots that fall outside the new availability window
+  // If a day is disabled, delete all slots for that day.
+  // If a day's time window changed, delete slots that no longer fit.
+  await Promise.all(
+    data.availability.map((slot) => {
+      if (!slot.isEnabled) {
+        // Day disabled → delete all service slots for this member on this day
+        return prisma.serviceSlot.deleteMany({
+          where: { memberId, dayOfWeek: slot.dayOfWeek },
+        });
+      }
+      // Day enabled but time window may have changed → delete slots outside window
+      const breakFilter =
+        slot.breakStart && slot.breakEnd
+          ? [{ startTime: { lt: slot.breakEnd }, endTime: { gt: slot.breakStart } }]
+          : [];
+
+      return prisma.serviceSlot.deleteMany({
+        where: {
+          memberId,
+          dayOfWeek: slot.dayOfWeek,
+          OR: [
+            { startTime: { lt: slot.startTime } },
+            { endTime: { gt: slot.endTime } },
+            ...breakFilter,
+          ],
+        },
+      });
+    }),
   );
 
   return results;
@@ -565,10 +860,7 @@ export async function setAvailability(
 // PRICING SETTINGS
 // ============================================================================
 
-export async function updatePricingSettings(
-  userId: string,
-  data: UpdatePricingSettingsInput,
-) {
+export async function updatePricingSettings(userId: string, data: UpdatePricingSettingsInput) {
   const { provider, memberRole } = await getProviderForUser(userId);
   if (memberRole !== "OWNER") {
     throw new ForbiddenError("Only the owner can update pricing");
@@ -584,11 +876,12 @@ export async function updatePricingSettings(
 // SERVICE SLOTS (per-service, per-member bookable time blocks)
 // ============================================================================
 
-export async function setServiceSlots(
-  userId: string,
-  data: SetServiceSlotsInput,
-) {
-  const { provider } = await getProviderForUser(userId);
+export async function setServiceSlots(userId: string, data: SetServiceSlotsInput) {
+  const { provider, memberRole, member: requesterMember } = await getProviderForUser(userId);
+
+  if (memberRole !== "OWNER" && requesterMember?.id !== data.memberId) {
+    throw new ForbiddenError("You can only set your own service slots");
+  }
 
   // Verify service belongs to this provider
   const service = await prisma.service.findFirst({
@@ -598,7 +891,7 @@ export async function setServiceSlots(
 
   // Verify member belongs to this provider
   const member = await prisma.providerMember.findFirst({
-    where: { id: data.memberId, providerId: provider.id },
+    where: { id: data.memberId, providerId: provider.id, status: "ACTIVE" },
   });
   if (!member) throw new NotFoundError("Member");
 
@@ -625,12 +918,8 @@ export async function setServiceSlots(
   });
 }
 
-export async function getServiceSlots(
-  userId: string,
-  serviceId: string,
-  memberId?: string,
-) {
-  const { provider } = await getProviderForUser(userId);
+export async function getServiceSlots(userId: string, serviceId: string, memberId?: string) {
+  const { provider, memberRole, member } = await getProviderForUser(userId);
 
   // Verify service belongs to this provider
   const service = await prisma.service.findFirst({
@@ -638,8 +927,13 @@ export async function getServiceSlots(
   });
   if (!service) throw new NotFoundError("Service");
 
+  const effectiveMemberId = memberRole === "OWNER" ? memberId : member?.id;
+  if (memberRole !== "OWNER" && memberId && memberId !== member?.id) {
+    throw new ForbiddenError("You can only view your own service slots");
+  }
+
   return prisma.serviceSlot.findMany({
-    where: { serviceId, ...(memberId ? { memberId } : {}) },
+    where: { serviceId, ...(effectiveMemberId ? { memberId: effectiveMemberId } : {}) },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
   });
 }
@@ -664,18 +958,9 @@ export async function getProviderStats(userId: string, memberId?: string) {
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const endOfLastMonth = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    0,
-    23,
-    59,
-    59,
-  );
+  const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
   const startOfWeek = new Date(now);
-  startOfWeek.setDate(
-    now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1),
-  );
+  startOfWeek.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1));
   startOfWeek.setHours(0, 0, 0, 0);
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
@@ -799,10 +1084,7 @@ export async function getProviderStats(userId: string, memberId?: string) {
     d.setMonth(d.getMonth() - i);
     const monthStr = d.toISOString().substring(0, 7);
     const monthRevenue = monthlyBookings
-      .filter(
-        (b) =>
-          b.completedAt && b.completedAt.toISOString().startsWith(monthStr),
-      )
+      .filter((b) => b.completedAt && b.completedAt.toISOString().startsWith(monthStr))
       .reduce((sum, b) => sum + Number(b.totalAmount), 0);
     revenueByMonth.push({ month: monthStr, revenue: monthRevenue });
   }
@@ -843,14 +1125,8 @@ export async function getProviderStats(userId: string, memberId?: string) {
 
   // Member performance with names (only for company-wide stats)
   let memberStats: any[] = [];
-  if (
-    !memberId &&
-    Array.isArray(memberPerformance) &&
-    memberPerformance.length > 0
-  ) {
-    const memberIds = memberPerformance
-      .map((m: any) => m.assignedMemberId)
-      .filter(Boolean);
+  if (!memberId && Array.isArray(memberPerformance) && memberPerformance.length > 0) {
+    const memberIds = memberPerformance.map((m: any) => m.assignedMemberId).filter(Boolean);
     const members = await prisma.providerMember.findMany({
       where: { id: { in: memberIds } },
       select: {
@@ -862,8 +1138,7 @@ export async function getProviderStats(userId: string, memberId?: string) {
     const memberMap = Object.fromEntries(
       members.map((m) => [
         m.id,
-        m.displayName ||
-          `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim(),
+        m.displayName || `${m.user?.firstName || ""} ${m.user?.lastName || ""}`.trim(),
       ]),
     );
     memberStats = memberPerformance.map((m: any) => ({
@@ -880,8 +1155,7 @@ export async function getProviderStats(userId: string, memberId?: string) {
   const lastMonthRevenueNum = Number(lastMonthRevenue._sum.totalAmount || 0);
   const revenueChange =
     lastMonthRevenueNum > 0
-      ? ((thisMonthRevenueNum - lastMonthRevenueNum) / lastMonthRevenueNum) *
-        100
+      ? ((thisMonthRevenueNum - lastMonthRevenueNum) / lastMonthRevenueNum) * 100
       : thisMonthRevenueNum > 0
         ? 100
         : 0;
@@ -902,8 +1176,7 @@ export async function getProviderStats(userId: string, memberId?: string) {
       : 0;
   const avgDuration =
     recentBookingsRaw.length > 0
-      ? recentBookingsRaw.reduce((sum, b) => sum + b.durationMin, 0) /
-        recentBookingsRaw.length
+      ? recentBookingsRaw.reduce((sum, b) => sum + b.durationMin, 0) / recentBookingsRaw.length
       : 0;
 
   return {
@@ -958,12 +1231,7 @@ export async function getProviderStats(userId: string, memberId?: string) {
 // CLIENTS LIST
 // ============================================================================
 
-export async function getProviderClients(
-  userId: string,
-  page = 1,
-  limit = 20,
-  memberId?: string,
-) {
+export async function getProviderClients(userId: string, page = 1, limit = 20, memberId?: string) {
   const { provider, memberRole, member } = await getProviderForUser(userId);
 
   const skip = (page - 1) * limit;
